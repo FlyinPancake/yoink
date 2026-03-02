@@ -5,6 +5,9 @@
 
 <p align="center">yoink is a self-hosted music library manager that lets you search, download, tag, and organize your collection from multiple sources — all from a single, clean web interface. Think of it as your personal command center for building the music library you've always wanted.</p>
 
+> [!WARNING]
+> yoink is under active development and is **not production ready**. Expect breaking changes, incomplete features, and rough edges. **Do not point yoink at your main music library** — use a separate copy or a fresh directory until the project stabilizes.
+
 ![yoink open for Pendulum](docs/screenshot-1.png)
 
 ## What Is Yoink?
