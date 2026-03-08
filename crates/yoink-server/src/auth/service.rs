@@ -221,7 +221,12 @@ impl AuthService {
     }
 
     async fn bootstrap_if_needed(&self, config: &AuthConfig) -> AppResult<()> {
-        if self.load_settings().await?.is_some() {
+        if let Some(settings) = self.load_settings().await? {
+            if settings.must_change_password {
+                self.rotate_temporary_password(&settings.admin_username)
+                    .await?;
+                return Ok(());
+            }
             delete_expired_auth_sessions(&self.db, Utc::now()).await?;
             return Ok(());
         }
@@ -261,6 +266,27 @@ impl AuthService {
             }
         }
 
+        Ok(())
+    }
+
+    async fn rotate_temporary_password(&self, username: &str) -> AppResult<()> {
+        let temp_password = random_token(18);
+        let now = Utc::now();
+        update_auth_settings(
+            &self.db,
+            username,
+            &hash_password(&temp_password)?,
+            true,
+            now,
+            None,
+        )
+        .await?;
+        delete_all_auth_sessions(&self.db).await?;
+        warn!(
+            username,
+            temporary_password = ?temp_password,
+            "Previous bootstrap setup was not completed. Generated a new temporary admin password."
+        );
         Ok(())
     }
 
@@ -334,7 +360,15 @@ fn hex_encode(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::{app_config::AuthConfig, test_helpers::test_db};
+    use chrono::{Duration, Utc};
+
+    use crate::{
+        app_config::AuthConfig,
+        db::{
+            AuthSessionRecord, insert_auth_session, load_auth_session_by_hash, load_auth_settings,
+        },
+        test_helpers::test_db,
+    };
 
     use super::*;
 
@@ -377,5 +411,42 @@ mod tests {
         let settings = load_auth_settings(&pool).await.unwrap().unwrap();
         assert_eq!(settings.admin_username, DEFAULT_BOOTSTRAP_USERNAME);
         assert!(settings.must_change_password);
+    }
+
+    #[tokio::test]
+    async fn restart_rotates_unfinished_bootstrap_password_and_clears_sessions() {
+        let pool = test_db().await;
+        let config = AuthConfig {
+            enabled: true,
+            session_secret: "secret".to_string(),
+            init_admin_username: None,
+            init_admin_password: None,
+        };
+
+        AuthService::new(config.clone(), pool.clone())
+            .await
+            .unwrap();
+        let initial = load_auth_settings(&pool).await.unwrap().unwrap();
+        let stale_session = AuthSessionRecord {
+            id: Uuid::now_v7(),
+            session_token_hash: "stale".to_string(),
+            created_at: Utc::now(),
+            last_seen_at: Utc::now(),
+            expires_at: Utc::now() + Duration::hours(1),
+        };
+        insert_auth_session(&pool, &stale_session).await.unwrap();
+
+        AuthService::new(config, pool.clone()).await.unwrap();
+
+        let rotated = load_auth_settings(&pool).await.unwrap().unwrap();
+        assert_eq!(rotated.admin_username, initial.admin_username);
+        assert!(rotated.must_change_password);
+        assert_ne!(rotated.password_hash, initial.password_hash);
+        assert!(
+            load_auth_session_by_hash(&pool, "stale")
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 }
