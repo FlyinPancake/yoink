@@ -42,14 +42,11 @@ pub(crate) async fn enforce_auth(
     }
 
     let cookie_value = extract_session_cookie(request.headers());
-    let session = match state
+    let session = state
         .auth
         .authenticate_request(cookie_value.as_deref(), true)
         .await
-    {
-        Ok(session) => session,
-        Err(_) => None,
-    };
+        .unwrap_or_default();
 
     let Some(session) = session else {
         return unauthorized_response(request.uri(), &path);
