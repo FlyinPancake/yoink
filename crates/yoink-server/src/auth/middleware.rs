@@ -7,7 +7,12 @@ use axum::{
 };
 use tracing::warn;
 
-use crate::{auth::extract_session_cookie, error::AppError, state::AppState};
+use crate::{
+    auth::extract_session_cookie,
+    error::AppError,
+    redirects::{percent_encode_component, sanitize_relative_target},
+    state::AppState,
+};
 
 pub(crate) async fn enforce_auth(
     State(state): State<AppState>,
@@ -84,26 +89,7 @@ fn unauthorized_response(uri: &Uri, path: &str) -> Response {
 }
 
 fn sanitize_next(next: Option<&str>) -> String {
-    let Some(next) = next else {
-        return "%2F".to_string();
-    };
-    if !next.starts_with('/') || next.starts_with("//") {
-        return "%2F".to_string();
-    }
-    percent_encode_component(next)
-}
-
-fn percent_encode_component(value: &str) -> String {
-    let mut out = String::new();
-    for byte in value.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
-                out.push(byte as char);
-            }
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
+    percent_encode_component(&sanitize_relative_target(next))
 }
 
 fn is_public_path(path: &str) -> bool {
@@ -144,8 +130,10 @@ mod tests {
 
     #[test]
     fn sanitize_next_rejects_external_targets() {
-        assert_eq!(sanitize_next(Some("https://example.com")), "%2F");
-        assert_eq!(sanitize_next(Some("//evil.com")), "%2F");
+        assert_eq!(sanitize_next(Some("https://example.com")), "/");
+        assert_eq!(sanitize_next(Some("//evil.com")), "/");
+        assert_eq!(sanitize_next(Some("/\\evil.example")), "/");
+        assert_eq!(sanitize_next(Some("/library%0d%0aLocation:%20/admin")), "/");
         assert_eq!(sanitize_next(Some("/library")), "/library");
     }
 

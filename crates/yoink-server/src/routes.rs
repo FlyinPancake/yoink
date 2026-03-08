@@ -3,7 +3,7 @@ use std::{convert::Infallible, time::Duration};
 use axum::{
     Form, Json, Router,
     extract::{Extension, Path, Query, State},
-    http::{HeaderMap, StatusCode, Uri, header},
+    http::{HeaderMap, StatusCode, header},
     response::{
         IntoResponse, Redirect,
         sse::{Event, KeepAlive, Sse},
@@ -15,6 +15,7 @@ use tokio_stream::{StreamExt as _, wrappers::BroadcastStream};
 use tracing::{debug, warn};
 
 use uuid::Uuid;
+use veil::Redact;
 
 use crate::{
     auth::{
@@ -24,23 +25,28 @@ use crate::{
     db,
     error::AppError,
     models::*,
+    redirects::{percent_encode_component, sanitize_relative_target},
     state::AppState,
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize, Redact)]
 struct LoginForm {
     username: String,
+    #[redact]
     password: String,
     #[serde(default)]
     next: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize, Redact)]
 struct CredentialsForm {
     username: String,
     #[serde(default)]
+    #[redact]
     current_password: Option<String>,
+    #[redact]
     new_password: String,
+    #[redact]
     confirm_password: String,
 }
 
@@ -586,64 +592,7 @@ fn redirect_with_error(base: &str, message: &str, next: Option<&str>) -> axum::r
 }
 
 fn sanitize_next_target(next: Option<&str>) -> String {
-    match next {
-        Some(value)
-            if value.starts_with('/')
-                && !value.starts_with("//")
-                && !value.contains('\\')
-                && !value.contains("://")
-                && !value
-                    .chars()
-                    .any(|ch| ch.is_ascii_whitespace() || ch.is_control())
-                && !contains_percent_encoded_control_chars(value)
-                && Uri::try_from(value)
-                    .map(|uri| uri.scheme().is_none() && uri.authority().is_none())
-                    .unwrap_or(false) =>
-        {
-            value.to_string()
-        }
-        _ => "/".to_string(),
-    }
-}
-
-fn contains_percent_encoded_control_chars(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    let mut index = 0;
-    while index + 2 < bytes.len() {
-        if bytes[index] == b'%'
-            && let (Some(high), Some(low)) = (
-                decode_hex_digit(bytes[index + 1]),
-                decode_hex_digit(bytes[index + 2]),
-            )
-            && ((high << 4) | low).is_ascii_control()
-        {
-            return true;
-        }
-        index += 1;
-    }
-    false
-}
-
-fn decode_hex_digit(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
-}
-
-fn percent_encode_component(value: &str) -> String {
-    let mut out = String::new();
-    for byte in value.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
-                out.push(byte as char);
-            }
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
+    sanitize_relative_target(next)
 }
 
 #[cfg(test)]
@@ -666,7 +615,7 @@ mod tests {
     use crate::providers::registry::ProviderRegistry;
     use crate::test_helpers::*;
 
-    use super::{CredentialsForm, build_router, sanitize_next_target, update_credentials};
+    use super::{CredentialsForm, LoginForm, build_router, sanitize_next_target, update_credentials};
 
     /// Helper: send a GET request to a path and return the status + body bytes.
     async fn get(state: crate::state::AppState, path: &str) -> (StatusCode, Vec<u8>) {
@@ -1200,6 +1149,30 @@ mod tests {
         assert_eq!(sanitize_next_target(Some("/\\evil.example")), "/");
         assert_eq!(sanitize_next_target(Some("/://example.com")), "/");
         assert_eq!(sanitize_next_target(Some("library")), "/");
+    }
+
+    #[test]
+    fn auth_forms_redact_passwords_in_debug_output() {
+        let login = LoginForm {
+            username: "admin".to_string(),
+            password: "password123".to_string(),
+            next: Some("/library".to_string()),
+        };
+        let credentials = CredentialsForm {
+            username: "admin".to_string(),
+            current_password: Some("current-secret".to_string()),
+            new_password: "new-secret".to_string(),
+            confirm_password: "confirm-secret".to_string(),
+        };
+
+        let login_debug = format!("{login:?}");
+        let credentials_debug = format!("{credentials:?}");
+
+        assert!(login_debug.contains("admin"));
+        assert!(!login_debug.contains("password123"));
+        assert!(!credentials_debug.contains("current-secret"));
+        assert!(!credentials_debug.contains("new-secret"));
+        assert!(!credentials_debug.contains("confirm-secret"));
     }
 
     #[tokio::test]

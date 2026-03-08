@@ -9,6 +9,7 @@ mod error;
 mod logging;
 mod models;
 mod providers;
+mod redirects;
 mod routes;
 mod server_context;
 mod services;
