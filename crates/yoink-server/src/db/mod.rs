@@ -25,7 +25,7 @@ pub(crate) use auth::{
     AuthSessionRecord, AuthSettingsRecord, delete_all_auth_sessions_tx, delete_auth_session,
     delete_expired_auth_sessions, insert_auth_session, insert_auth_session_tx,
     insert_auth_settings, load_auth_session_by_hash, load_auth_settings, touch_auth_session,
-    update_auth_settings, update_auth_settings_tx,
+    update_auth_settings_tx,
 };
 pub(crate) use jobs::{delete_completed_jobs, delete_job, insert_job, load_jobs, update_job};
 pub(crate) use match_suggestions::{

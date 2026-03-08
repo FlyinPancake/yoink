@@ -69,25 +69,6 @@ pub(crate) async fn insert_auth_settings(
     Ok(())
 }
 
-pub(crate) async fn update_auth_settings(
-    pool: &SqlitePool,
-    admin_username: &str,
-    password_hash: &str,
-    must_change_password: bool,
-    updated_at: DateTime<Utc>,
-    password_changed_at: Option<DateTime<Utc>>,
-) -> Result<(), sqlx::Error> {
-    update_auth_settings_with_executor(
-        pool,
-        admin_username,
-        password_hash,
-        must_change_password,
-        updated_at,
-        password_changed_at,
-    )
-    .await
-}
-
 pub(crate) async fn update_auth_settings_tx(
     tx: &mut Transaction<'_, Sqlite>,
     admin_username: &str,
@@ -227,10 +208,6 @@ pub(crate) async fn delete_auth_session(
     Ok(())
 }
 
-pub(crate) async fn delete_all_auth_sessions(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
-    delete_all_auth_sessions_with_executor(pool).await
-}
-
 pub(crate) async fn delete_all_auth_sessions_tx(
     tx: &mut Transaction<'_, Sqlite>,
 ) -> Result<u64, sqlx::Error> {
@@ -337,7 +314,7 @@ mod tests {
 
         insert_auth_session(&pool, &session).await.unwrap();
 
-        let deleted = delete_all_auth_sessions(&pool).await.unwrap();
+        let deleted = delete_all_auth_sessions_with_executor(&pool).await.unwrap();
         assert_eq!(deleted, 1);
         assert!(
             load_auth_session_by_hash(&pool, "active")

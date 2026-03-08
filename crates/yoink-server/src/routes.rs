@@ -648,7 +648,7 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::auth::middleware::enforce_auth;
-    use crate::db::{load_auth_settings, update_auth_settings};
+    use crate::db::{load_auth_settings, update_auth_settings_tx};
     use crate::models::DownloadStatus;
     use crate::providers::ProviderArtist;
     use crate::providers::registry::ProviderRegistry;
@@ -1006,8 +1006,9 @@ mod tests {
     async fn forced_setup_login_redirects_to_setup_page() {
         let (state, _tmp) = test_app_state_with_auth().await;
         let settings = load_auth_settings(&state.db).await.unwrap().unwrap();
-        update_auth_settings(
-            &state.db,
+        let mut tx = state.db.begin().await.unwrap();
+        update_auth_settings_tx(
+            &mut tx,
             &settings.admin_username,
             &settings.password_hash,
             true,
@@ -1016,6 +1017,8 @@ mod tests {
         )
         .await
         .unwrap();
+
+        tx.commit().await.unwrap();
 
         let app = app_with_auth(state);
         let req = Request::builder()
