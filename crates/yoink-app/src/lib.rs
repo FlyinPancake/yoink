@@ -15,7 +15,7 @@ use leptos_router::{
 };
 
 use components::SidebarProvider;
-use hooks::{SseStatus, provide_auth_enabled, provide_sse_version, use_sse_status};
+use hooks::{SseRuntime, SseStatus, provide_auth_enabled, provide_sse_version, use_sse_status};
 
 /// The top-level Leptos application component.
 ///
@@ -43,6 +43,7 @@ pub fn App() -> impl IntoView {
         </Show>
         <SidebarProvider>
             <Router>
+                <SseRuntime />
                 <KeyboardShortcuts />
                 <Routes fallback=pages::not_found::NotFoundPage>
                     <Route path=path!("/") view=pages::dashboard::DashboardPage />

@@ -34,14 +34,20 @@ pub enum SseStatus {
 /// Provide SSE version + status signals via Leptos context.
 /// Call once from the top-level `App` component.
 pub fn provide_sse_version(enabled: bool) {
-    let (version, _set_version, status, _set_status) = create_sse_signals();
+    let (version, set_version, status, set_status) = create_sse_signals();
     provide_context(SseVersion(version));
     provide_context(SseConnectionStatus(status));
 
     #[cfg(feature = "hydrate")]
-    if enabled {
-        setup_event_source(_set_version, _set_status);
-    }
+    provide_context(SseRuntimeState {
+        enabled,
+        started: RwSignal::new(false),
+        set_version,
+        set_status,
+    });
+
+    #[cfg(not(feature = "hydrate"))]
+    let _ = (set_version, set_status);
 
     #[cfg(not(feature = "hydrate"))]
     let _ = enabled;
@@ -77,6 +83,15 @@ struct SseConnectionStatus(ReadSignal<SseStatus>);
 #[derive(Clone, Copy)]
 struct AuthEnabled(ReadSignal<bool>);
 
+#[cfg(feature = "hydrate")]
+#[derive(Clone, Copy)]
+struct SseRuntimeState {
+    enabled: bool,
+    started: RwSignal<bool>,
+    set_version: WriteSignal<u64>,
+    set_status: WriteSignal<SseStatus>,
+}
+
 fn create_sse_signals() -> (
     ReadSignal<u64>,
     WriteSignal<u64>,
@@ -96,6 +111,26 @@ fn create_sse_signals() -> (
     let (status, set_status) = signal(SseStatus::Connected);
 
     (version, set_version, status, set_status)
+}
+
+/// Renders nothing, but starts SSE once the router navigates to an allowed page.
+#[component]
+pub fn SseRuntime() -> impl IntoView {
+    #[cfg(feature = "hydrate")]
+    {
+        let location = leptos_router::hooks::use_location();
+        let runtime = expect_context::<SseRuntimeState>();
+
+        Effect::new(move |_| {
+            let pathname = location.pathname.get();
+            if runtime.enabled && should_connect_sse(pathname.as_str()) && !runtime.started.get() {
+                runtime.started.set(true);
+                setup_event_source(runtime.set_version, runtime.set_status);
+            }
+        });
+    }
+
+    view! {}
 }
 
 /// Wire up an `EventSource` with auto-reconnect.
@@ -197,9 +232,7 @@ fn setup_event_source(set_version: WriteSignal<u64>, set_status: WriteSignal<Sse
         // until the error handler closes it and a new one is created.
     }
 
-    if should_connect_sse() {
-        connect(set_version, set_status);
-    }
+    connect(set_version, set_status);
 }
 
 #[cfg(feature = "hydrate")]
@@ -236,13 +269,9 @@ async fn auth_redirect_if_needed() -> bool {
 }
 
 #[cfg(feature = "hydrate")]
-fn should_connect_sse() -> bool {
-    let pathname = leptos::prelude::window()
-        .location()
-        .pathname()
-        .unwrap_or_else(|_| "/".to_string());
+fn should_connect_sse(pathname: &str) -> bool {
     !matches!(
-        pathname.as_str(),
+        pathname,
         "/login" | "/setup/password" | "/settings/security"
     )
 }
