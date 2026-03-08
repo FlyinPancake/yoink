@@ -5,7 +5,7 @@ use crate::{
     hooks::set_page_title,
 };
 
-const WRAP: &str = "min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,.12),_transparent_34%),linear-gradient(180deg,rgba(255,255,255,.96),rgba(244,244,245,.92))] dark:bg-[radial-gradient(circle_at_top,_rgba(59,130,246,.18),_transparent_28%),linear-gradient(180deg,rgba(9,9,11,.98),rgba(17,24,39,.96))] px-4 py-10";
+const WRAP: &str = "min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(59,130,246,.12),_transparent_34%),linear-gradient(180deg,rgba(255,255,255,.96),rgba(244,244,245,.92))] dark:bg-[radial-gradient(circle_at_top,_rgba(59,130,246,.18),_transparent_28%),linear-gradient(180deg,rgba(9,9,11,.98),rgba(17,24,39,.96))] px-4 py-10";
 
 #[component]
 pub fn SetupPasswordPage() -> impl IntoView {
@@ -15,7 +15,7 @@ pub fn SetupPasswordPage() -> impl IntoView {
 
     view! {
         <div class=WRAP>
-            <div class="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
+            <div class="flex flex-col gap-6 w-full max-w-md">
                 <AuthCredentialsForm
                     title="Replace Bootstrap Password"
                     intro="This temporary admin password is only for first access. Set the permanent username and password you want to keep using."
