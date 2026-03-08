@@ -2,6 +2,7 @@
 
 mod actions;
 mod app_config;
+mod auth;
 mod config;
 mod db;
 mod error;
@@ -21,7 +22,7 @@ mod test_helpers;
 
 use std::{sync::Arc, time::Duration};
 
-use axum::routing::get;
+use axum::{middleware, routing::get};
 use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::services::ServeDir;
@@ -77,6 +78,7 @@ async fn main() {
         app_config.download_max_parallel_tracks,
         &db_url,
         registry,
+        app_config.auth.clone(),
     )
     .await;
 
@@ -109,7 +111,7 @@ async fn main() {
     };
 
     // ── Axum app ────────────────────────────────────────────────
-    let app = build_router(state)
+    let app = build_router(state.clone())
         .route(
             "/leptos/{*fn_name}",
             get(server_fn_handler.clone()).post(server_fn_handler),
@@ -124,6 +126,10 @@ async fn main() {
             ServeDir::new(format!("{}/yoink.svg", site_root)),
         )
         .fallback(leptos_handler())
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::middleware::enforce_auth,
+        ))
         .layer(
             TraceLayer::new_for_http()
                 .on_request(

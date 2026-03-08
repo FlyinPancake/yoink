@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n            id as \"id!: Uuid\",\n            session_token_hash,\n            created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n            last_seen_at as \"last_seen_at!: chrono::DateTime<chrono::Utc>\",\n            expires_at as \"expires_at!: chrono::DateTime<chrono::Utc>\"\n        FROM auth_sessions\n        WHERE session_token_hash = $1",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: Uuid",
+        "ordinal": 0,
+        "type_info": "Blob"
+      },
+      {
+        "name": "session_token_hash",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: chrono::DateTime<chrono::Utc>",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_seen_at!: chrono::DateTime<chrono::Utc>",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "expires_at!: chrono::DateTime<chrono::Utc>",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7d6890a29ad6741626e5d6c91ea8cfcc2bd05404b2f76dbf957d90e4e72413ba"
+}

@@ -15,7 +15,7 @@ use leptos_router::{
 };
 
 use components::SidebarProvider;
-use hooks::{SseStatus, provide_sse_version, use_sse_status};
+use hooks::{SseStatus, provide_auth_enabled, provide_sse_version, use_sse_status};
 
 /// The top-level Leptos application component.
 ///
@@ -25,11 +25,13 @@ use hooks::{SseStatus, provide_sse_version, use_sse_status};
 #[component]
 pub fn App() -> impl IntoView {
     provide_toaster();
-    provide_sse_version();
+    let auth_enabled = provide_auth_enabled();
+    provide_sse_version(true);
 
     let status = use_sse_status();
 
     view! {
+        <AuthStateMarker auth_enabled=auth_enabled />
         <Toaster stacked=true />
         // SSE reconnecting banner
         <Show when=move || status.get() == SseStatus::Reconnecting>
@@ -44,6 +46,9 @@ pub fn App() -> impl IntoView {
                 <KeyboardShortcuts />
                 <Routes fallback=pages::not_found::NotFoundPage>
                     <Route path=path!("/") view=pages::dashboard::DashboardPage />
+                    <Route path=path!("/login") view=pages::login::LoginPage />
+                    <Route path=path!("/setup/password") view=pages::settings_security::SetupPasswordPage />
+                    <Route path=path!("/settings/security") view=pages::settings_security::SecuritySettingsPage />
                     <Route path=path!("/library") view=pages::library::LibraryPage />
                     <Route path=path!("/library/artists") view=pages::library::LibraryPage />
                     <Route path=path!("/library/albums") view=pages::library_albums::LibraryAlbumsPage />
@@ -58,6 +63,13 @@ pub fn App() -> impl IntoView {
                 </Routes>
             </Router>
         </SidebarProvider>
+    }
+}
+
+#[component]
+fn AuthStateMarker(auth_enabled: bool) -> impl IntoView {
+    view! {
+        <div id="yoink-auth-state" data-enabled=if auth_enabled { "true" } else { "false" } hidden></div>
     }
 }
 

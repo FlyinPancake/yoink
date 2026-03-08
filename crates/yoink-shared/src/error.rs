@@ -15,6 +15,8 @@ pub enum YoinkError {
     },
     #[error("Conflict: {reason}")]
     Conflict { reason: String },
+    #[error("Unauthorized")]
+    Unauthorized,
     #[error("Service unavailable: {service}")]
     Unavailable { service: String, reason: String },
     #[error("Internal error: {message}")]

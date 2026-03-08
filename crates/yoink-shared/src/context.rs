@@ -61,6 +61,7 @@ pub type FetchLibraryTracksFn =
 /// `use_context::<ServerContext>()` inside `#[server]` functions.
 #[derive(Clone)]
 pub struct ServerContext {
+    pub auth_enabled: bool,
     pub monitored_artists: std::sync::Arc<tokio::sync::RwLock<Vec<MonitoredArtist>>>,
     pub monitored_albums: std::sync::Arc<tokio::sync::RwLock<Vec<MonitoredAlbum>>>,
     pub download_jobs: std::sync::Arc<tokio::sync::RwLock<Vec<DownloadJob>>>,

@@ -48,6 +48,7 @@ pub(crate) fn build_server_context(state: &AppState) -> yoink_shared::ServerCont
     let fetch_library_tracks_fn = build_fetch_library_tracks_fn(state);
 
     yoink_shared::ServerContext {
+        auth_enabled: state.auth.enabled(),
         monitored_artists: state.monitored_artists.clone(),
         monitored_albums: state.monitored_albums.clone(),
         download_jobs: state.download_jobs.clone(),

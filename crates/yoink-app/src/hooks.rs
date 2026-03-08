@@ -33,10 +33,30 @@ pub enum SseStatus {
 
 /// Provide SSE version + status signals via Leptos context.
 /// Call once from the top-level `App` component.
-pub fn provide_sse_version() {
-    let (version, status) = create_sse_signals();
+pub fn provide_sse_version(enabled: bool) {
+    let (version, _set_version, status, _set_status) = create_sse_signals();
     provide_context(SseVersion(version));
     provide_context(SseConnectionStatus(status));
+
+    #[cfg(feature = "hydrate")]
+    if enabled {
+        setup_event_source(_set_version, _set_status);
+    }
+
+    #[cfg(not(feature = "hydrate"))]
+    let _ = enabled;
+}
+
+/// Provide the static auth-enabled flag to the hydrated app.
+pub fn provide_auth_enabled() -> bool {
+    let enabled = initial_auth_enabled();
+    let (signal, _) = signal(enabled);
+    provide_context(AuthEnabled(signal));
+    enabled
+}
+
+pub fn use_auth_enabled() -> ReadSignal<bool> {
+    expect_context::<AuthEnabled>().0
 }
 
 /// Read the SSE version signal from context. Panics if `provide_sse_version` wasn't called.
@@ -54,26 +74,28 @@ struct SseVersion(ReadSignal<u64>);
 
 #[derive(Clone, Copy)]
 struct SseConnectionStatus(ReadSignal<SseStatus>);
+#[derive(Clone, Copy)]
+struct AuthEnabled(ReadSignal<bool>);
 
-fn create_sse_signals() -> (ReadSignal<u64>, ReadSignal<SseStatus>) {
+fn create_sse_signals() -> (
+    ReadSignal<u64>,
+    WriteSignal<u64>,
+    ReadSignal<SseStatus>,
+    WriteSignal<SseStatus>,
+) {
     #[cfg(not(feature = "hydrate"))]
-    let (version, _) = signal(0u64);
+    let (version, set_version) = signal(0u64);
 
     #[cfg(feature = "hydrate")]
     let (version, set_version) = signal(0u64);
 
     #[cfg(not(feature = "hydrate"))]
-    let (status, _) = signal(SseStatus::Connected);
+    let (status, set_status) = signal(SseStatus::Connected);
 
     #[cfg(feature = "hydrate")]
     let (status, set_status) = signal(SseStatus::Connected);
 
-    #[cfg(feature = "hydrate")]
-    {
-        setup_event_source(set_version, set_status);
-    }
-
-    (version, status)
+    (version, set_version, status, set_status)
 }
 
 /// Wire up an `EventSource` with auto-reconnect.
@@ -84,6 +106,7 @@ fn create_sse_signals() -> (ReadSignal<u64>, ReadSignal<SseStatus>) {
 #[cfg(feature = "hydrate")]
 fn setup_event_source(set_version: WriteSignal<u64>, set_status: WriteSignal<SseStatus>) {
     use wasm_bindgen::prelude::*;
+    use wasm_bindgen_futures::spawn_local;
 
     // We use a simple recursive approach: connect(), and on error close
     // the old EventSource and schedule a reconnect after 3 seconds.
@@ -146,16 +169,24 @@ fn setup_event_source(set_version: WriteSignal<u64>, set_status: WriteSignal<Sse
                 // built-in auto-reconnect from firing additional error events.
                 es_ref.close();
 
-                set_status.set(SseStatus::Reconnecting);
+                let set_status_inner = set_status;
+                let set_version_inner = set_version;
+                spawn_local(async move {
+                    if auth_redirect_if_needed().await {
+                        return;
+                    }
 
-                let reconnect_cb = Closure::once_into_js(move || {
-                    connect(set_version, set_status);
+                    set_status_inner.set(SseStatus::Reconnecting);
+
+                    let reconnect_cb = Closure::once_into_js(move || {
+                        connect(set_version_inner, set_status_inner);
+                    });
+                    let _ = leptos::prelude::window()
+                        .set_timeout_with_callback_and_timeout_and_arguments_0(
+                            reconnect_cb.as_ref().unchecked_ref(),
+                            3_000,
+                        );
                 });
-                let _ = leptos::prelude::window()
-                    .set_timeout_with_callback_and_timeout_and_arguments_0(
-                        reconnect_cb.as_ref().unchecked_ref(),
-                        3_000,
-                    );
             });
             es.set_onerror(Some(cb.as_ref().unchecked_ref()));
             cb.forget();
@@ -166,5 +197,87 @@ fn setup_event_source(set_version: WriteSignal<u64>, set_status: WriteSignal<Sse
         // until the error handler closes it and a new one is created.
     }
 
-    connect(set_version, set_status);
+    if should_connect_sse() {
+        connect(set_version, set_status);
+    }
+}
+
+#[cfg(feature = "hydrate")]
+async fn auth_redirect_if_needed() -> bool {
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+
+    let Ok(resp_value) =
+        JsFuture::from(leptos::prelude::window().fetch_with_str("/api/auth/status")).await
+    else {
+        return false;
+    };
+    let Some(resp) = resp_value.dyn_ref::<web_sys::Response>() else {
+        return false;
+    };
+
+    if resp.status() != 401 {
+        return false;
+    }
+
+    let pathname = leptos::prelude::window()
+        .location()
+        .pathname()
+        .unwrap_or_else(|_| "/".to_string());
+    let search = leptos::prelude::window()
+        .location()
+        .search()
+        .unwrap_or_default();
+    let next = encode_query_component(&format!("{pathname}{search}"));
+    let _ = leptos::prelude::window()
+        .location()
+        .set_href(&format!("/login?next={next}"));
+    true
+}
+
+#[cfg(feature = "hydrate")]
+fn should_connect_sse() -> bool {
+    let pathname = leptos::prelude::window()
+        .location()
+        .pathname()
+        .unwrap_or_else(|_| "/".to_string());
+    !matches!(
+        pathname.as_str(),
+        "/login" | "/setup/password" | "/settings/security"
+    )
+}
+
+#[cfg(feature = "hydrate")]
+fn encode_query_component(value: &str) -> String {
+    let mut out = String::new();
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                out.push(byte as char);
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
+fn initial_auth_enabled() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        return leptos::prelude::document()
+            .get_element_by_id("yoink-auth-state")
+            .and_then(|el| el.get_attribute("data-enabled"))
+            .map(|value| value == "true")
+            .unwrap_or(true);
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), feature = "ssr"))]
+    {
+        return use_context::<yoink_shared::ServerContext>()
+            .map(|ctx| ctx.auth_enabled)
+            .unwrap_or(true);
+    }
+
+    #[allow(unreachable_code)]
+    true
 }

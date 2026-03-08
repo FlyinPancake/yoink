@@ -1,4 +1,5 @@
 mod album_card;
+mod auth_credentials_form;
 mod badge;
 mod breadcrumb;
 mod button;
@@ -17,6 +18,7 @@ mod sleeve_badge;
 pub mod toast;
 
 pub use album_card::{AlbumCard, MonitorToggle};
+pub use auth_credentials_form::AuthCredentialsForm;
 pub use badge::{Badge, BadgeSize, BadgeSurface, BadgeVariant, download_status_badge_variant};
 pub use breadcrumb::{Breadcrumb, BreadcrumbItem};
 pub use button::{Button, ButtonSize, ButtonVariant};

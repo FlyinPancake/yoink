@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n            admin_username,\n            password_hash,\n            must_change_password as \"must_change_password!: bool\",\n            created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n            updated_at as \"updated_at!: chrono::DateTime<chrono::Utc>\",\n            password_changed_at as \"password_changed_at: chrono::DateTime<chrono::Utc>\"\n        FROM auth_settings\n        WHERE singleton = 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "admin_username",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "password_hash",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "must_change_password!: bool",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "created_at!: chrono::DateTime<chrono::Utc>",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at!: chrono::DateTime<chrono::Utc>",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "password_changed_at: chrono::DateTime<chrono::Utc>",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3d9ffa16e3f68d7583ba50a3d68165dcc3ef65203a3133a99e573af28dbdd728"
+}

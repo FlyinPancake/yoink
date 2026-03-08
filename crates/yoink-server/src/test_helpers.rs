@@ -20,6 +20,7 @@ use crate::providers::{
     ProviderArtist, ProviderError, ProviderSearchAlbum, ProviderSearchTrack, ProviderTrack,
 };
 use crate::state::AppState;
+use crate::{app_config::AuthConfig, auth::AuthService};
 use yoink_shared::Quality;
 
 // ── Database helpers ────────────────────────────────────────────────
@@ -41,13 +42,45 @@ pub(crate) async fn test_app_state() -> (AppState, tempfile::TempDir) {
     test_app_state_with_registry(ProviderRegistry::new()).await
 }
 
+pub(crate) async fn test_app_state_with_auth() -> (AppState, tempfile::TempDir) {
+    test_app_state_with_registry_and_auth(
+        ProviderRegistry::new(),
+        AuthConfig {
+            enabled: true,
+            session_secret: "test-session-secret".to_string(),
+            init_admin_username: Some("admin".to_string()),
+            init_admin_password: Some("password123".to_string()),
+        },
+    )
+    .await
+}
+
 /// Build an `AppState` with a custom `ProviderRegistry`.
 pub(crate) async fn test_app_state_with_registry(
     registry: ProviderRegistry,
 ) -> (AppState, tempfile::TempDir) {
+    test_app_state_with_registry_and_auth(
+        registry,
+        AuthConfig {
+            enabled: false,
+            session_secret: String::new(),
+            init_admin_username: None,
+            init_admin_password: None,
+        },
+    )
+    .await
+}
+
+pub(crate) async fn test_app_state_with_registry_and_auth(
+    registry: ProviderRegistry,
+    auth_config: AuthConfig,
+) -> (AppState, tempfile::TempDir) {
     let pool = test_db().await;
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let (sse_tx, _) = broadcast::channel(16);
+    let auth = AuthService::new(auth_config, pool.clone())
+        .await
+        .expect("failed to create test auth service");
 
     let state = AppState {
         http: reqwest::Client::new(),
@@ -62,6 +95,7 @@ pub(crate) async fn test_app_state_with_registry(
         download_lyrics: false,
         download_max_parallel_tracks: 2,
         registry: Arc::new(registry),
+        auth: Arc::new(auth),
     };
     (state, tmp)
 }

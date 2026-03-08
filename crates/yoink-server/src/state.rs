@@ -5,7 +5,9 @@ use sqlx::SqlitePool;
 use tokio::sync::{Notify, RwLock, broadcast};
 use tracing::{info, warn};
 
+use crate::app_config::AuthConfig;
 use crate::{
+    auth::AuthService,
     db,
     models::{DownloadJob, MonitoredAlbum, MonitoredArtist},
     providers::registry::ProviderRegistry,
@@ -26,6 +28,7 @@ pub(crate) struct AppState {
     pub(crate) download_lyrics: bool,
     pub(crate) download_max_parallel_tracks: usize,
     pub(crate) registry: Arc<ProviderRegistry>,
+    pub(crate) auth: Arc<AuthService>,
 }
 
 impl AppState {
@@ -36,8 +39,12 @@ impl AppState {
         download_max_parallel_tracks: usize,
         db_url: &str,
         registry: ProviderRegistry,
+        auth_config: AuthConfig,
     ) -> Self {
         let pool = db::open(db_url).await.expect("failed to open database");
+        let auth = AuthService::new(auth_config, pool.clone())
+            .await
+            .expect("failed to initialize authentication");
 
         // Load persisted data into memory
         let artists = db::load_artists(&pool).await.unwrap_or_default();
@@ -89,6 +96,7 @@ impl AppState {
             download_lyrics,
             download_max_parallel_tracks,
             registry: Arc::new(registry),
+            auth: Arc::new(auth),
         }
     }
 

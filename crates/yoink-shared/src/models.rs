@@ -185,6 +185,14 @@ pub struct ProviderLink {
     pub external_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthStatus {
+    pub auth_enabled: bool,
+    pub authenticated: bool,
+    pub username: Option<String>,
+    pub must_change_password: bool,
+}
+
 /// Potential cross-provider match suggestion.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MatchSuggestion {

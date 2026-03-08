@@ -1,25 +1,52 @@
 use std::{convert::Infallible, time::Duration};
 
 use axum::{
-    Json, Router,
-    extract::{Path, Query, State},
-    http::{StatusCode, header},
+    Form, Json, Router,
+    extract::{Extension, Path, Query, State},
+    http::{HeaderMap, StatusCode, header},
     response::{
-        IntoResponse,
+        IntoResponse, Redirect,
         sse::{Event, KeepAlive, Sse},
     },
-    routing::get,
+    routing::{get, post},
 };
+use serde::Deserialize;
 use tokio_stream::{StreamExt as _, wrappers::BroadcastStream};
 use tracing::{debug, warn};
 
 use uuid::Uuid;
 
-use crate::{db, models::*, state::AppState};
+use crate::{
+    auth::{
+        AuthenticatedSession, clear_session_cookie_header, extract_session_cookie,
+        is_secure_request, session_cookie_header,
+    },
+    db,
+    models::*,
+    state::AppState,
+};
+
+#[derive(Debug, Deserialize)]
+struct LoginForm {
+    username: String,
+    password: String,
+    #[serde(default)]
+    next: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CredentialsForm {
+    username: String,
+    #[serde(default)]
+    current_password: Option<String>,
+    new_password: String,
+    confirm_password: String,
+}
 
 pub(crate) fn build_router(state: AppState) -> Router {
     Router::new()
         // ── API endpoints ───────────────────────────────────────
+        .route("/api/auth/status", get(auth_status))
         .route("/api/library/artists", get(list_monitored_artists))
         .route("/api/library/albums", get(list_monitored_albums))
         .route("/api/downloads", get(list_download_jobs))
@@ -34,10 +61,186 @@ pub(crate) fn build_router(state: AppState) -> Router {
             "/api/image/{provider}/{image_id}/{size}",
             get(proxy_provider_image),
         )
+        .route("/auth/login", post(login))
+        .route("/auth/logout", post(logout))
+        .route("/auth/credentials", post(update_credentials))
         .with_state(state)
 }
 
 // ── API handlers ────────────────────────────────────────────────────
+
+async fn auth_status(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    if !state.auth.enabled() {
+        return (
+            StatusCode::OK,
+            Json(yoink_shared::AuthStatus {
+                auth_enabled: false,
+                authenticated: true,
+                username: None,
+                must_change_password: false,
+            }),
+        )
+            .into_response();
+    }
+
+    let cookie_value = extract_session_cookie(&headers);
+    match state
+        .auth
+        .authenticate_request(cookie_value.as_deref(), false)
+        .await
+    {
+        Ok(Some(session)) => (
+            StatusCode::OK,
+            Json(yoink_shared::AuthStatus {
+                auth_enabled: true,
+                authenticated: true,
+                username: Some(session.username),
+                must_change_password: session.must_change_password,
+            }),
+        )
+            .into_response(),
+        Ok(None) => StatusCode::UNAUTHORIZED.into_response(),
+        Err(err) => {
+            warn!(error = %err, "Failed to resolve auth status");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+async fn login(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<LoginForm>,
+) -> impl IntoResponse {
+    if !state.auth.enabled() {
+        return Redirect::to("/").into_response();
+    }
+
+    let secure = is_secure_request(&headers);
+    let next = sanitize_next_target(form.next.as_deref());
+    match state.auth.login(&form.username, &form.password).await {
+        Ok(Some(outcome)) => {
+            let redirect_target = if outcome.must_change_password {
+                "/setup/password".to_string()
+            } else {
+                next
+            };
+            (
+                StatusCode::SEE_OTHER,
+                [
+                    (
+                        header::SET_COOKIE,
+                        session_cookie_header(&outcome.cookie_value, secure),
+                    ),
+                    (header::LOCATION, redirect_target),
+                ],
+            )
+                .into_response()
+        }
+        Ok(None) => redirect_with_error("/login", "Invalid username or password", Some(&next)),
+        Err(err) => {
+            warn!(error = %err, "Login failed unexpectedly");
+            redirect_with_error("/login", "Login failed", Some(&next))
+        }
+    }
+}
+
+async fn logout(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    let secure = is_secure_request(&headers);
+    let location = if state.auth.enabled() { "/login" } else { "/" };
+    if state.auth.enabled() {
+        let cookie_value = extract_session_cookie(&headers);
+        if let Err(err) = state.auth.logout(cookie_value.as_deref()).await {
+            warn!(error = %err, "Logout failed");
+        }
+    }
+
+    (
+        StatusCode::SEE_OTHER,
+        [
+            (header::SET_COOKIE, clear_session_cookie_header(secure)),
+            (header::LOCATION, location.to_string()),
+        ],
+    )
+        .into_response()
+}
+
+async fn update_credentials(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Extension(session): Extension<AuthenticatedSession>,
+    Form(form): Form<CredentialsForm>,
+) -> impl IntoResponse {
+    if !state.auth.enabled() {
+        return Redirect::to("/").into_response();
+    }
+
+    let secure = is_secure_request(&headers);
+    let return_path = if session.must_change_password {
+        "/setup/password"
+    } else {
+        "/settings/security"
+    };
+    let username = form.username.trim().to_string();
+
+    if form.new_password != form.confirm_password {
+        return redirect_with_error(return_path, "Passwords do not match", None);
+    }
+
+    if !session.must_change_password {
+        let current_password = form.current_password.as_deref().unwrap_or_default();
+        match state.auth.verify_current_password(current_password).await {
+            Ok(true) => {}
+            Ok(false) => {
+                return redirect_with_error(return_path, "Current password is incorrect", None);
+            }
+            Err(err) => {
+                warn!(error = %err, "Failed to verify current password");
+                return redirect_with_error(return_path, "Failed to update credentials", None);
+            }
+        }
+    }
+
+    match state
+        .auth
+        .update_credentials(&username, &form.new_password)
+        .await
+    {
+        Ok(()) => match state.auth.login(&username, &form.new_password).await {
+            Ok(Some(outcome)) => {
+                let location = if session.must_change_password {
+                    "/".to_string()
+                } else {
+                    "/settings/security?success=1".to_string()
+                };
+                (
+                    StatusCode::SEE_OTHER,
+                    [
+                        (
+                            header::SET_COOKIE,
+                            session_cookie_header(&outcome.cookie_value, secure),
+                        ),
+                        (header::LOCATION, location),
+                    ],
+                )
+                    .into_response()
+            }
+            Ok(None) => redirect_with_error(
+                return_path,
+                "Updated credentials could not be verified",
+                None,
+            ),
+            Err(err) => {
+                warn!(error = %err, "Credential update relogin failed");
+                redirect_with_error(return_path, "Failed to update credentials", None)
+            }
+        },
+        Err(err) => {
+            warn!(error = %err, "Failed to update credentials");
+            redirect_with_error(return_path, &err.to_string(), None)
+        }
+    }
+}
 
 async fn list_monitored_artists(State(state): State<AppState>) -> impl IntoResponse {
     let artists = state.monitored_artists.read().await.clone();
@@ -376,14 +579,47 @@ async fn proxy_image_impl(
     }
 }
 
+fn redirect_with_error(base: &str, message: &str, next: Option<&str>) -> axum::response::Response {
+    let mut location = format!("{base}?error={}", percent_encode_component(message));
+    if let Some(next) = next.filter(|next| *next != "/") {
+        location.push_str("&next=");
+        location.push_str(&percent_encode_component(next));
+    }
+    Redirect::to(&location).into_response()
+}
+
+fn sanitize_next_target(next: Option<&str>) -> String {
+    match next {
+        Some(value) if value.starts_with('/') && !value.starts_with("//") => value.to_string(),
+        _ => "/".to_string(),
+    }
+}
+
+fn percent_encode_component(value: &str) -> String {
+    let mut out = String::new();
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                out.push(byte as char);
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
+    use axum::middleware;
+    use axum::{Router, routing::get as axum_get};
     use tower::ServiceExt;
 
+    use crate::auth::middleware::enforce_auth;
+    use crate::db::{load_auth_settings, update_auth_settings};
     use crate::models::DownloadStatus;
     use crate::providers::ProviderArtist;
     use crate::providers::registry::ProviderRegistry;
@@ -402,6 +638,21 @@ mod tests {
             .unwrap()
             .to_vec();
         (status, body)
+    }
+
+    fn app_with_auth(state: crate::state::AppState) -> Router {
+        build_router(state.clone()).layer(middleware::from_fn_with_state(state, enforce_auth))
+    }
+
+    async fn send(app: Router, req: Request<Body>) -> (StatusCode, axum::http::HeaderMap, Vec<u8>) {
+        let resp = app.oneshot(req).await.unwrap();
+        let status = resp.status();
+        let headers = resp.headers().clone();
+        let body = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap()
+            .to_vec();
+        (status, headers, body)
     }
 
     // ── GET /api/library/artists ────────────────────────────────
@@ -600,5 +851,148 @@ mod tests {
         let (state, _tmp) = test_app_state().await;
         let (status, _) = get(state, "/api/image/nonexistent/abc123/320").await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn protected_api_requires_auth() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        let app = app_with_auth(state);
+        let req = Request::builder()
+            .uri("/api/library/artists")
+            .body(Body::empty())
+            .unwrap();
+
+        let (status, _, _) = send(app, req).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn protected_html_redirects_to_login() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        let app = Router::new()
+            .route("/library", axum_get(|| async { StatusCode::OK }))
+            .with_state(state.clone())
+            .layer(middleware::from_fn_with_state(state, enforce_auth));
+        let req = Request::builder()
+            .uri("/library")
+            .body(Body::empty())
+            .unwrap();
+
+        let (status, headers, _) = send(app, req).await;
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert_eq!(
+            headers.get("location").and_then(|v| v.to_str().ok()),
+            Some("/login?next=/library")
+        );
+    }
+
+    #[tokio::test]
+    async fn login_sets_cookie_and_redirects_home() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        let app = app_with_auth(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/auth/login")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(
+                "username=admin&password=password123&next=%2Flibrary",
+            ))
+            .unwrap();
+
+        let (status, headers, _) = send(app, req).await;
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert_eq!(
+            headers.get("location").and_then(|v| v.to_str().ok()),
+            Some("/library")
+        );
+        assert!(
+            headers
+                .get("set-cookie")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or_default()
+                .contains("yoink_session=")
+        );
+    }
+
+    #[tokio::test]
+    async fn auth_status_returns_authenticated_session() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        let login_app = app_with_auth(state.clone());
+        let login_req = Request::builder()
+            .method("POST")
+            .uri("/auth/login")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from("username=admin&password=password123"))
+            .unwrap();
+        let (_, login_headers, _) = send(login_app, login_req).await;
+        let cookie = login_headers
+            .get("set-cookie")
+            .and_then(|v| v.to_str().ok())
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_string();
+
+        let app = app_with_auth(state);
+        let req = Request::builder()
+            .uri("/api/auth/status")
+            .header("cookie", cookie)
+            .body(Body::empty())
+            .unwrap();
+
+        let (status, _, body) = send(app, req).await;
+        assert_eq!(status, StatusCode::OK);
+        let payload: yoink_shared::AuthStatus = serde_json::from_slice(&body).unwrap();
+        assert!(payload.auth_enabled);
+        assert!(payload.authenticated);
+        assert_eq!(payload.username.as_deref(), Some("admin"));
+    }
+
+    #[tokio::test]
+    async fn forced_setup_login_redirects_to_setup_page() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        let settings = load_auth_settings(&state.db).await.unwrap().unwrap();
+        update_auth_settings(
+            &state.db,
+            &settings.admin_username,
+            &settings.password_hash,
+            true,
+            chrono::Utc::now(),
+            settings.password_changed_at,
+        )
+        .await
+        .unwrap();
+
+        let app = app_with_auth(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/auth/login")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from("username=admin&password=password123"))
+            .unwrap();
+
+        let (status, headers, _) = send(app, req).await;
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert_eq!(
+            headers.get("location").and_then(|v| v.to_str().ok()),
+            Some("/setup/password")
+        );
+    }
+
+    #[tokio::test]
+    async fn server_fn_path_requires_auth() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        let app = Router::new()
+            .route("/leptos/test", axum_get(|| async { StatusCode::OK }))
+            .with_state(state.clone())
+            .layer(middleware::from_fn_with_state(state, enforce_auth));
+
+        let req = Request::builder()
+            .uri("/leptos/test")
+            .body(Body::empty())
+            .unwrap();
+        let (status, _, _) = send(app, req).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
 }

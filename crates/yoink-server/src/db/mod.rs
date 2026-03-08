@@ -1,6 +1,7 @@
 mod album_artists;
 mod albums;
 mod artists;
+mod auth;
 mod jobs;
 mod match_suggestions;
 mod provider_links;
@@ -19,6 +20,11 @@ pub(crate) use albums::{
 pub(crate) use artists::{
     delete_artist, load_artists, update_artist_bio, update_artist_details, update_artist_monitored,
     upsert_artist,
+};
+pub(crate) use auth::{
+    AuthSessionRecord, AuthSettingsRecord, delete_all_auth_sessions, delete_auth_session,
+    delete_expired_auth_sessions, insert_auth_session, insert_auth_settings,
+    load_auth_session_by_hash, load_auth_settings, touch_auth_session, update_auth_settings,
 };
 pub(crate) use jobs::{delete_completed_jobs, delete_job, insert_job, load_jobs, update_job};
 pub(crate) use match_suggestions::{

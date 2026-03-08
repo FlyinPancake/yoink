@@ -16,6 +16,7 @@ futures = "0.3"
 
 # Client-only (behind "hydrate" feature)
 wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }
 simpleicons-rs = "16.9.0"
 
@@ -24,6 +25,7 @@ simpleicons-rs = "16.9.0"
 default = []
 hydrate = [
   "dep:wasm-bindgen",
+  "dep:wasm-bindgen-futures",
   "dep:web-sys",
 
   "leptos/hydrate",
