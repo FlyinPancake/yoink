@@ -1,6 +1,7 @@
 [tools]
 "cargo:cargo-leptos" = "latest"
 "cargo:sqlx-cli" = { version = "latest", features = "sqlite" }
+"github:tursodatabase/turso" = "latest"
 
 [tasks.lint-server]
 run = "cargo clippy --package yoink-server -- -D warnings"
