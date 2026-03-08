@@ -9,7 +9,7 @@ CREATE TABLE auth_settings (
 );
 
 CREATE TABLE auth_sessions (
-    id                 BLOB PRIMARY KEY,
+    id                 BLOB PRIMARY KEY UNIQUE,
     session_token_hash TEXT NOT NULL UNIQUE,
     created_at         TEXT NOT NULL,
     last_seen_at       TEXT NOT NULL,
