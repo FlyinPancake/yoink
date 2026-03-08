@@ -18,7 +18,7 @@ pub fn LoginPage() -> impl IntoView {
     let next = query
         .read_untracked()
         .get("next")
-        .filter(|value| value.starts_with('/'))
+        .filter(|value| value.starts_with('/') && !value.starts_with("//"))
         .unwrap_or_else(|| "/".to_string());
 
     view! {
