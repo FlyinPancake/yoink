@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::SqlitePool;
+use sqlx::{Executor, Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -77,6 +77,47 @@ pub(crate) async fn update_auth_settings(
     updated_at: DateTime<Utc>,
     password_changed_at: Option<DateTime<Utc>>,
 ) -> Result<(), sqlx::Error> {
+    update_auth_settings_with_executor(
+        pool,
+        admin_username,
+        password_hash,
+        must_change_password,
+        updated_at,
+        password_changed_at,
+    )
+    .await
+}
+
+pub(crate) async fn update_auth_settings_tx(
+    tx: &mut Transaction<'_, Sqlite>,
+    admin_username: &str,
+    password_hash: &str,
+    must_change_password: bool,
+    updated_at: DateTime<Utc>,
+    password_changed_at: Option<DateTime<Utc>>,
+) -> Result<(), sqlx::Error> {
+    update_auth_settings_with_executor(
+        &mut **tx,
+        admin_username,
+        password_hash,
+        must_change_password,
+        updated_at,
+        password_changed_at,
+    )
+    .await
+}
+
+async fn update_auth_settings_with_executor<'e, E>(
+    executor: E,
+    admin_username: &str,
+    password_hash: &str,
+    must_change_password: bool,
+    updated_at: DateTime<Utc>,
+    password_changed_at: Option<DateTime<Utc>>,
+) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query!(
         r#"UPDATE auth_settings
         SET admin_username = $1,
@@ -91,7 +132,7 @@ pub(crate) async fn update_auth_settings(
         updated_at,
         password_changed_at,
     )
-    .execute(pool)
+    .execute(executor)
     .await?;
     Ok(())
 }
@@ -100,6 +141,23 @@ pub(crate) async fn insert_auth_session(
     pool: &SqlitePool,
     session: &AuthSessionRecord,
 ) -> Result<(), sqlx::Error> {
+    insert_auth_session_with_executor(pool, session).await
+}
+
+pub(crate) async fn insert_auth_session_tx(
+    tx: &mut Transaction<'_, Sqlite>,
+    session: &AuthSessionRecord,
+) -> Result<(), sqlx::Error> {
+    insert_auth_session_with_executor(&mut **tx, session).await
+}
+
+async fn insert_auth_session_with_executor<'e, E>(
+    executor: E,
+    session: &AuthSessionRecord,
+) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     sqlx::query!(
         r#"INSERT INTO auth_sessions (
             id, session_token_hash, created_at, last_seen_at, expires_at
@@ -110,7 +168,7 @@ pub(crate) async fn insert_auth_session(
         session.last_seen_at,
         session.expires_at,
     )
-    .execute(pool)
+    .execute(executor)
     .await?;
     Ok(())
 }
@@ -170,8 +228,21 @@ pub(crate) async fn delete_auth_session(
 }
 
 pub(crate) async fn delete_all_auth_sessions(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+    delete_all_auth_sessions_with_executor(pool).await
+}
+
+pub(crate) async fn delete_all_auth_sessions_tx(
+    tx: &mut Transaction<'_, Sqlite>,
+) -> Result<u64, sqlx::Error> {
+    delete_all_auth_sessions_with_executor(&mut **tx).await
+}
+
+async fn delete_all_auth_sessions_with_executor<'e, E>(executor: E) -> Result<u64, sqlx::Error>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
     let result = sqlx::query!("DELETE FROM auth_sessions")
-        .execute(pool)
+        .execute(executor)
         .await?;
     Ok(result.rows_affected())
 }
@@ -245,6 +316,31 @@ mod tests {
         assert_eq!(deleted, 1);
         assert!(
             load_auth_session_by_hash(&pool, "expired")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_all_auth_sessions_clears_records() {
+        let pool = test_db().await;
+        let now = Utc::now();
+
+        let session = AuthSessionRecord {
+            id: Uuid::now_v7(),
+            session_token_hash: "active".to_string(),
+            created_at: now,
+            last_seen_at: now,
+            expires_at: now + Duration::hours(1),
+        };
+
+        insert_auth_session(&pool, &session).await.unwrap();
+
+        let deleted = delete_all_auth_sessions(&pool).await.unwrap();
+        assert_eq!(deleted, 1);
+        assert!(
+            load_auth_session_by_hash(&pool, "active")
                 .await
                 .unwrap()
                 .is_none()

@@ -206,35 +206,24 @@ async fn update_credentials(
         .update_credentials(&username, &form.new_password)
         .await
     {
-        Ok(()) => match state.auth.login(&username, &form.new_password).await {
-            Ok(Some(outcome)) => {
-                let location = if session.must_change_password {
-                    "/".to_string()
-                } else {
-                    "/settings/security?success=1".to_string()
-                };
-                (
-                    StatusCode::SEE_OTHER,
-                    [
-                        (
-                            header::SET_COOKIE,
-                            session_cookie_header(&outcome.cookie_value, secure),
-                        ),
-                        (header::LOCATION, location),
-                    ],
-                )
-                    .into_response()
-            }
-            Ok(None) => redirect_with_error(
-                return_path,
-                "Updated credentials could not be verified",
-                None,
-            ),
-            Err(err) => {
-                warn!(error = %err, "Credential update relogin failed");
-                redirect_with_error(return_path, "Failed to update credentials", None)
-            }
-        },
+        Ok(outcome) => {
+            let location = if session.must_change_password {
+                "/".to_string()
+            } else {
+                "/settings/security?success=1".to_string()
+            };
+            (
+                StatusCode::SEE_OTHER,
+                [
+                    (
+                        header::SET_COOKIE,
+                        session_cookie_header(&outcome.cookie_value, secure),
+                    ),
+                    (header::LOCATION, location),
+                ],
+            )
+                .into_response()
+        }
         Err(err) => {
             warn!(error = %err, "Failed to update credentials");
             redirect_with_error(return_path, &err.to_string(), None)

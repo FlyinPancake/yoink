@@ -12,9 +12,10 @@ use uuid::Uuid;
 use crate::{
     app_config::AuthConfig,
     db::{
-        AuthSessionRecord, AuthSettingsRecord, delete_all_auth_sessions, delete_auth_session,
-        delete_expired_auth_sessions, insert_auth_session, insert_auth_settings,
-        load_auth_session_by_hash, load_auth_settings, touch_auth_session, update_auth_settings,
+        AuthSessionRecord, AuthSettingsRecord, delete_all_auth_sessions_tx, delete_auth_session,
+        delete_expired_auth_sessions, insert_auth_session, insert_auth_session_tx,
+        insert_auth_settings, load_auth_session_by_hash, load_auth_settings, touch_auth_session,
+        update_auth_settings_tx,
     },
     error::{AppError, AppResult},
 };
@@ -86,23 +87,10 @@ impl AuthService {
             return Ok(None);
         }
 
-        let raw_token = random_token(32);
-        let signed_cookie_value = self.sign_cookie_value(&raw_token);
-        let now = Utc::now();
-        let expires_at = now + Duration::hours(24);
-        let session = AuthSessionRecord {
-            id: Uuid::now_v7(),
-            session_token_hash: hash_value(&raw_token),
-            created_at: now,
-            last_seen_at: now,
-            expires_at,
-        };
+        let (session, outcome) = self.build_login_session(settings.must_change_password);
         insert_auth_session(&self.db, &session).await?;
 
-        Ok(Some(LoginOutcome {
-            cookie_value: signed_cookie_value,
-            must_change_password: settings.must_change_password,
-        }))
+        Ok(Some(outcome))
     }
 
     pub(crate) async fn authenticate_request(
@@ -169,7 +157,7 @@ impl AuthService {
         &self,
         username: &str,
         new_password: &str,
-    ) -> AppResult<()> {
+    ) -> AppResult<LoginOutcome> {
         let settings = self
             .load_settings()
             .await?
@@ -191,8 +179,11 @@ impl AuthService {
 
         let now = Utc::now();
         let password_hash = hash_password(new_password)?;
-        update_auth_settings(
-            &self.db,
+        let (session, outcome) = self.build_login_session(false);
+        let mut tx = self.db.begin().await?;
+
+        update_auth_settings_tx(
+            &mut tx,
             trimmed_username,
             &password_hash,
             false,
@@ -200,7 +191,9 @@ impl AuthService {
             Some(now),
         )
         .await?;
-        delete_all_auth_sessions(&self.db).await?;
+        delete_all_auth_sessions_tx(&mut tx).await?;
+        insert_auth_session_tx(&mut tx, &session).await?;
+        tx.commit().await?;
 
         if settings.must_change_password {
             warn!(
@@ -209,7 +202,7 @@ impl AuthService {
             );
         }
 
-        Ok(())
+        Ok(outcome)
     }
 
     pub(crate) async fn verify_current_password(&self, password: &str) -> AppResult<bool> {
@@ -272,8 +265,9 @@ impl AuthService {
     async fn rotate_temporary_password(&self, username: &str) -> AppResult<()> {
         let temp_password = random_token(18);
         let now = Utc::now();
-        update_auth_settings(
-            &self.db,
+        let mut tx = self.db.begin().await?;
+        update_auth_settings_tx(
+            &mut tx,
             username,
             &hash_password(&temp_password)?,
             true,
@@ -281,7 +275,8 @@ impl AuthService {
             None,
         )
         .await?;
-        delete_all_auth_sessions(&self.db).await?;
+        delete_all_auth_sessions_tx(&mut tx).await?;
+        tx.commit().await?;
         warn!(
             username,
             temporary_password = ?temp_password,
@@ -323,6 +318,26 @@ impl AuthService {
         Ok(Argon2::default()
             .verify_password(password.as_bytes(), &parsed)
             .is_ok())
+    }
+
+    fn build_login_session(&self, must_change_password: bool) -> (AuthSessionRecord, LoginOutcome) {
+        let raw_token = random_token(32);
+        let now = Utc::now();
+        let session = AuthSessionRecord {
+            id: Uuid::now_v7(),
+            session_token_hash: hash_value(&raw_token),
+            created_at: now,
+            last_seen_at: now,
+            expires_at: now + Duration::hours(24),
+        };
+
+        (
+            session,
+            LoginOutcome {
+                cookie_value: self.sign_cookie_value(&raw_token),
+                must_change_password,
+            },
+        )
     }
 }
 
@@ -448,5 +463,71 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn update_credentials_replaces_sessions_atomically() {
+        let pool = test_db().await;
+        let service = AuthService::new(
+            AuthConfig {
+                enabled: true,
+                session_secret: "secret".to_string(),
+                init_admin_username: Some("admin".to_string()),
+                init_admin_password: Some("password123".to_string()),
+            },
+            pool.clone(),
+        )
+        .await
+        .unwrap();
+
+        let previous_login = service
+            .login("admin", "password123")
+            .await
+            .unwrap()
+            .unwrap();
+        let previous_raw_token = service
+            .verify_signed_cookie(&previous_login.cookie_value)
+            .unwrap();
+
+        let replacement = service
+            .update_credentials("root", "new-password")
+            .await
+            .unwrap();
+        let replacement_raw_token = service
+            .verify_signed_cookie(&replacement.cookie_value)
+            .unwrap();
+
+        let settings = load_auth_settings(&pool).await.unwrap().unwrap();
+        assert_eq!(settings.admin_username, "root");
+        assert!(!settings.must_change_password);
+        assert_eq!(settings.password_changed_at, Some(settings.updated_at));
+        assert!(
+            load_auth_session_by_hash(&pool, &hash_value(&previous_raw_token))
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            load_auth_session_by_hash(&pool, &hash_value(&replacement_raw_token))
+                .await
+                .unwrap()
+                .is_some()
+        );
+
+        assert!(
+            service
+                .authenticate_request(Some(&previous_login.cookie_value), false)
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let replacement_session = service
+            .authenticate_request(Some(&replacement.cookie_value), false)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(replacement_session.username, "root");
+        assert!(!replacement_session.must_change_password);
     }
 }
