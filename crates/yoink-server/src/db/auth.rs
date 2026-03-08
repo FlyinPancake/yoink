@@ -99,7 +99,7 @@ async fn update_auth_settings_with_executor<'e, E>(
 where
     E: Executor<'e, Database = Sqlite>,
 {
-    sqlx::query!(
+    let result = sqlx::query!(
         r#"UPDATE auth_settings
         SET admin_username = $1,
             password_hash = $2,
@@ -115,6 +115,10 @@ where
     )
     .execute(executor)
     .await?;
+    if result.rows_affected() == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
     Ok(())
 }
 
@@ -187,7 +191,7 @@ pub(crate) async fn touch_auth_session(
     last_seen_at: DateTime<Utc>,
     expires_at: DateTime<Utc>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(
+    let result = sqlx::query!(
         "UPDATE auth_sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3",
         last_seen_at,
         expires_at,
@@ -195,6 +199,10 @@ pub(crate) async fn touch_auth_session(
     )
     .execute(pool)
     .await?;
+    if result.rows_affected() == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
     Ok(())
 }
 
@@ -202,9 +210,13 @@ pub(crate) async fn delete_auth_session(
     pool: &SqlitePool,
     session_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!("DELETE FROM auth_sessions WHERE id = $1", session_id)
+    let result = sqlx::query!("DELETE FROM auth_sessions WHERE id = $1", session_id)
         .execute(pool)
         .await?;
+    if result.rows_affected() == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
     Ok(())
 }
 
@@ -322,5 +334,41 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn update_auth_settings_returns_row_not_found_when_missing() {
+        let pool = test_db().await;
+        let now = Utc::now();
+        let mut tx = pool.begin().await.unwrap();
+
+        let err = update_auth_settings_tx(&mut tx, "admin", "hash", false, now, Some(now))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, sqlx::Error::RowNotFound));
+    }
+
+    #[tokio::test]
+    async fn touch_auth_session_returns_row_not_found_when_missing() {
+        let pool = test_db().await;
+        let now = Utc::now();
+
+        let err = touch_auth_session(&pool, Uuid::now_v7(), now, now + Duration::hours(1))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, sqlx::Error::RowNotFound));
+    }
+
+    #[tokio::test]
+    async fn delete_auth_session_returns_row_not_found_when_missing() {
+        let pool = test_db().await;
+
+        let err = delete_auth_session(&pool, Uuid::now_v7())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, sqlx::Error::RowNotFound));
     }
 }
