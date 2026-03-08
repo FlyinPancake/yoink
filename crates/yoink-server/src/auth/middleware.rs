@@ -110,6 +110,7 @@ fn is_public_path(path: &str) -> bool {
     path == "/login"
         || path == "/auth/login"
         || path == "/auth/logout"
+        || path == "/api/auth/status"
         || path.starts_with("/pkg/")
         || path == "/favicon.ico"
         || path == "/yoink.svg"
@@ -134,12 +135,38 @@ fn is_api_like_path(path: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_next;
+    use axum::{Router, body::Body, http::{Request, StatusCode}, middleware, routing::get};
+    use tower::ServiceExt;
+
+    use crate::test_helpers::test_app_state_with_auth;
+
+    use super::{enforce_auth, sanitize_next};
 
     #[test]
     fn sanitize_next_rejects_external_targets() {
         assert_eq!(sanitize_next(Some("https://example.com")), "%2F");
         assert_eq!(sanitize_next(Some("//evil.com")), "%2F");
         assert_eq!(sanitize_next(Some("/library")), "/library");
+    }
+
+    #[tokio::test]
+    async fn auth_status_path_bypasses_auth_middleware() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        let app = Router::new()
+            .route("/api/auth/status", get(|| async { StatusCode::OK }))
+            .with_state(state.clone())
+            .layer(middleware::from_fn_with_state(state, enforce_auth));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/auth/status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
