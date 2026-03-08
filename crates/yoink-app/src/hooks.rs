@@ -129,8 +129,6 @@ pub fn SseRuntime() -> impl IntoView {
             }
         });
     }
-
-    view! {}
 }
 
 /// Wire up an `EventSource` with auto-reconnect.

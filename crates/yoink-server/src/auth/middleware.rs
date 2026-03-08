@@ -121,7 +121,13 @@ fn is_api_like_path(path: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use axum::{Router, body::Body, http::{Request, StatusCode}, middleware, routing::get};
+    use axum::{
+        Router,
+        body::Body,
+        http::{Request, StatusCode},
+        middleware,
+        routing::get,
+    };
     use tower::ServiceExt;
 
     use crate::test_helpers::test_app_state_with_auth;
