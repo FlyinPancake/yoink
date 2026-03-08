@@ -684,6 +684,30 @@ mod tests {
         (status, headers, body)
     }
 
+    fn session_cookie(headers: &axum::http::HeaderMap) -> String {
+        headers
+            .get("set-cookie")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split(';').next())
+            .expect("missing session cookie")
+            .to_string()
+    }
+
+    async fn login_cookie(state: crate::state::AppState, username: &str, password: &str) -> String {
+        let req = Request::builder()
+            .method("POST")
+            .uri("/auth/login")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(format!(
+                "username={username}&password={password}"
+            )))
+            .unwrap();
+
+        let (status, headers, _) = send(app_with_auth(state), req).await;
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        session_cookie(&headers)
+    }
+
     // ── GET /api/library/artists ────────────────────────────────
 
     #[tokio::test]
@@ -941,6 +965,138 @@ mod tests {
                 .unwrap_or_default()
                 .contains("yoink_session=")
         );
+    }
+
+    #[tokio::test]
+    async fn update_credentials_reissues_session_on_success() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        let original_cookie = login_cookie(state.clone(), "admin", "password123").await;
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/auth/credentials")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("cookie", &original_cookie)
+            .body(Body::from(
+                "username=root&current_password=password123&new_password=new-password&confirm_password=new-password",
+            ))
+            .unwrap();
+
+        let (status, headers, _) = send(app_with_auth(state.clone()), req).await;
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert_eq!(
+            headers
+                .get("location")
+                .and_then(|value| value.to_str().ok()),
+            Some("/settings/security?success=1")
+        );
+
+        let replacement_cookie = session_cookie(&headers);
+        assert_ne!(replacement_cookie, original_cookie);
+
+        let settings = load_auth_settings(&state.db).await.unwrap().unwrap();
+        assert_eq!(settings.admin_username, "root");
+        assert!(!settings.must_change_password);
+
+        let old_status_req = Request::builder()
+            .uri("/api/auth/status")
+            .header("cookie", &original_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let (old_status, _, _) = send(app_with_auth(state.clone()), old_status_req).await;
+        assert_eq!(old_status, StatusCode::UNAUTHORIZED);
+
+        let new_status_req = Request::builder()
+            .uri("/api/auth/status")
+            .header("cookie", &replacement_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let (new_status, _, body) = send(app_with_auth(state.clone()), new_status_req).await;
+        assert_eq!(new_status, StatusCode::OK);
+
+        let payload: yoink_shared::AuthStatus = serde_json::from_slice(&body).unwrap();
+        assert!(payload.authenticated);
+        assert_eq!(payload.username.as_deref(), Some("root"));
+    }
+
+    #[tokio::test]
+    async fn update_credentials_rejects_wrong_current_password() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        let cookie = login_cookie(state.clone(), "admin", "password123").await;
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/auth/credentials")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("cookie", &cookie)
+            .body(Body::from(
+                "username=root&current_password=wrong-password&new_password=new-password&confirm_password=new-password",
+            ))
+            .unwrap();
+
+        let (status, headers, _) = send(app_with_auth(state.clone()), req).await;
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert_eq!(
+            headers
+                .get("location")
+                .and_then(|value| value.to_str().ok()),
+            Some("/settings/security?error=Current%20password%20is%20incorrect")
+        );
+        assert!(headers.get("set-cookie").is_none());
+
+        let settings = load_auth_settings(&state.db).await.unwrap().unwrap();
+        assert_eq!(settings.admin_username, "admin");
+
+        let status_req = Request::builder()
+            .uri("/api/auth/status")
+            .header("cookie", &cookie)
+            .body(Body::empty())
+            .unwrap();
+        let (auth_status, _, body) = send(app_with_auth(state), status_req).await;
+        assert_eq!(auth_status, StatusCode::OK);
+
+        let payload: yoink_shared::AuthStatus = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload.username.as_deref(), Some("admin"));
+    }
+
+    #[tokio::test]
+    async fn update_credentials_rejects_password_confirmation_mismatch() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        let cookie = login_cookie(state.clone(), "admin", "password123").await;
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/auth/credentials")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("cookie", &cookie)
+            .body(Body::from(
+                "username=root&current_password=password123&new_password=new-password&confirm_password=other-password",
+            ))
+            .unwrap();
+
+        let (status, headers, _) = send(app_with_auth(state.clone()), req).await;
+        assert_eq!(status, StatusCode::SEE_OTHER);
+        assert_eq!(
+            headers
+                .get("location")
+                .and_then(|value| value.to_str().ok()),
+            Some("/settings/security?error=Passwords%20do%20not%20match")
+        );
+        assert!(headers.get("set-cookie").is_none());
+
+        let settings = load_auth_settings(&state.db).await.unwrap().unwrap();
+        assert_eq!(settings.admin_username, "admin");
+
+        let status_req = Request::builder()
+            .uri("/api/auth/status")
+            .header("cookie", &cookie)
+            .body(Body::empty())
+            .unwrap();
+        let (auth_status, _, body) = send(app_with_auth(state), status_req).await;
+        assert_eq!(auth_status, StatusCode::OK);
+
+        let payload: yoink_shared::AuthStatus = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload.username.as_deref(), Some("admin"));
     }
 
     #[test]
