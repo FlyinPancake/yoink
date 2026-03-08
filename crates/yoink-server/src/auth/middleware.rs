@@ -5,8 +5,9 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Redirect, Response},
 };
+use tracing::warn;
 
-use crate::{auth::extract_session_cookie, state::AppState};
+use crate::{auth::extract_session_cookie, error::AppError, state::AppState};
 
 pub(crate) async fn enforce_auth(
     State(state): State<AppState>,
@@ -42,14 +43,20 @@ pub(crate) async fn enforce_auth(
     }
 
     let cookie_value = extract_session_cookie(request.headers());
-    let session = state
+    let session = match state
         .auth
         .authenticate_request(cookie_value.as_deref(), true)
         .await
-        .unwrap_or_default();
-
-    let Some(session) = session else {
-        return unauthorized_response(request.uri(), &path);
+    {
+        Ok(Some(session)) => session,
+        Ok(None) => return unauthorized_response(request.uri(), &path),
+        Err(err) => {
+            warn!(error = %err, "Failed to authenticate request");
+            return match err {
+                AppError::Unavailable { .. } => StatusCode::SERVICE_UNAVAILABLE.into_response(),
+                _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            };
+        }
     };
 
     if session.must_change_password && !is_force_setup_allowed_path(&path) {
