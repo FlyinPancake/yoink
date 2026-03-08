@@ -22,6 +22,7 @@ use crate::{
         is_secure_request, session_cookie_header,
     },
     db,
+    error::AppError,
     models::*,
     state::AppState,
 };
@@ -226,8 +227,15 @@ async fn update_credentials(
         }
         Err(err) => {
             warn!(error = %err, "Failed to update credentials");
-            redirect_with_error(return_path, &err.to_string(), None)
+            redirect_with_error(return_path, credential_update_error_message(&err), None)
         }
+    }
+}
+
+fn credential_update_error_message(err: &AppError) -> &str {
+    match err {
+        AppError::Validation { reason, .. } => reason,
+        _ => "Failed to update credentials",
     }
 }
 
@@ -643,19 +651,22 @@ mod tests {
     use std::sync::Arc;
 
     use axum::body::Body;
-    use axum::http::{Request, StatusCode};
+    use axum::extract::{Extension, State};
+    use axum::http::{HeaderMap, Request, StatusCode};
     use axum::middleware;
+    use axum::response::IntoResponse;
+    use axum::Form;
     use axum::{Router, routing::get as axum_get};
     use tower::ServiceExt;
 
-    use crate::auth::middleware::enforce_auth;
+    use crate::auth::{AuthenticatedSession, middleware::enforce_auth};
     use crate::db::{load_auth_settings, update_auth_settings_tx};
     use crate::models::DownloadStatus;
     use crate::providers::ProviderArtist;
     use crate::providers::registry::ProviderRegistry;
     use crate::test_helpers::*;
 
-    use super::{build_router, sanitize_next_target};
+    use super::{CredentialsForm, build_router, sanitize_next_target, update_credentials};
 
     /// Helper: send a GET request to a path and return the status + body bytes.
     async fn get(state: crate::state::AppState, path: &str) -> (StatusCode, Vec<u8>) {
@@ -1098,6 +1109,72 @@ mod tests {
 
         let payload: yoink_shared::AuthStatus = serde_json::from_slice(&body).unwrap();
         assert_eq!(payload.username.as_deref(), Some("admin"));
+    }
+
+    #[tokio::test]
+    async fn update_credentials_sanitizes_internal_errors() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+        sqlx::query("DELETE FROM auth_settings WHERE singleton = 1")
+            .execute(&state.db)
+            .await
+            .unwrap();
+
+        let response = update_credentials(
+            State(state),
+            HeaderMap::new(),
+            Extension(AuthenticatedSession {
+                username: "admin".to_string(),
+                must_change_password: true,
+            }),
+            Form(CredentialsForm {
+                username: "root".to_string(),
+                current_password: None,
+                new_password: "new-password".to_string(),
+                confirm_password: "new-password".to_string(),
+            }),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response
+                .headers()
+                .get("location")
+                .and_then(|value| value.to_str().ok()),
+            Some("/setup/password?error=Failed%20to%20update%20credentials")
+        );
+    }
+
+    #[tokio::test]
+    async fn update_credentials_preserves_safe_validation_errors() {
+        let (state, _tmp) = test_app_state_with_auth().await;
+
+        let response = update_credentials(
+            State(state),
+            HeaderMap::new(),
+            Extension(AuthenticatedSession {
+                username: "admin".to_string(),
+                must_change_password: true,
+            }),
+            Form(CredentialsForm {
+                username: "   ".to_string(),
+                current_password: None,
+                new_password: "new-password".to_string(),
+                confirm_password: "new-password".to_string(),
+            }),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(
+            response
+                .headers()
+                .get("location")
+                .and_then(|value| value.to_str().ok()),
+            Some("/setup/password?error=username%20cannot%20be%20empty")
+        );
     }
 
     #[test]
