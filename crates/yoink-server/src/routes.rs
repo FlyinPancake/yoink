@@ -582,6 +582,7 @@ fn sanitize_next_target(next: Option<&str>) -> String {
         Some(value)
             if value.starts_with('/')
                 && !value.starts_with("//")
+                && !value.contains('\\')
                 && !value.contains("://")
                 && !value
                     .chars()
@@ -1119,6 +1120,7 @@ mod tests {
     fn sanitize_next_target_rejects_non_relative_targets() {
         assert_eq!(sanitize_next_target(Some("https://example.com")), "/");
         assert_eq!(sanitize_next_target(Some("//example.com/path")), "/");
+        assert_eq!(sanitize_next_target(Some("/\\evil.example")), "/");
         assert_eq!(sanitize_next_target(Some("/://example.com")), "/");
         assert_eq!(sanitize_next_target(Some("library")), "/");
     }
