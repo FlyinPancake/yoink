@@ -1,5 +1,7 @@
 use leptos::prelude::*;
-use lucide_leptos::{FolderDown, Headphones, Heart, House, Menu, Search, SunMoon, X};
+use lucide_leptos::{
+    FolderDown, Headphones, Heart, House, KeyRound, LogOut, Menu, Search, SunMoon, X,
+};
 
 use crate::hooks::use_auth_enabled;
 
@@ -141,17 +143,22 @@ fn SidebarNav(
             </a>
         </nav>
         <div class="px-4 py-3 border-t border-white/[.06]">
+            <span class="block text-[11px] uppercase tracking-wider font-semibold text-zinc-500 px-1 pb-1 mb-1">
+                "Settings"
+            </span>
             <Show when=move || auth_enabled.get()>
-                <div class="mb-2">
+                <div class="mb-1">
                     <a href="/settings/security" class=security_class on:click=nav_click>
+                        <KeyRound />
                         "Security"
                     </a>
                 </div>
                 <form method="post" action="/auth/logout">
                     <button type="submit"
-                        class="flex items-center gap-2.5 w-full bg-transparent border-none text-zinc-400/90 font-inherit text-[13px] cursor-pointer py-2 px-1 rounded-md transition-[background,color] duration-150 hover:bg-white/[.04] hover:text-zinc-200"
+                        class="flex items-center gap-2.5 w-full bg-transparent border-none text-red-400/90 font-inherit text-[13px] cursor-pointer py-2 px-1 rounded-md transition-[background,color] duration-150 hover:bg-red-500/[.08] hover:text-red-300 [&_svg]:size-4 [&_svg]:shrink-0"
                         on:click=nav_click
                     >
+                        <LogOut />
                         "Logout"
                     </button>
                 </form>
