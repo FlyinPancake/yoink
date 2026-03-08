@@ -22,39 +22,46 @@ pub fn ErrorPanel(
 ) -> impl IntoView {
     let (show_details, set_show_details) = signal(false);
     let has_details = details.is_some();
+    let has_actions = has_details || retry_href.is_some();
 
     view! {
         <div class="rounded-xl border border-red-500/20 bg-red-500/[.06] dark:bg-red-500/[.08] p-5 mb-6">
-            <div class="flex items-start gap-3">
-                <div class="shrink-0 mt-0.5 text-red-500 dark:text-red-400 [&_svg]:size-5" aria-hidden="true">
+            <div class="flex items-center gap-3">
+                <div class="shrink-0 text-red-500 dark:text-red-400 [&_svg]:size-5" aria-hidden="true">
                     <TriangleAlert />
                 </div>
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-red-700 dark:text-red-300 m-0 mb-2">{message}</p>
-                    <div class="flex flex-wrap items-center gap-2">
-                        {retry_href.map(|href| view! {
-                            <Button href=href>
-                                <RefreshCw size=12 />
-                                "Retry"
-                            </Button>
-                        })}
-                        {if has_details {
-                            view! {
-                                <button type="button"
-                                    class="inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer bg-transparent border-none p-0 font-inherit [&_svg]:size-3.5"
-                                    on:click=move |_| set_show_details.update(|v| *v = !*v)
-                                    attr:aria-expanded=move || show_details.get().to_string()
-                                >
-                                    {move || if show_details.get() { "Hide details" } else { "Show details" }}
-                                    <Show when=move || show_details.get() fallback=|| view! { <ChevronDown /> }>
-                                        <ChevronUp />
-                                    </Show>
-                                </button>
-                            }.into_any()
-                        } else {
-                            view! { <span></span> }.into_any()
-                        }}
-                    </div>
+                    <p class="text-sm font-medium text-red-700 dark:text-red-300 m-0">{message}</p>
+                    {if has_actions {
+                        view! {
+                            <div class="flex flex-wrap items-center gap-2 mt-2">
+                                {retry_href.map(|href| view! {
+                                    <Button href=href>
+                                        <RefreshCw size=12 />
+                                        "Retry"
+                                    </Button>
+                                })}
+                                {if has_details {
+                                    view! {
+                                        <button type="button"
+                                            class="inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer bg-transparent border-none p-0 font-inherit [&_svg]:size-3.5"
+                                            on:click=move |_| set_show_details.update(|v| *v = !*v)
+                                            attr:aria-expanded=move || show_details.get().to_string()
+                                        >
+                                            {move || if show_details.get() { "Hide details" } else { "Show details" }}
+                                            <Show when=move || show_details.get() fallback=|| view! { <ChevronDown /> }>
+                                                <ChevronUp />
+                                            </Show>
+                                        </button>
+                                    }.into_any()
+                                } else {
+                                    ().into_any()
+                                }}
+                            </div>
+                        }.into_any()
+                    } else {
+                        ().into_any()
+                    }}
                     {if has_details {
                         view! {
                             <Show when=move || show_details.get()>
@@ -64,7 +71,7 @@ pub fn ErrorPanel(
                             </Show>
                         }.into_any()
                     } else {
-                        view! { <span></span> }.into_any()
+                        ().into_any()
                     }}
                 </div>
             </div>
