@@ -55,7 +55,6 @@ pub fn AuthCredentialsForm(
                             type="text"
                             name="username"
                             autocomplete="username"
-                            placeholder="admin"
                             required=true
                         />
                     </div>

@@ -52,7 +52,6 @@ pub fn LoginPage() -> impl IntoView {
                                     type="text"
                                     name="username"
                                     autocomplete="username"
-                                    placeholder="admin"
                                     required=true
                                 />
                             </div>
