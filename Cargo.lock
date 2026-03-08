@@ -4130,6 +4130,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
+name = "veil"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7352f0bbf3ab98911b0c0277065094c1b1ec79bbc85fa3b7d16bf1859c3d96f"
+dependencies = [
+ "once_cell",
+ "veil-macros",
+]
+
+[[package]]
+name = "veil-macros"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47a3f4f06d904eb789b935253752ba6bcc1dfa61349f8d5341c66abe070b44e5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4844,6 +4865,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "veil",
  "yoink-app",
  "yoink-shared",
 ]

@@ -18,6 +18,7 @@ argon2 = "0.5"
 cookie = "0.18"
 rand = "0.9"
 sha2 = "0.10"
+veil = "0.3"
 
 # ── Leptos ecosystem ────────────────────────────────────────
 leptos = "0.8"

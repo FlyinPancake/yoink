@@ -33,6 +33,7 @@ sha2 = { workspace = true }
 sqlx = { workspace = true }
 strsim = { workspace = true }
 uuid = { workspace = true }
+veil = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tower = { workspace = true }

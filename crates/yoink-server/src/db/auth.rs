@@ -1,10 +1,12 @@
 use chrono::{DateTime, Utc};
 use sqlx::{Executor, Sqlite, SqlitePool, Transaction};
 use uuid::Uuid;
+use veil::Redact;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Redact)]
 pub(crate) struct AuthSettingsRecord {
     pub(crate) admin_username: String,
+    #[redact]
     pub(crate) password_hash: String,
     pub(crate) must_change_password: bool,
     pub(crate) created_at: DateTime<Utc>,
@@ -12,9 +14,10 @@ pub(crate) struct AuthSettingsRecord {
     pub(crate) password_changed_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Redact)]
 pub(crate) struct AuthSessionRecord {
     pub(crate) id: Uuid,
+    #[redact]
     pub(crate) session_token_hash: String,
     pub(crate) created_at: DateTime<Utc>,
     pub(crate) last_seen_at: DateTime<Utc>,
@@ -370,5 +373,33 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, sqlx::Error::RowNotFound));
+    }
+
+    #[test]
+    fn auth_records_redact_sensitive_fields_in_debug_output() {
+        let now = Utc::now();
+        let settings = AuthSettingsRecord {
+            admin_username: "admin".to_string(),
+            password_hash: "super-secret-hash".to_string(),
+            must_change_password: true,
+            created_at: now,
+            updated_at: now,
+            password_changed_at: None,
+        };
+        let session = AuthSessionRecord {
+            id: Uuid::nil(),
+            session_token_hash: "session-token-hash".to_string(),
+            created_at: now,
+            last_seen_at: now,
+            expires_at: now,
+        };
+
+        let settings_debug = format!("{settings:?}");
+        let session_debug = format!("{session:?}");
+
+        assert!(settings_debug.contains("admin"));
+        assert!(!settings_debug.contains("super-secret-hash"));
+        assert!(!session_debug.contains("session-token-hash"));
+        assert!(session_debug.contains(&Uuid::nil().to_string()));
     }
 }
