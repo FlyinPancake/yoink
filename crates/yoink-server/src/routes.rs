@@ -3,7 +3,7 @@ use std::{convert::Infallible, time::Duration};
 use axum::{
     Form, Json, Router,
     extract::{Extension, Path, Query, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, StatusCode, Uri, header},
     response::{
         IntoResponse, Redirect,
         sse::{Event, KeepAlive, Sse},
@@ -590,8 +590,48 @@ fn redirect_with_error(base: &str, message: &str, next: Option<&str>) -> axum::r
 
 fn sanitize_next_target(next: Option<&str>) -> String {
     match next {
-        Some(value) if value.starts_with('/') && !value.starts_with("//") => value.to_string(),
+        Some(value)
+            if value.starts_with('/')
+                && !value.starts_with("//")
+                && !value.contains("://")
+                && !value
+                    .chars()
+                    .any(|ch| ch.is_ascii_whitespace() || ch.is_control())
+                && !contains_percent_encoded_control_chars(value)
+                && Uri::try_from(value)
+                    .map(|uri| uri.scheme().is_none() && uri.authority().is_none())
+                    .unwrap_or(false) =>
+        {
+            value.to_string()
+        }
         _ => "/".to_string(),
+    }
+}
+
+fn contains_percent_encoded_control_chars(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    let mut index = 0;
+    while index + 2 < bytes.len() {
+        if bytes[index] == b'%'
+            && let (Some(high), Some(low)) = (
+                decode_hex_digit(bytes[index + 1]),
+                decode_hex_digit(bytes[index + 2]),
+            )
+            && ((high << 4) | low).is_ascii_control()
+        {
+            return true;
+        }
+        index += 1;
+    }
+    false
+}
+
+fn decode_hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
     }
 }
 
@@ -625,7 +665,7 @@ mod tests {
     use crate::providers::registry::ProviderRegistry;
     use crate::test_helpers::*;
 
-    use super::build_router;
+    use super::{build_router, sanitize_next_target};
 
     /// Helper: send a GET request to a path and return the status + body bytes.
     async fn get(state: crate::state::AppState, path: &str) -> (StatusCode, Vec<u8>) {
@@ -912,6 +952,30 @@ mod tests {
                 .unwrap_or_default()
                 .contains("yoink_session=")
         );
+    }
+
+    #[test]
+    fn sanitize_next_target_rejects_header_unsafe_targets() {
+        assert_eq!(sanitize_next_target(Some("/library")), "/library");
+        assert_eq!(
+            sanitize_next_target(Some("/library?view=grid")),
+            "/library?view=grid"
+        );
+        assert_eq!(sanitize_next_target(Some("/\r\nLocation: /admin")), "/");
+        assert_eq!(
+            sanitize_next_target(Some("/library%0d%0aLocation:%20/admin")),
+            "/"
+        );
+        assert_eq!(sanitize_next_target(Some("/library path")), "/");
+        assert_eq!(sanitize_next_target(Some("/library\tpath")), "/");
+    }
+
+    #[test]
+    fn sanitize_next_target_rejects_non_relative_targets() {
+        assert_eq!(sanitize_next_target(Some("https://example.com")), "/");
+        assert_eq!(sanitize_next_target(Some("//example.com/path")), "/");
+        assert_eq!(sanitize_next_target(Some("/://example.com")), "/");
+        assert_eq!(sanitize_next_target(Some("library")), "/");
     }
 
     #[tokio::test]
