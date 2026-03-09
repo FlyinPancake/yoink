@@ -10,7 +10,6 @@ leptos_router = { workspace = true }
 leptos_axum = { workspace = true, optional = true }
 leptoaster = "0.2"
 lucide-leptos = { workspace = true }
-chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
@@ -22,6 +21,8 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true }
 simpleicons-rs = "16.9.0"
 
+[dev-dependencies]
+chrono = { workspace = true }
 
 [features]
 default = []
