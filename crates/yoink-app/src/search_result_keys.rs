@@ -3,7 +3,11 @@ use uuid::Uuid;
 use yoink_shared::MonitoredArtist;
 
 pub(crate) fn provider_result_key(provider: &str, external_id: &str) -> String {
-    format!("{provider}:{external_id}")
+    format!(
+        "{}:{provider}|{}:{external_id}",
+        provider.len(),
+        external_id.len()
+    )
 }
 
 pub(crate) fn monitored_artist_key(artist: &MonitoredArtist) -> Uuid {
@@ -12,6 +16,8 @@ pub(crate) fn monitored_artist_key(artist: &MonitoredArtist) -> Uuid {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use chrono::Utc;
     use uuid::Uuid;
 
@@ -33,6 +39,20 @@ mod tests {
             provider_result_key("tidal", "123"),
             provider_result_key("deezer", "123")
         );
+    }
+
+    #[test]
+    fn provider_result_key_avoids_delimiter_collisions() {
+        let first = provider_result_key("spotify", "a:b");
+        let second = provider_result_key("spotify:a", "b");
+
+        assert_ne!(first, second);
+
+        let mut entries = HashMap::new();
+        entries.insert(first, "first");
+        entries.insert(second, "second");
+
+        assert_eq!(entries.len(), 2);
     }
 
     #[test]
