@@ -506,9 +506,9 @@ fn ArtistsContent(
                                 let new_results: Vec<_> = sr.results.into_iter()
                                     .filter(|a| !names.contains(&a.name.to_lowercase()))
                                     .collect();
-                                let new_results = StoredValue::new(new_results);
 
-                                let results_view = if !new_results.with_value(|results| results.is_empty()) {
+                                let results_view = if !new_results.is_empty() {
+                                    let new_results = new_results.clone();
                                     Some(view! {
                                         <Panel>
                                             <PanelHeader>
@@ -516,7 +516,7 @@ fn ArtistsContent(
                                             </PanelHeader>
                                             <div>
                                                 <For
-                                                    each=move || new_results.with_value(|results| results.clone())
+                                                    each=move || new_results.clone()
                                                     key=|artist| provider_result_key(&artist.provider, &artist.external_id)
                                                     let:artist
                                                 >
