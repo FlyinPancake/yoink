@@ -508,7 +508,6 @@ fn ArtistsContent(
                                     .collect();
 
                                 let results_view = if !new_results.is_empty() {
-                                    let new_results = new_results.clone();
                                     Some(view! {
                                         <Panel>
                                             <PanelHeader>

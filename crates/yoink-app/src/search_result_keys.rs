@@ -58,7 +58,7 @@ mod tests {
     #[test]
     fn monitored_artist_key_uses_uuid_identity() {
         let artist = MonitoredArtist {
-            id: Uuid::now_v7(),
+            id: Uuid::from_u128(1),
             name: "Artist".to_string(),
             image_url: Some("https://example.com/image.jpg".to_string()),
             bio: Some("Bio".to_string()),
