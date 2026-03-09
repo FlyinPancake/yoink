@@ -10,6 +10,7 @@ use super::{
 };
 use crate::actions::dispatch_action;
 use crate::pages::provider_icon_svg;
+use crate::search_result_keys::provider_result_key;
 use crate::styles::SEARCH_INPUT;
 use leptoaster::{ToastBuilder, ToastLevel, ToastPosition, expect_toaster};
 
@@ -273,12 +274,20 @@ pub fn LinkProviderDialog(
                                                     <div class="text-center py-6 text-sm text-zinc-400 dark:text-zinc-600">"No results found"</div>
                                                 }.into_any()
                                             } else {
+                                                let visible = StoredValue::new(visible);
                                                 view! {
                                                     <div>
-                                                        {visible.into_iter().map(|result| {
-                                                            let aid = artist_id.with_value(|id| *id);
-                                                            view! { <LinkResultRow result=result artist_id=aid session_linked=session_linked /> }
-                                                        }).collect_view()}
+                                                        <For
+                                                            each=move || visible.with_value(|results| results.clone())
+                                                            key=|result| provider_result_key(&result.provider, &result.external_id)
+                                                            let:result
+                                                        >
+                                                            <LinkResultRow
+                                                                result=result
+                                                                artist_id=artist_id.with_value(|id| *id)
+                                                                session_linked=session_linked
+                                                            />
+                                                        </For>
                                                     </div>
                                                 }.into_any()
                                             }

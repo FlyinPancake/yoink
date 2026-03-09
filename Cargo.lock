@@ -4803,6 +4803,7 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 name = "yoink-app"
 version = "0.1.2"
 dependencies = [
+ "chrono",
  "futures",
  "leptoaster",
  "leptos",
@@ -4812,6 +4813,7 @@ dependencies = [
  "serde",
  "serde_json",
  "simpleicons-rs",
+ "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

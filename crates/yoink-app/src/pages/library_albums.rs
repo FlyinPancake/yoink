@@ -11,6 +11,7 @@ use crate::components::{
     PanelHeader, PanelTitle, SleeveBadge,
 };
 use crate::hooks::set_page_title;
+use crate::search_result_keys::provider_result_key;
 use crate::styles::{EMPTY, MUTED, SEARCH_INPUT, SELECT};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -227,6 +228,7 @@ pub fn LibraryAlbumsTab() -> impl IntoView {
                                                 if sr.results.is_empty() {
                                                     return view! { <span></span> }.into_any();
                                                 }
+                                                let results = StoredValue::new(sr.results);
                                                 view! {
                                                     <Panel>
                                                         <PanelHeader>
@@ -234,38 +236,13 @@ pub fn LibraryAlbumsTab() -> impl IntoView {
                                                         </PanelHeader>
                                                         <PanelBody class="p-0!">
                                                             <div class="divide-y divide-black/[.04] dark:divide-white/[.04]">
-                                                                {sr.results.into_iter().map(|r| {
-                                                                    let loading = RwSignal::new(false);
-                                                                    let provider = r.provider.clone();
-                                                                    let external_album_id = r.external_id.clone();
-                                                                    let artist_external_id = r.artist_external_id.clone();
-                                                                    let artist_name = r.artist_name.clone();
-                                                                    view! {
-                                                                        <div class="px-4 py-3 flex items-center gap-3">
-                                                                            <div class="flex-1 min-w-0">
-                                                                                <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{r.title}</div>
-                                                                                <div class={cls!(MUTED, "text-xs truncate")}>{format!("{} · {}", r.artist_name, r.provider)}</div>
-                                                                            </div>
-                                                                            <Button variant=ButtonVariant::Primary class="py-1" loading=loading
-                                                                                on:click=move |_| {
-                                                                                    dispatch_with_toast_loading(
-                                                                                        ServerAction::AddAlbum {
-                                                                                            provider: provider.clone(),
-                                                                                            external_album_id: external_album_id.clone(),
-                                                                                            artist_external_id: artist_external_id.clone(),
-                                                                                            artist_name: artist_name.clone(),
-                                                                                            monitor_all: false,
-                                                                                        },
-                                                                                        "Album added",
-                                                                                        Some(loading),
-                                                                                    );
-                                                                                }
-                                                                            >
-                                                                                "Add"
-                                                                            </Button>
-                                                                        </div>
-                                                                    }
-                                                                }).collect_view()}
+                                                                <For
+                                                                    each=move || results.with_value(|results| results.clone())
+                                                                    key=|result| provider_result_key(&result.provider, &result.external_id)
+                                                                    let:result
+                                                                >
+                                                                    <ProviderAlbumSearchRow result=result />
+                                                                </For>
                                                             </div>
                                                         </PanelBody>
                                                     </Panel>
@@ -281,6 +258,41 @@ pub fn LibraryAlbumsTab() -> impl IntoView {
                 })
             }}
         </Transition>
+    }
+}
+
+#[component]
+fn ProviderAlbumSearchRow(result: SearchAlbumResult) -> impl IntoView {
+    let loading = RwSignal::new(false);
+    let provider = result.provider.clone();
+    let external_album_id = result.external_id.clone();
+    let artist_external_id = result.artist_external_id.clone();
+    let artist_name = result.artist_name.clone();
+
+    view! {
+        <div class="px-4 py-3 flex items-center gap-3">
+            <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{result.title.clone()}</div>
+                <div class={cls!(MUTED, "text-xs truncate")}>{format!("{} · {}", result.artist_name.clone(), result.provider.clone())}</div>
+            </div>
+            <Button variant=ButtonVariant::Primary class="py-1" loading=loading
+                on:click=move |_| {
+                    dispatch_with_toast_loading(
+                        ServerAction::AddAlbum {
+                            provider: provider.clone(),
+                            external_album_id: external_album_id.clone(),
+                            artist_external_id: artist_external_id.clone(),
+                            artist_name: artist_name.clone(),
+                            monitor_all: false,
+                        },
+                        "Album added",
+                        Some(loading),
+                    );
+                }
+            >
+                "Add"
+            </Button>
+        </div>
     }
 }
 

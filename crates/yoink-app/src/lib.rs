@@ -4,6 +4,7 @@ pub mod actions;
 pub mod components;
 pub mod hooks;
 pub mod pages;
+mod search_result_keys;
 pub mod shell;
 pub mod styles;
 

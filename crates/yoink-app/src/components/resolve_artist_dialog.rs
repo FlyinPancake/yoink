@@ -6,6 +6,7 @@ use yoink_shared::{MonitoredArtist, SearchArtistResult, ServerAction, provider_d
 
 use crate::actions::dispatch_action;
 use crate::pages::provider_icon_svg;
+use crate::search_result_keys::{monitored_artist_key, provider_result_key};
 use crate::styles::SEARCH_INPUT;
 use leptoaster::{ToastBuilder, ToastLevel, ToastPosition, expect_toaster};
 
@@ -314,19 +315,22 @@ pub fn ResolveArtistDialog(
                                                 b_match.cmp(&a_match)
                                                     .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
                                             });
+                                            let sorted = StoredValue::new(sorted);
                                             view! {
                                                 <div>
-                                                    {sorted.into_iter().map(|artist| {
-                                                        view! {
-                                                            <ExistingArtistRow
-                                                                artist=artist
-                                                                album_id=aid
-                                                                credit_provider=credit_provider.clone()
-                                                                credit_external_id=credit_external_id.clone()
-                                                                open=open
-                                                            />
-                                                        }
-                                                    }).collect_view()}
+                                                    <For
+                                                        each=move || sorted.with_value(|artists| artists.clone())
+                                                        key=|artist| monitored_artist_key(artist)
+                                                        let:artist
+                                                    >
+                                                        <ExistingArtistRow
+                                                            artist=artist
+                                                            album_id=aid
+                                                            credit_provider=credit_provider.clone()
+                                                            credit_external_id=credit_external_id.clone()
+                                                            open=open
+                                                        />
+                                                    </For>
                                                 </div>
                                             }.into_any()
                                         }
@@ -388,13 +392,18 @@ pub fn ResolveArtistDialog(
                                                         <div class="text-center py-6 text-sm text-zinc-400 dark:text-zinc-600">"No results found"</div>
                                                     }.into_any()
                                                 } else {
-                                                    view! {
-                                                        <div>
-                                                            {results.into_iter().map(|result| {
-                                                                view! { <ProviderSearchRow result=result album_id=aid open=open /> }
-                                                            }).collect_view()}
-                                                        </div>
-                                                    }.into_any()
+                                                    let results = StoredValue::new(results);
+                                                view! {
+                                                    <div>
+                                                        <For
+                                                            each=move || results.with_value(|results| results.clone())
+                                                            key=|result| provider_result_key(&result.provider, &result.external_id)
+                                                            let:result
+                                                        >
+                                                            <ProviderSearchRow result=result album_id=aid open=open />
+                                                        </For>
+                                                    </div>
+                                                }.into_any()
                                                 }
                                             }
                                         }

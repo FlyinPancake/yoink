@@ -19,6 +19,7 @@ use crate::components::{
     fallback_initial,
 };
 use crate::hooks::{set_page_title, use_sse_version};
+use crate::search_result_keys::provider_result_key;
 use crate::styles::{EMPTY, GLASS, GLASS_BODY, SEARCH_INPUT, SELECT};
 
 // ── Page-specific Tailwind class constants ──────────────────
@@ -505,17 +506,22 @@ fn ArtistsContent(
                                 let new_results: Vec<_> = sr.results.into_iter()
                                     .filter(|a| !names.contains(&a.name.to_lowercase()))
                                     .collect();
+                                let new_results = StoredValue::new(new_results);
 
-                                let results_view = if !new_results.is_empty() {
+                                let results_view = if !new_results.with_value(|results| results.is_empty()) {
                                     Some(view! {
                                         <Panel>
                                             <PanelHeader>
                                                 <PanelTitle>"Add from Search"</PanelTitle>
                                             </PanelHeader>
                                             <div>
-                                                {new_results.into_iter().map(|artist| {
-                                                    view! { <SearchResultRow artist=artist set_query=set_query /> }
-                                                }).collect_view()}
+                                                <For
+                                                    each=move || new_results.with_value(|results| results.clone())
+                                                    key=|artist| provider_result_key(&artist.provider, &artist.external_id)
+                                                    let:artist
+                                                >
+                                                    <SearchResultRow artist=artist set_query=set_query />
+                                                </For>
                                             </div>
                                         </Panel>
                                     }.into_any())
