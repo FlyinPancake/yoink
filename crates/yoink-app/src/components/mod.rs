@@ -14,6 +14,7 @@ mod page_shell;
 mod panel;
 mod quality_select;
 mod resolve_artist_dialog;
+mod select;
 mod sidebar;
 mod sleeve_badge;
 pub mod toast;
@@ -36,6 +37,7 @@ pub use page_shell::PageShell;
 pub use panel::{Panel, PanelBody, PanelHeader, PanelTitle};
 pub use quality_select::{QualitySelect, quality_label};
 pub use resolve_artist_dialog::ResolveArtistDialog;
+pub use select::{Select, SelectGroup, SelectOption};
 pub use sidebar::{MobileMenuButton, Sidebar, SidebarProvider};
 pub use sleeve_badge::{SleeveBadge, SleeveBadgeView};
 
