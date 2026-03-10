@@ -207,6 +207,8 @@ where
             type="button"
             class=TRIGGER
             node_ref=trigger_ref
+            aria-haspopup="listbox"
+            aria-expanded=move || if open.get() { "true" } else { "false" }
             on:click=move |_| {
                 if open.get_untracked() { open.set(false) } else { do_open() }
             }
@@ -248,9 +250,10 @@ where
                 <div
                     node_ref=dropdown_ref
                     class=CONTENT
+                    role="listbox"
                     style=move || {
                         let pos = pos_style.get();
-                        format!("{pos}animation:quality-select-in 120ms ease-out")
+                        format!("{pos}animation:select-in 120ms ease-out")
                     }
                 >
                     {groups.with_value(|gs| {
@@ -263,6 +266,8 @@ where
                                 view! {
                                     <button
                                         type="button"
+                                        role="option"
+                                        aria-selected=if is_selected { "true" } else { "false" }
                                         class=move || if is_selected { ITEM_ACTIVE } else { ITEM }
                                         on:click=move |_| {
                                             on_change.run(value);

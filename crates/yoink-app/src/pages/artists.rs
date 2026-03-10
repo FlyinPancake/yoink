@@ -519,7 +519,7 @@ fn ArtistsContent(
                                                     let _ = storage.set_item(SORT_STORAGE_KEY, val.as_str());
                                                 }
                                             })
-                                            icon=Box::new(|| view! { <ArrowUpDown /> }.into_any())
+                                            icon=Box::new(|| view! { <ArrowUpDown size=14 /> }.into_any())
                                         />
                                     }
                                 }}
@@ -538,18 +538,24 @@ fn ArtistsContent(
                                         let filter = query.get().trim().to_lowercase();
                                         let sort_key = collection_sort.get();
                                         artists_with_albums.with_value(|all| {
+                                            // Pair each entry with a pre-computed lowercase
+                                            // name so we don't re-allocate on every comparison.
                                             let mut filtered: Vec<_> = all.iter()
                                                 .filter(|(artist, _)| {
                                                     filter.is_empty() || artist.name.to_lowercase().contains(&filter)
+                                                })
+                                                .map(|(artist, albums)| {
+                                                    let lower = artist.name.to_lowercase();
+                                                    (artist, albums, lower)
                                                 })
                                                 .collect();
 
                                             // Sort based on selected option
                                             match sort_key {
-                                                ArtistSort::AZ => filtered.sort_by(|(a, _), (b, _)| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-                                                ArtistSort::ZA => filtered.sort_by(|(a, _), (b, _)| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
-                                                ArtistSort::Recent => filtered.sort_by(|(a, _), (b, _)| b.added_at.cmp(&a.added_at)),
-                                                ArtistSort::Wanted => filtered.sort_by(|(_, aa), (_, ba)| {
+                                                ArtistSort::AZ => filtered.sort_by(|(_, _, a), (_, _, b)| a.cmp(b)),
+                                                ArtistSort::ZA => filtered.sort_by(|(_, _, a), (_, _, b)| b.cmp(a)),
+                                                ArtistSort::Recent => filtered.sort_by(|(a, _, _), (b, _, _)| b.added_at.cmp(&a.added_at)),
+                                                ArtistSort::Wanted => filtered.sort_by(|(_, aa, _), (_, ba, _)| {
                                                     let aw = aa.iter().filter(|a| a.wanted).count();
                                                     let bw = ba.iter().filter(|a| a.wanted).count();
                                                     bw.cmp(&aw)
@@ -563,7 +569,7 @@ fn ArtistsContent(
                                                     </div>
                                                 }.into_any()
                                             } else {
-                                                filtered.into_iter().map(|(artist, albums)| {
+                                                filtered.into_iter().map(|(artist, albums, _)| {
                                                     view! { <ArtistCard artist=artist.clone() albums=albums.clone() /> }
                                                 }).collect_view().into_any()
                                             }
