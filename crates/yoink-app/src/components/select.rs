@@ -195,9 +195,9 @@ where
                     pos_style.set(style);
                 }
             });
-            let _ = web_sys::window()
-                .unwrap()
-                .request_animation_frame(cb.as_ref().unchecked_ref());
+            if let Some(w) = web_sys::window() {
+                let _ = w.request_animation_frame(cb.as_ref().unchecked_ref());
+            }
         }
     };
 
