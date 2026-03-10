@@ -16,6 +16,9 @@ const TRIGGER: &str = "\
     focus-visible:border-blue-500 focus-visible:ring-[3px] focus-visible:ring-blue-500/15 \
     disabled:cursor-not-allowed disabled:opacity-50";
 
+/// The dropdown starts invisible (`opacity:0`) and is revealed by JS
+/// once positioning is resolved, preventing the single-frame flash at
+/// the wrong position.
 const CONTENT: &str = "\
     fixed z-[9999] w-max \
     rounded-lg \
@@ -47,6 +50,68 @@ const ITEM_ACTIVE: &str = "\
 const INDICATOR: &str =
     "absolute right-2 flex size-3.5 items-center justify-center text-blue-500 dark:text-blue-400";
 
+// ── Viewport-aware positioning (hydrate-only) ──────────────
+
+/// Padding (px) kept between the dropdown edge and the viewport edge.
+#[cfg(feature = "hydrate")]
+const VIEWPORT_PADDING: f64 = 8.0;
+
+/// Gap (px) between trigger and dropdown.
+#[cfg(feature = "hydrate")]
+const TRIGGER_GAP: f64 = 4.0;
+
+/// Measure the trigger rect and the dropdown rect, then position the
+/// dropdown so it stays fully inside the viewport.  Tries below-left
+/// first, then shifts horizontally / flips vertically as needed.
+#[cfg(feature = "hydrate")]
+fn position_dropdown(trigger: &web_sys::Element, dropdown: &web_sys::HtmlElement) -> String {
+    let tr = trigger.get_bounding_client_rect();
+    let dr = dropdown.get_bounding_client_rect();
+    let vw = web_sys::window()
+        .and_then(|w| w.inner_width().ok())
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1024.0);
+    let vh = web_sys::window()
+        .and_then(|w| w.inner_height().ok())
+        .and_then(|v| v.as_f64())
+        .unwrap_or(768.0);
+
+    let dw = dr.width();
+    let dh = dr.height();
+
+    // ── Horizontal: prefer left-aligned with trigger ───────
+    let mut left = tr.left();
+    // If it overflows the right edge, shift left.
+    if left + dw + VIEWPORT_PADDING > vw {
+        left = vw - dw - VIEWPORT_PADDING;
+    }
+    // Never go past the left edge.
+    if left < VIEWPORT_PADDING {
+        left = VIEWPORT_PADDING;
+    }
+
+    // ── Vertical: prefer below trigger ─────────────────────
+    let below = tr.bottom() + TRIGGER_GAP;
+    let above = tr.top() - TRIGGER_GAP - dh;
+
+    let top = if below + dh + VIEWPORT_PADDING <= vh {
+        // Fits below.
+        below
+    } else if above >= VIEWPORT_PADDING {
+        // Flip above.
+        above
+    } else {
+        // Neither fits perfectly — pick the side with more room.
+        if (vh - tr.bottom()) >= tr.top() {
+            below
+        } else {
+            above.max(VIEWPORT_PADDING)
+        }
+    };
+
+    format!("top:{top:.0}px;left:{left:.0}px;")
+}
+
 // ── Types ──────────────────────────────────────────────────
 
 /// A single option inside a [`Select`] dropdown.
@@ -75,7 +140,9 @@ pub struct SelectGroup<T: 'static> {
 ///
 /// Works with any `T: Clone + Copy + PartialEq + Send + Sync + 'static`.
 /// The dropdown is rendered via `<Portal>` into `<body>` so it escapes
-/// any ancestor `overflow-hidden` / stacking contexts.
+/// any ancestor `overflow-hidden` / stacking contexts.  Positioning is
+/// viewport-aware: the dropdown shifts horizontally and flips vertically
+/// to stay fully visible.
 #[component]
 pub fn Select<T>(
     /// The currently selected value.
@@ -87,6 +154,10 @@ pub fn Select<T>(
     groups: Vec<SelectGroup<T>>,
     /// Called when the user picks a different option.
     on_change: Callback<T>,
+    /// Optional leading icon rendered before the display text in the
+    /// trigger button (e.g. `<ArrowUpDown size=14 />`).
+    #[prop(optional)]
+    icon: Option<Children>,
 ) -> impl IntoView
 where
     T: Clone + Copy + PartialEq + Send + Sync + 'static,
@@ -94,23 +165,40 @@ where
     let open = RwSignal::new(false);
     let pos_style = RwSignal::new(String::new());
     let trigger_ref = NodeRef::<leptos::html::Button>::new();
+    let dropdown_ref = NodeRef::<leptos::html::Div>::new();
 
     // Store groups in a StoredValue so they can be read from Fn closures
     // without Send+Sync issues from pre-built view trees.
     let groups = StoredValue::new(groups);
 
     let do_open = move || {
-        #[cfg(feature = "hydrate")]
-        if let Some(el) = trigger_ref.get() {
-            let element: &web_sys::Element = el.as_ref();
-            let rect = element.get_bounding_client_rect();
-            pos_style.set(format!(
-                "top:{:.0}px;left:{:.0}px;",
-                rect.bottom() + 4.0,
-                rect.left(),
-            ));
-        }
+        // We cannot measure the dropdown before it is in the DOM, so we
+        // set a temporary off-screen position, flip `open` to `true`,
+        // and schedule the real measurement for the next animation frame.
+        pos_style.set("top:-9999px;left:-9999px;".into());
         open.set(true);
+
+        #[cfg(feature = "hydrate")]
+        {
+            use wasm_bindgen::prelude::*;
+
+            let trigger_ref = trigger_ref;
+            let dropdown_ref = dropdown_ref;
+            let pos_style = pos_style;
+
+            // requestAnimationFrame so the browser has laid out the dropdown.
+            let cb = Closure::once_into_js(move || {
+                if let (Some(trigger_el), Some(dd_el)) = (trigger_ref.get(), dropdown_ref.get()) {
+                    let trigger: &web_sys::Element = trigger_el.as_ref();
+                    let dropdown: &web_sys::HtmlElement = dd_el.as_ref();
+                    let style = position_dropdown(trigger, dropdown);
+                    pos_style.set(style);
+                }
+            });
+            let _ = web_sys::window()
+                .unwrap()
+                .request_animation_frame(cb.as_ref().unchecked_ref());
+        }
     };
 
     view! {
@@ -134,6 +222,11 @@ where
                 }
             }
         >
+            {icon.map(|children| view! {
+                <span class="shrink-0 opacity-50 flex items-center [&_svg]:size-3.5">
+                    {children()}
+                </span>
+            })}
             <span class="line-clamp-1">{display_text}</span>
             <span
                 class="shrink-0 opacity-50 transition-transform duration-150 flex items-center"
@@ -153,11 +246,12 @@ where
                 ></div>
                 // Dropdown — views are built inside the closure from stored data.
                 <div
+                    node_ref=dropdown_ref
                     class=CONTENT
-                    style=move || format!(
-                        "{}animation:quality-select-in 120ms ease-out",
-                        pos_style.get(),
-                    )
+                    style=move || {
+                        let pos = pos_style.get();
+                        format!("{pos}animation:quality-select-in 120ms ease-out")
+                    }
                 >
                     {groups.with_value(|gs| {
                         gs.iter().enumerate().map(|(gi, group)| {

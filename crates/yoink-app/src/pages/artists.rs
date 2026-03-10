@@ -2,7 +2,7 @@ use crate::cls;
 use std::collections::HashSet;
 
 use leptos::prelude::*;
-use lucide_leptos::X;
+use lucide_leptos::{ArrowUpDown, X};
 
 use yoink_shared::{
     MonitoredAlbum, MonitoredArtist, SearchArtistResult, ServerAction, build_albums_by_artist,
@@ -15,12 +15,58 @@ use crate::actions::dispatch_action;
 use crate::components::toast::dispatch_with_toast;
 use crate::components::{
     Badge, BadgeSize, BadgeSurface, BadgeVariant, Breadcrumb, BreadcrumbItem, Button,
-    ButtonVariant, ErrorPanel, PageShell, Panel, PanelBody, PanelHeader, PanelTitle,
-    fallback_initial,
+    ButtonVariant, ErrorPanel, PageShell, Panel, PanelBody, PanelHeader, PanelTitle, Select,
+    SelectGroup, SelectOption, fallback_initial,
 };
 use crate::hooks::{set_page_title, use_sse_version};
 use crate::search_result_keys::provider_result_key;
-use crate::styles::{EMPTY, GLASS, GLASS_BODY, SEARCH_INPUT, SELECT};
+use crate::styles::{EMPTY, GLASS, GLASS_BODY, SEARCH_INPUT};
+
+// ── Artist collection sort order ─────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ArtistSort {
+    AZ,
+    ZA,
+    Recent,
+    Wanted,
+}
+
+impl ArtistSort {
+    const ALL: [Self; 4] = [Self::AZ, Self::ZA, Self::Recent, Self::Wanted];
+
+    /// Key persisted to localStorage.
+    #[cfg(feature = "hydrate")]
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::AZ => "az",
+            Self::ZA => "za",
+            Self::Recent => "recent",
+            Self::Wanted => "wanted",
+        }
+    }
+
+    /// Human-readable label for the select trigger / dropdown.
+    fn label(self) -> &'static str {
+        match self {
+            Self::AZ => "A \u{2013} Z",
+            Self::ZA => "Z \u{2013} A",
+            Self::Recent => "Recently Added",
+            Self::Wanted => "Most Wanted",
+        }
+    }
+
+    #[cfg(feature = "hydrate")]
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "az" => Some(Self::AZ),
+            "za" => Some(Self::ZA),
+            "recent" => Some(Self::Recent),
+            "wanted" => Some(Self::Wanted),
+            _ => None,
+        }
+    }
+}
 
 // ── Page-specific Tailwind class constants ──────────────────
 
@@ -345,8 +391,32 @@ fn ArtistsContent(
         .collect();
     let albums_by_artist = build_albums_by_artist(data.albums);
 
-    // Client-side sort for the collection grid (filter reuses the search query)
-    let (collection_sort, set_collection_sort) = signal("az".to_string());
+    // Client-side sort for the collection grid (filter reuses the search query).
+    // Persist the chosen sort order in localStorage so it survives page reloads.
+    // We defer the real grid render until the client has mounted so there is no
+    // flash of AZ-sorted content while localStorage is read.
+    #[cfg(feature = "hydrate")]
+    const SORT_STORAGE_KEY: &str = "yoink:artists:sort";
+
+    let mounted = RwSignal::new(false);
+    let (collection_sort, set_collection_sort) = signal(ArtistSort::AZ);
+
+    Effect::new(move |prev: Option<()>| {
+        if prev.is_some() {
+            return;
+        }
+        #[cfg(feature = "hydrate")]
+        if let Some(stored) = leptos::prelude::window()
+            .local_storage()
+            .ok()
+            .flatten()
+            .and_then(|s| s.get_item(SORT_STORAGE_KEY).ok().flatten())
+            .and_then(|v| ArtistSort::from_str(&v))
+        {
+            set_collection_sort.set(stored);
+        }
+        mounted.set(true);
+    });
 
     // Precompute artist data for filtering/sorting
     let artists_with_albums: Vec<(MonitoredArtist, Vec<MonitoredAlbum>)> = data
@@ -403,75 +473,108 @@ fn ArtistsContent(
                 </div>
             </div>
 
-            // Monitored artists collection (shown first, filtered by search query)
-            <Panel>
-                <PanelHeader>
-                    <PanelTitle>"Your Collection"</PanelTitle>
-                    {if monitored_count > 0 {
-                        view! {
-                            <select
-                                class=SELECT
-                                aria-label="Sort collection"
-                                on:change=move |ev| {
-                                    set_collection_sort.set(event_target_value(&ev));
-                                }
-                            >
-                                <option value="az" selected=true>"A \u{2013} Z"</option>
-                                <option value="za">"Z \u{2013} A"</option>
-                                <option value="recent">"Recently Added"</option>
-                                <option value="wanted">"Most Wanted"</option>
-                            </select>
-                        }.into_any()
-                    } else {
-                        view! { <span></span> }.into_any()
-                    }}
-                </PanelHeader>
-                {if monitored_count == 0 {
-                    view! { <div class=EMPTY>"No monitored artists yet. Search and add one above."</div> }.into_any()
-                } else {
-                    view! {
-                        <PanelBody class="p-4">
-                            <div class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+            // Monitored artists collection (shown first, filtered by search query).
+            // Rendered client-only so localStorage sort is applied before first paint.
+            <Show
+                when=move || mounted.get()
+                fallback=move || view! {
+                    <div class="bg-white/70 dark:bg-zinc-800/60 rounded-xl border border-black/[.06] dark:border-white/[.08] overflow-hidden">
+                        <div class="px-5 py-3 border-b border-black/[.06] dark:border-white/[.06]">
+                            <div class="h-4 w-28 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse"></div>
+                        </div>
+                        <div class="p-4 grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+                            {(0..8).map(|_| view! {
+                                <div class="rounded-xl p-4 flex items-center gap-3.5 border border-black/[.04] dark:border-white/[.04] animate-pulse">
+                                    <div class="size-12 rounded-full bg-zinc-200 dark:bg-zinc-700 shrink-0"></div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="h-4 w-28 bg-zinc-200 dark:bg-zinc-700 rounded mb-2"></div>
+                                        <div class="h-3 w-40 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
+                                    </div>
+                                </div>
+                            }).collect_view()}
+                        </div>
+                    </div>
+                }
+            >
+                <Panel>
+                    <PanelHeader>
+                        <PanelTitle>"Your Collection"</PanelTitle>
+                        {if monitored_count > 0 {
+                            view! {
                                 {move || {
-                                    let filter = query.get().trim().to_lowercase();
-                                    let sort_key = collection_sort.get();
-                                    artists_with_albums.with_value(|all| {
-                                        let mut filtered: Vec<_> = all.iter()
-                                            .filter(|(artist, _)| {
-                                                filter.is_empty() || artist.name.to_lowercase().contains(&filter)
+                                    let sort_options: Vec<SelectOption<ArtistSort>> = ArtistSort::ALL
+                                        .iter()
+                                        .map(|&s| SelectOption { value: s, label: s.label().into() })
+                                        .collect();
+                                    let current = collection_sort.get();
+                                    view! {
+                                        <Select
+                                            selected=current
+                                            display_text=current.label().to_string()
+                                            groups=vec![SelectGroup { options: sort_options, separator_after: false }]
+                                            on_change=Callback::new(move |val: ArtistSort| {
+                                                set_collection_sort.set(val);
+                                                #[cfg(feature = "hydrate")]
+                                                if let Ok(Some(storage)) = leptos::prelude::window().local_storage() {
+                                                    let _ = storage.set_item(SORT_STORAGE_KEY, val.as_str());
+                                                }
                                             })
-                                            .collect();
-
-                                        // Sort based on selected option
-                                        match sort_key.as_str() {
-                                            "za" => filtered.sort_by(|(a, _), (b, _)| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
-                                            "recent" => filtered.sort_by(|(a, _), (b, _)| b.added_at.cmp(&a.added_at)),
-                                            "wanted" => filtered.sort_by(|(_, aa), (_, ba)| {
-                                                let aw = aa.iter().filter(|a| a.wanted).count();
-                                                let bw = ba.iter().filter(|a| a.wanted).count();
-                                                bw.cmp(&aw)
-                                            }),
-                                            _ /* "az" */ => filtered.sort_by(|(a, _), (b, _)| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-                                        }
-
-                                        if filtered.is_empty() {
-                                            view! {
-                                                <div class="col-span-full text-center py-6 text-sm text-zinc-400 dark:text-zinc-600">
-                                                    "No matching artists"
-                                                </div>
-                                            }.into_any()
-                                        } else {
-                                            filtered.into_iter().map(|(artist, albums)| {
-                                                view! { <ArtistCard artist=artist.clone() albums=albums.clone() /> }
-                                            }).collect_view().into_any()
-                                        }
-                                    })
+                                            icon=Box::new(|| view! { <ArrowUpDown /> }.into_any())
+                                        />
+                                    }
                                 }}
-                            </div>
-                        </PanelBody>
-                    }.into_any()
-                }}
-            </Panel>
+                            }.into_any()
+                        } else {
+                            view! { <span></span> }.into_any()
+                        }}
+                    </PanelHeader>
+                    {if monitored_count == 0 {
+                        view! { <div class=EMPTY>"No monitored artists yet. Search and add one above."</div> }.into_any()
+                    } else {
+                        view! {
+                            <PanelBody class="p-4">
+                                <div class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+                                    {move || {
+                                        let filter = query.get().trim().to_lowercase();
+                                        let sort_key = collection_sort.get();
+                                        artists_with_albums.with_value(|all| {
+                                            let mut filtered: Vec<_> = all.iter()
+                                                .filter(|(artist, _)| {
+                                                    filter.is_empty() || artist.name.to_lowercase().contains(&filter)
+                                                })
+                                                .collect();
+
+                                            // Sort based on selected option
+                                            match sort_key {
+                                                ArtistSort::AZ => filtered.sort_by(|(a, _), (b, _)| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+                                                ArtistSort::ZA => filtered.sort_by(|(a, _), (b, _)| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
+                                                ArtistSort::Recent => filtered.sort_by(|(a, _), (b, _)| b.added_at.cmp(&a.added_at)),
+                                                ArtistSort::Wanted => filtered.sort_by(|(_, aa), (_, ba)| {
+                                                    let aw = aa.iter().filter(|a| a.wanted).count();
+                                                    let bw = ba.iter().filter(|a| a.wanted).count();
+                                                    bw.cmp(&aw)
+                                                }),
+                                            }
+
+                                            if filtered.is_empty() {
+                                                view! {
+                                                    <div class="col-span-full text-center py-6 text-sm text-zinc-400 dark:text-zinc-600">
+                                                        "No matching artists"
+                                                    </div>
+                                                }.into_any()
+                                            } else {
+                                                filtered.into_iter().map(|(artist, albums)| {
+                                                    view! { <ArtistCard artist=artist.clone() albums=albums.clone() /> }
+                                                }).collect_view().into_any()
+                                            }
+                                        })
+                                    }}
+                                </div>
+                            </PanelBody>
+                        }.into_any()
+                    }}
+                </Panel>
+            </Show>
 
             // Search results — only non-monitored artists, shown below collection
             <Suspense fallback=move || view! {
