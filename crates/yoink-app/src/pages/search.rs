@@ -22,8 +22,7 @@ pub struct SearchAllResult {
 
 #[server(SearchAll, "/leptos")]
 pub async fn search_all(query: String) -> Result<SearchAllResult, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let q = query.trim().to_string();
     if q.is_empty() {

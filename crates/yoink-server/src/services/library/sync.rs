@@ -10,6 +10,7 @@ use crate::{
     models::MonitoredAlbum,
     providers::ProviderAlbum,
     state::AppState,
+    util::provider_priority,
 };
 
 /// Sync albums for an artist from all linked metadata providers.
@@ -333,15 +334,7 @@ fn should_prefer_album(
     candidate.external_id > existing.external_id
 }
 
-/// Higher value = preferred as display-metadata source.
-fn provider_priority(provider_id: &str) -> u8 {
-    match provider_id {
-        "tidal" => 10,
-        "deezer" => 9,
-        "musicbrainz" => 1,
-        _ => 5,
-    }
-}
+
 
 #[cfg(test)]
 mod tests {

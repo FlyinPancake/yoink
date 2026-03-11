@@ -9,6 +9,7 @@ use super::{
     DialogShell, DialogSize, dialog_shell::DIALOG_BACKDROP_CLASS,
 };
 use crate::actions::dispatch_action;
+use crate::hooks::use_debounced_signal;
 use crate::pages::provider_icon_svg;
 use crate::search_result_keys::provider_result_key;
 use crate::styles::SEARCH_INPUT;
@@ -23,15 +24,13 @@ const FILTER_INACTIVE: &str = "inline-flex items-center gap-1.5 px-2.5 py-1 roun
 
 #[server(ListProviders, "/leptos")]
 pub async fn list_providers() -> Result<Vec<String>, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
     Ok((ctx.list_providers)())
 }
 
 #[server(SearchAllProviders, "/leptos")]
 pub async fn search_all_providers(query: String) -> Result<Vec<SearchArtistResult>, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let trimmed = query.trim().to_string();
     if trimmed.is_empty() {
@@ -69,45 +68,7 @@ pub fn LinkProviderDialog(
 
     // Search query — default to artist name
     let default_query = artist_name.clone();
-    let query = RwSignal::new(String::new());
-    let debounced_query = RwSignal::new(String::new());
-
-    #[cfg(feature = "hydrate")]
-    {
-        use std::cell::Cell;
-        use std::rc::Rc;
-        use wasm_bindgen::JsCast;
-        let timer_id: Rc<Cell<Option<i32>>> = Rc::new(Cell::new(None));
-        Effect::new({
-            let timer_id = timer_id.clone();
-            move |_| {
-                let val = query.get();
-                if let Some(id) = timer_id.get() {
-                    leptos::prelude::window().clear_timeout_with_handle(id);
-                }
-                let timer_id_inner = timer_id.clone();
-                let dq = debounced_query;
-                let cb = wasm_bindgen::closure::Closure::once_into_js(move || {
-                    dq.set(val);
-                    timer_id_inner.set(None);
-                });
-                if let Ok(id) = leptos::prelude::window()
-                    .set_timeout_with_callback_and_timeout_and_arguments_0(
-                        cb.as_ref().unchecked_ref(),
-                        300,
-                    )
-                {
-                    timer_id.set(Some(id));
-                }
-            }
-        });
-    }
-    #[cfg(not(feature = "hydrate"))]
-    {
-        Effect::new(move |_| {
-            debounced_query.set(query.get());
-        });
-    }
+    let (query, debounced_query) = use_debounced_signal(String::new());
 
     // Search all providers at once
     let search_results: Resource<Result<Vec<SearchArtistResult>, ServerFnError>> = Resource::new(
@@ -128,9 +89,7 @@ pub fn LinkProviderDialog(
     Effect::new(move || {
         let is_open = open.get();
         if is_open {
-            let dq = default_query_stored.with_value(|q| q.clone());
-            query.set(dq.clone());
-            debounced_query.set(dq);
+            query.set(default_query_stored.with_value(|q| q.clone()));
             filter_provider.set(None);
             session_linked.set(Vec::new());
         }

@@ -43,8 +43,7 @@ pub struct ArtistDetailData {
 pub async fn get_artist_detail(artist_id: String) -> Result<ArtistDetailData, ServerFnError> {
     use yoink_shared::Uuid;
 
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let artist_uuid: Uuid = artist_id
         .parse()
@@ -97,8 +96,7 @@ pub async fn get_artist_detail(artist_id: String) -> Result<ArtistDetailData, Se
 pub async fn get_artist_images(artist_id: String) -> Result<Vec<ArtistImageOption>, ServerFnError> {
     use yoink_shared::Uuid;
 
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let artist_uuid: Uuid = artist_id
         .parse()

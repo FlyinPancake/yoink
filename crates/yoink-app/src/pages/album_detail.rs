@@ -52,8 +52,7 @@ pub struct AlbumDetailData {
 pub async fn get_album_detail(album_id: String) -> Result<AlbumDetailData, ServerFnError> {
     use yoink_shared::Uuid;
 
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let album_uuid: Uuid = album_id
         .parse()
@@ -334,7 +333,7 @@ fn AlbumDetailContent(
     let artist_name = artist
         .as_ref()
         .map(|a| a.name.clone())
-        .unwrap_or_else(|| "Unknown Artist".to_string());
+        .unwrap_or_else(|| yoink_shared::UNKNOWN_ARTIST.to_string());
     let artist_link = artist_id_param
         .as_deref()
         .map(|id| format!("/artists/{id}"))

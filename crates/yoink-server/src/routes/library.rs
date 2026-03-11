@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use crate::{
     db,
-    models::{SearchQuery, SearchResultAlbum, SearchResultArtist, SearchResultTrack, TrackInfo},
+    models::{SearchAlbumResult, SearchArtistResult, SearchQuery, SearchTrackResult, TrackInfo},
     state::AppState,
     ui::{artist_image_url, artist_profile_url},
 };
@@ -90,25 +90,7 @@ async fn album_tracks(
                 let tracks: Vec<TrackInfo> = provider_tracks
                     .into_iter()
                     .map(|track| {
-                        let secs = track.duration_secs;
-                        let mins = secs / 60;
-                        let rem = secs % 60;
-                        TrackInfo {
-                            id: Uuid::now_v7(),
-                            title: track.title,
-                            version: track.version,
-                            disc_number: track.disc_number.unwrap_or(1),
-                            track_number: track.track_number,
-                            duration_secs: secs,
-                            duration_display: format!("{mins}:{rem:02}"),
-                            isrc: track.isrc,
-                            explicit: track.explicit,
-                            quality_override: None,
-                            track_artist: track.artists,
-                            file_path: None,
-                            monitored: false,
-                            acquired: false,
-                        }
+                        track.into_track_info(Default::default())
                     })
                     .collect();
                 return (StatusCode::OK, Json(tracks)).into_response();
@@ -133,7 +115,7 @@ async fn api_search(
 ) -> impl IntoResponse {
     let q = match query.q.filter(|value| !value.trim().is_empty()) {
         Some(q) => q,
-        None => return (StatusCode::OK, Json(Vec::<SearchResultArtist>::new())).into_response(),
+        None => return (StatusCode::OK, Json(Vec::<SearchArtistResult>::new())).into_response(),
     };
 
     let monitored = state.monitored_artists.read().await;
@@ -148,13 +130,15 @@ async fn api_search(
 
     for (provider_id, artists) in all_results {
         for artist in &artists {
-            results.push(SearchResultArtist {
+            results.push(SearchArtistResult {
                 provider: provider_id.clone(),
                 external_id: artist.external_id.clone(),
                 name: artist.name.clone(),
                 image_url: artist_image_url(&provider_id, artist, 160),
                 url: artist_profile_url(artist),
-                already_monitored: monitored_names.contains(&artist.name.to_ascii_lowercase()),
+                already_monitored: Some(
+                    monitored_names.contains(&artist.name.to_ascii_lowercase()),
+                ),
                 disambiguation: artist.disambiguation.clone(),
                 artist_type: artist.artist_type.clone(),
                 country: artist.country.clone(),
@@ -173,7 +157,7 @@ async fn api_search_albums(
 ) -> impl IntoResponse {
     let q = match query.q.filter(|value| !value.trim().is_empty()) {
         Some(q) => q,
-        None => return (StatusCode::OK, Json(Vec::<SearchResultAlbum>::new())).into_response(),
+        None => return (StatusCode::OK, Json(Vec::<SearchAlbumResult>::new())).into_response(),
     };
 
     let all_results = state.registry.search_albums_all(&q).await;
@@ -186,7 +170,7 @@ async fn api_search_albums(
                 .as_deref()
                 .map(|cover| yoink_shared::provider_image_url(&provider_id, cover, 320));
 
-            results.push(SearchResultAlbum {
+            results.push(SearchAlbumResult {
                 provider: provider_id.clone(),
                 external_id: album.external_id,
                 title: album.title,
@@ -210,7 +194,7 @@ async fn api_search_tracks(
 ) -> impl IntoResponse {
     let q = match query.q.filter(|value| !value.trim().is_empty()) {
         Some(q) => q,
-        None => return (StatusCode::OK, Json(Vec::<SearchResultTrack>::new())).into_response(),
+        None => return (StatusCode::OK, Json(Vec::<SearchTrackResult>::new())).into_response(),
     };
 
     let all_results = state.registry.search_tracks_all(&q).await;
@@ -218,22 +202,18 @@ async fn api_search_tracks(
 
     for (provider_id, tracks) in all_results {
         for track in tracks {
-            let secs = track.duration_secs;
-            let mins = secs / 60;
-            let rem = secs % 60;
-
             let album_cover_url = track
                 .album_cover_ref
                 .as_deref()
                 .map(|cover| yoink_shared::provider_image_url(&provider_id, cover, 160));
 
-            results.push(SearchResultTrack {
+            results.push(SearchTrackResult {
                 provider: provider_id.clone(),
                 external_id: track.external_id,
                 title: track.title,
                 version: track.version,
                 duration_secs: track.duration_secs,
-                duration_display: format!("{mins}:{rem:02}"),
+                duration_display: yoink_shared::format_duration(track.duration_secs),
                 isrc: track.isrc,
                 explicit: track.explicit,
                 artist_name: track.artist_name,

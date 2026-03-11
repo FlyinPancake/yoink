@@ -5,6 +5,7 @@ use lucide_leptos::{Link, Search, UserPlus, X};
 use yoink_shared::{MonitoredArtist, SearchArtistResult, ServerAction, provider_display_name};
 
 use crate::actions::dispatch_action;
+use crate::hooks::use_debounced_signal;
 use crate::pages::provider_icon_svg;
 use crate::search_result_keys::{monitored_artist_key, provider_result_key};
 use crate::styles::SEARCH_INPUT;
@@ -22,8 +23,7 @@ use super::{
 
 #[server(GetMonitoredArtists, "/leptos")]
 pub async fn get_monitored_artists() -> Result<Vec<MonitoredArtist>, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
     Ok(ctx.monitored_artists.read().await.clone())
 }
 
@@ -66,45 +66,7 @@ pub fn ResolveArtistDialog(
     let mode = RwSignal::new("choose".to_string()); // "choose", "link_existing", "search_new"
 
     // Search query for linking to existing
-    let query = RwSignal::new(String::new());
-    let debounced_query = RwSignal::new(String::new());
-
-    #[cfg(feature = "hydrate")]
-    {
-        use std::cell::Cell;
-        use std::rc::Rc;
-        use wasm_bindgen::JsCast;
-        let timer_id: Rc<Cell<Option<i32>>> = Rc::new(Cell::new(None));
-        Effect::new({
-            let timer_id = timer_id.clone();
-            move |_| {
-                let val = query.get();
-                if let Some(id) = timer_id.get() {
-                    leptos::prelude::window().clear_timeout_with_handle(id);
-                }
-                let timer_id_inner = timer_id.clone();
-                let dq = debounced_query;
-                let cb = wasm_bindgen::closure::Closure::once_into_js(move || {
-                    dq.set(val);
-                    timer_id_inner.set(None);
-                });
-                if let Ok(id) = leptos::prelude::window()
-                    .set_timeout_with_callback_and_timeout_and_arguments_0(
-                        cb.as_ref().unchecked_ref(),
-                        300,
-                    )
-                {
-                    timer_id.set(Some(id));
-                }
-            }
-        });
-    }
-    #[cfg(not(feature = "hydrate"))]
-    {
-        Effect::new(move |_| {
-            debounced_query.set(query.get());
-        });
-    }
+    let (query, debounced_query) = use_debounced_signal(String::new());
 
     // Monitored artists for "link to existing"
     let monitored_artists = Resource::new(
@@ -136,7 +98,6 @@ pub fn ResolveArtistDialog(
             mode.set("choose".to_string());
             adding_new.set(false);
             query.set(credit_name_stored.with_value(|n| n.clone()));
-            debounced_query.set(credit_name_stored.with_value(|n| n.clone()));
         }
         #[cfg(feature = "hydrate")]
         {

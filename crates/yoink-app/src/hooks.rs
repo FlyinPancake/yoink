@@ -1,5 +1,66 @@
 use leptos::prelude::*;
 
+// ── Debounced signal hook ───────────────────────────────────
+
+/// Create a signal pair where the second value lags behind the first by
+/// `delay_ms` (default 300 ms).  On WASM the debounce is implemented
+/// with `setTimeout`; on SSR the debounced signal copies the source
+/// synchronously.
+///
+/// Returns `(raw, debounced)` — write to `raw`, read from `debounced`.
+pub fn use_debounced_signal(initial: String) -> (RwSignal<String>, ReadSignal<String>) {
+    use_debounced_signal_with_delay(initial, 300)
+}
+
+/// Like [`use_debounced_signal`] but with a configurable delay.
+pub fn use_debounced_signal_with_delay(
+    initial: String,
+    _delay_ms: i32,
+) -> (RwSignal<String>, ReadSignal<String>) {
+    let raw = RwSignal::new(initial.clone());
+    let (debounced, set_debounced) = signal(initial);
+
+    #[cfg(feature = "hydrate")]
+    {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        use wasm_bindgen::JsCast;
+
+        let timer_id: Rc<Cell<Option<i32>>> = Rc::new(Cell::new(None));
+        Effect::new({
+            let timer_id = timer_id.clone();
+            move |_| {
+                let val = raw.get();
+                if let Some(id) = timer_id.get() {
+                    leptos::prelude::window().clear_timeout_with_handle(id);
+                }
+                let timer_id_inner = timer_id.clone();
+                let cb = wasm_bindgen::closure::Closure::once_into_js(move || {
+                    set_debounced.set(val);
+                    timer_id_inner.set(None);
+                });
+                if let Ok(id) = leptos::prelude::window()
+                    .set_timeout_with_callback_and_timeout_and_arguments_0(
+                        cb.as_ref().unchecked_ref(),
+                        _delay_ms,
+                    )
+                {
+                    timer_id.set(Some(id));
+                }
+            }
+        });
+    }
+
+    #[cfg(not(feature = "hydrate"))]
+    {
+        Effect::new(move |_| {
+            set_debounced.set(raw.get());
+        });
+    }
+
+    (raw, debounced)
+}
+
 /// Set the document's `<title>` on the client side.
 ///
 /// On SSR this is a no-op — the shell always renders `<title>yoink</title>`.

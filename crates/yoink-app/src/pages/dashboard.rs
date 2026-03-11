@@ -38,8 +38,7 @@ pub struct DashboardData {
 
 #[server(GetDashboardData, "/leptos")]
 pub async fn get_dashboard_data() -> Result<DashboardData, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let artists = ctx.monitored_artists.read().await.clone();
     let albums = ctx.monitored_albums.read().await.clone();

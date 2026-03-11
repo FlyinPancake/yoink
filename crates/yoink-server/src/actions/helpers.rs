@@ -189,26 +189,12 @@ pub(super) async fn store_album_tracks(
             continue;
         }
 
-        let secs = track.duration_secs;
-        let mins = secs / 60;
-        let rem = secs % 60;
-
-        let track_info = yoink_shared::TrackInfo {
-            id: Uuid::now_v7(),
-            title: track.title,
-            version: track.version,
-            disc_number: track.disc_number.unwrap_or(1),
-            track_number: track.track_number.max(1),
-            duration_secs: secs,
-            duration_display: format!("{mins}:{rem:02}"),
-            isrc: track.isrc,
-            explicit: track.explicit,
-            quality_override: None,
-            track_artist: track.artists,
-            file_path: None,
+        let track_number = track.track_number.max(1);
+        let track_info = track.into_track_info(crate::providers::LocalTrackOverrides {
+            track_number: Some(track_number),
             monitored: monitor_all,
-            acquired: false,
-        };
+            ..Default::default()
+        });
 
         db::upsert_track(&state.db, &track_info, album_id).await?;
         db::upsert_track_provider_link(&state.db, track_info.id, provider, &ext_id).await?;

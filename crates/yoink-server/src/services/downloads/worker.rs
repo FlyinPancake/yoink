@@ -14,6 +14,7 @@ use crate::{
         DownloadSource, DownloadTrackContext, MetadataProvider, PlaybackInfo, ProviderTrack,
     },
     state::AppState,
+    util::provider_priority,
 };
 
 use super::fetch_cover_art_bytes_from_url;
@@ -50,7 +51,7 @@ pub(crate) async fn download_album_job(state: &AppState, job: DownloadJob) -> Ap
             album_links
                 .iter()
                 .filter(|l| state.registry.metadata_provider(&l.provider).is_some())
-                .max_by_key(|l| metadata_provider_priority(&l.provider))
+                .max_by_key(|l| provider_priority(&l.provider))
         })
         .ok_or_else(|| {
             AppError::not_found("metadata provider link", Some(job.album_id.to_string()))
@@ -562,35 +563,26 @@ async fn process_track_download(
         .unwrap_or(&final_path)
         .to_string_lossy()
         .to_string();
-    let explicit = track.explicit;
     let local_track_id = existing_track
         .as_ref()
-        .map(|track| track.id)
+        .map(|t| t.id)
         .unwrap_or_else(uuid::Uuid::now_v7);
-    let existing_monitored = existing_track
-        .as_ref()
-        .map(|track| track.monitored)
-        .unwrap_or(album_is_fully_monitored);
-    let quality_override = existing_track
-        .as_ref()
-        .and_then(|track| track.quality_override);
 
-    let track_info = yoink_shared::TrackInfo {
+    let track_info = track.to_track_info(crate::providers::LocalTrackOverrides {
         id: local_track_id,
-        title: track.title.clone(),
-        version: track.version.clone(),
-        disc_number: disc_number.unwrap_or(1),
-        track_number,
-        duration_secs: track.duration_secs,
-        duration_display: String::new(),
-        isrc: track.isrc.clone(),
-        explicit,
-        quality_override,
+        quality_override: existing_track.as_ref().and_then(|t| t.quality_override),
         track_artist: Some(track_artist.clone()),
         file_path: Some(relative_path),
-        monitored: existing_monitored,
+        monitored: existing_track
+            .as_ref()
+            .map(|t| t.monitored)
+            .unwrap_or(album_is_fully_monitored),
         acquired: true, // Just downloaded — mark as acquired
-    };
+        disc_number: Some(disc_number.unwrap_or(1)),
+        track_number: Some(track_number),
+        explicit: Some(track.explicit),
+        duration_display: Some(String::new()),
+    });
     if let Err(e) = db::upsert_track(&state.db, &track_info, job.album_id).await {
         warn!(track_id = %local_track_id, error = %e, "Failed to persist downloaded track to DB");
     }
@@ -612,7 +604,7 @@ async fn find_existing_track_file(
     album_dir: &std::path::Path,
     base_name: &str,
 ) -> Option<std::path::PathBuf> {
-    for ext in ["flac", "m4a", "mp3", "ogg", "wav", "aac"] {
+    for ext in crate::util::AUDIO_EXTENSIONS {
         let path = album_dir.join(format!("{base_name}.{ext}"));
         if tokio::fs::try_exists(&path).await.ok()? {
             return Some(path);
@@ -745,14 +737,7 @@ async fn download_playback_to_file(
     super::io::download_payload_to_file(http, &io_payload, path).await
 }
 
-fn metadata_provider_priority(provider_id: &str) -> u8 {
-    match provider_id {
-        "tidal" => 10,
-        "deezer" => 9,
-        "musicbrainz" => 1,
-        _ => 5,
-    }
-}
+
 
 async fn resolve_playback_with_fallback(
     state: &AppState,

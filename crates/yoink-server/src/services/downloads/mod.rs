@@ -20,6 +20,7 @@ use crate::{
     error::{AppError, AppResult},
     models::{DownloadJob, DownloadStatus, MonitoredAlbum},
     state::AppState,
+    util::is_audio_extension,
 };
 
 use super::library::{recompute_partially_wanted, update_wanted};
@@ -67,7 +68,7 @@ pub(crate) async fn enqueue_album_download(state: &AppState, album: &MonitoredAl
             .iter()
             .find(|a| a.id == album.artist_id)
             .map(|a| a.name.clone())
-            .unwrap_or_else(|| "Unknown Artist".to_string())
+            .unwrap_or_else(|| yoink_shared::UNKNOWN_ARTIST.to_string())
     };
 
     // Determine the download source from available album provider links
@@ -331,14 +332,7 @@ pub(crate) async fn retag_existing_files(state: &AppState) -> AppResult<(usize, 
             let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
                 continue;
             };
-            if !(ext.eq_ignore_ascii_case("flac")
-                || ext.eq_ignore_ascii_case("m4a")
-                || ext.eq_ignore_ascii_case("mp4")
-                || ext.eq_ignore_ascii_case("mp3")
-                || ext.eq_ignore_ascii_case("aac")
-                || ext.eq_ignore_ascii_case("ogg")
-                || ext.eq_ignore_ascii_case("wav"))
-            {
+            if !is_audio_extension(ext) {
                 continue;
             }
 
@@ -403,7 +397,7 @@ pub(crate) async fn remove_downloaded_album_files(
             .iter()
             .find(|artist| artist.id == album.artist_id)
             .map(|artist| artist.name.clone())
-            .unwrap_or_else(|| "Unknown Artist".to_string())
+            .unwrap_or_else(|| yoink_shared::UNKNOWN_ARTIST.to_string())
     };
 
     let release_suffix = album

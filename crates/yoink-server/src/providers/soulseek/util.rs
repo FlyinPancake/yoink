@@ -2,18 +2,7 @@
 
 use std::path::{Component, Path, PathBuf};
 
-/// Normalize text for fuzzy comparison: lowercase, strip non-alphanumeric,
-/// collapse whitespace.
-pub(crate) fn normalize(input: &str) -> String {
-    input
-        .to_ascii_lowercase()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { ' ' })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
+pub(crate) use crate::util::normalize;
 
 /// Percent-encode a string for use in URL path segments (RFC 3986 unreserved set).
 pub(crate) fn percent_encode_path(s: &str) -> String {
@@ -88,11 +77,7 @@ pub(crate) fn parse_track_number(filename: &str) -> Option<u32> {
     }
 }
 
-const AUDIO_EXTENSIONS: &[&str] = &["flac", "m4a", "alac", "mp3", "ogg", "wav", "aac"];
-
-pub(crate) fn is_audio_extension(ext: &str) -> bool {
-    AUDIO_EXTENSIONS.contains(&ext)
-}
+pub(crate) use crate::util::is_audio_extension;
 
 /// Detect the audio file extension from slskd metadata or the filename itself.
 pub(crate) fn detect_audio_extension(

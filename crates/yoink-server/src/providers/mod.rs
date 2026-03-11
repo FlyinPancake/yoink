@@ -196,6 +196,100 @@ pub(crate) struct ProviderTrack {
     pub extra: HashMap<String, Value>,
 }
 
+/// Local-state overrides applied when converting a [`ProviderTrack`] into
+/// a [`yoink_shared::TrackInfo`].  Fields default to sensible "fresh track"
+/// values so callers only need to set what differs.
+pub(crate) struct LocalTrackOverrides {
+    pub id: uuid::Uuid,
+    pub quality_override: Option<yoink_shared::Quality>,
+    pub track_artist: Option<String>,
+    pub file_path: Option<String>,
+    pub monitored: bool,
+    pub acquired: bool,
+    /// Override disc number (e.g. from file metadata). `None` uses the
+    /// provider value.
+    pub disc_number: Option<u32>,
+    /// Override track number. `None` uses the provider value.
+    pub track_number: Option<u32>,
+    /// Override explicit flag. `None` uses the provider value.
+    pub explicit: Option<bool>,
+    /// Override duration display. `None` uses `format_duration(secs)`.
+    pub duration_display: Option<String>,
+}
+
+impl Default for LocalTrackOverrides {
+    fn default() -> Self {
+        Self {
+            id: uuid::Uuid::now_v7(),
+            quality_override: None,
+            track_artist: None,
+            file_path: None,
+            monitored: false,
+            acquired: false,
+            disc_number: None,
+            track_number: None,
+            explicit: None,
+            duration_display: None,
+        }
+    }
+}
+
+impl ProviderTrack {
+    /// Convert this provider track into a [`TrackInfo`], applying
+    /// local-state overrides for fields that differ by call site.
+    pub(crate) fn into_track_info(self, overrides: LocalTrackOverrides) -> yoink_shared::TrackInfo {
+        let secs = self.duration_secs;
+        yoink_shared::TrackInfo {
+            id: overrides.id,
+            title: self.title,
+            version: self.version,
+            disc_number: overrides
+                .disc_number
+                .or(self.disc_number)
+                .unwrap_or(1),
+            track_number: overrides.track_number.unwrap_or(self.track_number),
+            duration_secs: secs,
+            duration_display: overrides
+                .duration_display
+                .unwrap_or_else(|| yoink_shared::format_duration(secs)),
+            isrc: self.isrc,
+            explicit: overrides.explicit.unwrap_or(self.explicit),
+            quality_override: overrides.quality_override,
+            track_artist: overrides.track_artist.or(self.artists),
+            file_path: overrides.file_path,
+            monitored: overrides.monitored,
+            acquired: overrides.acquired,
+        }
+    }
+
+    /// Borrowing variant of [`into_track_info`](Self::into_track_info)
+    /// for call sites that continue using the `ProviderTrack` afterward.
+    pub(crate) fn to_track_info(&self, overrides: LocalTrackOverrides) -> yoink_shared::TrackInfo {
+        let secs = self.duration_secs;
+        yoink_shared::TrackInfo {
+            id: overrides.id,
+            title: self.title.clone(),
+            version: self.version.clone(),
+            disc_number: overrides
+                .disc_number
+                .or(self.disc_number)
+                .unwrap_or(1),
+            track_number: overrides.track_number.unwrap_or(self.track_number),
+            duration_secs: secs,
+            duration_display: overrides
+                .duration_display
+                .unwrap_or_else(|| yoink_shared::format_duration(secs)),
+            isrc: self.isrc.clone(),
+            explicit: overrides.explicit.unwrap_or(self.explicit),
+            quality_override: overrides.quality_override,
+            track_artist: overrides.track_artist.or_else(|| self.artists.clone()),
+            file_path: overrides.file_path,
+            monitored: overrides.monitored,
+            acquired: overrides.acquired,
+        }
+    }
+}
+
 /// An album returned by a provider search (includes artist context).
 #[derive(Debug, Clone)]
 pub(crate) struct ProviderSearchAlbum {

@@ -21,8 +21,7 @@ pub struct SearchTracksResult {
 
 #[server(GetLibraryTracksData, "/leptos")]
 pub async fn get_library_tracks_data() -> Result<Vec<LibraryTrack>, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     (ctx.fetch_library_tracks)()
         .await
@@ -31,8 +30,7 @@ pub async fn get_library_tracks_data() -> Result<Vec<LibraryTrack>, ServerFnErro
 
 #[server(SearchTracksLibrary, "/leptos")]
 pub async fn search_tracks_library(query: String) -> Result<SearchTracksResult, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let q = query.trim().to_string();
     if q.is_empty() {

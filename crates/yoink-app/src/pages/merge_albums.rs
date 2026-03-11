@@ -45,8 +45,7 @@ pub struct MergeAlbumsData {
 pub async fn get_merge_albums_data(artist_id: String) -> Result<MergeAlbumsData, ServerFnError> {
     use yoink_shared::Uuid;
 
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let artist_uuid: Uuid = artist_id
         .parse()

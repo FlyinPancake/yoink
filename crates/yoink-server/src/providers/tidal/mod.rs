@@ -305,7 +305,7 @@ impl MetadataProvider for TidalProvider {
                     .artists
                     .first()
                     .map(|ar| (ar.name.clone(), ar.id.to_string()))
-                    .unwrap_or_else(|| ("Unknown Artist".to_string(), String::new()));
+                    .unwrap_or_else(|| (yoink_shared::UNKNOWN_ARTIST.to_string(), String::new()));
 
                 ProviderSearchAlbum {
                     external_id: a.id.to_string(),
@@ -336,12 +336,12 @@ impl MetadataProvider for TidalProvider {
                     .artists
                     .first()
                     .map(|ar| (ar.name.clone(), ar.id.to_string()))
-                    .unwrap_or_else(|| ("Unknown Artist".to_string(), String::new()));
+                    .unwrap_or_else(|| (yoink_shared::UNKNOWN_ARTIST.to_string(), String::new()));
 
                 let (album_title, album_external_id, album_cover_ref) = t
                     .album
                     .map(|al| (al.title, al.id.to_string(), al.cover))
-                    .unwrap_or_else(|| ("Unknown Album".to_string(), String::new(), None));
+                    .unwrap_or_else(|| (yoink_shared::UNKNOWN_ALBUM.to_string(), String::new(), None));
 
                 ProviderSearchTrack {
                     external_id: t.id.to_string(),

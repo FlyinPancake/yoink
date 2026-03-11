@@ -40,8 +40,7 @@ pub struct WantedData {
 
 #[server(GetWantedData, "/leptos")]
 pub async fn get_wanted_data() -> Result<WantedData, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let artists = ctx.monitored_artists.read().await.clone();
     let jobs = ctx.download_jobs.read().await.clone();

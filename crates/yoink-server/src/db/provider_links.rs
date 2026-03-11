@@ -170,6 +170,22 @@ pub(crate) async fn upsert_track_provider_link(
     Ok(())
 }
 
+/// Find a local track by a provider link's external_id.
+pub(crate) async fn find_track_by_provider_link(
+    pool: &SqlitePool,
+    provider: &str,
+    external_id: &str,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT track_id as "track_id!: Uuid"
+           FROM track_provider_links WHERE provider = $1 AND external_id = $2"#,
+        provider,
+        external_id,
+    )
+    .fetch_optional(pool)
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test_helpers::*;

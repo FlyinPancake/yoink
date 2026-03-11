@@ -237,6 +237,10 @@ pub struct SearchArtistResult {
     pub country: Option<String>,
     pub tags: Vec<String>,
     pub popularity: Option<u8>,
+    /// `Some(true)` when the artist is already in the library.
+    /// Only populated by server-side search handlers; defaults to `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub already_monitored: Option<bool>,
 }
 
 /// An album search result from a metadata provider.

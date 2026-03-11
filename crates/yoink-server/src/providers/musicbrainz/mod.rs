@@ -625,7 +625,7 @@ impl MetadataProvider for MusicBrainzProvider {
                     .as_ref()
                     .and_then(|credits| credits.first())
                     .map(|ac| (ac.name.clone(), ac.artist.id.clone()))
-                    .unwrap_or_else(|| ("Unknown Artist".to_string(), String::new()));
+                    .unwrap_or_else(|| (yoink_shared::UNKNOWN_ARTIST.to_string(), String::new()));
 
                 ProviderSearchAlbum {
                     external_id: rg.id,

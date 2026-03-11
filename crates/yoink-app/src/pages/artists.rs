@@ -18,7 +18,7 @@ use crate::components::{
     ButtonVariant, ErrorPanel, PageShell, Panel, PanelBody, PanelHeader, PanelTitle, Select,
     SelectGroup, SelectOption, fallback_initial,
 };
-use crate::hooks::{set_page_title, use_sse_version};
+use crate::hooks::{set_page_title, use_debounced_signal, use_sse_version};
 use crate::search_result_keys::provider_result_key;
 use crate::styles::{EMPTY, GLASS, GLASS_BODY, SEARCH_INPUT};
 
@@ -93,8 +93,7 @@ pub struct SearchResult {
 
 #[server(GetArtistsData, "/leptos")]
 pub async fn get_artists_data() -> Result<ArtistsData, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let monitored = ctx.monitored_artists.read().await.clone();
     let albums = ctx.monitored_albums.read().await.clone();
@@ -104,8 +103,7 @@ pub async fn get_artists_data() -> Result<ArtistsData, ServerFnError> {
 
 #[server(SearchArtists, "/leptos")]
 pub async fn search_artists(query: String) -> Result<SearchResult, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let trimmed = query.trim().to_string();
     if trimmed.is_empty() {
@@ -132,130 +130,10 @@ pub async fn search_artists(query: String) -> Result<SearchResult, ServerFnError
 #[component]
 pub fn ArtistsPage() -> impl IntoView {
     set_page_title("Artists");
-    let version = use_sse_version();
-    let data = Resource::new(move || version.get(), |_| get_artists_data());
-
-    // Read ?q= from URL query params (works with SPA navigation)
-    let url_query = leptos_router::hooks::use_query_map();
-    let initial_q = url_query.read_untracked().get("q").unwrap_or_default();
-
-    // Search state with debounce
-    let (query, set_query) = signal(initial_q.clone());
-    let (debounced_query, set_debounced_query) = signal(initial_q);
-
-    // Debounce: wait 300ms after last keystroke before updating debounced_query
-    #[cfg(feature = "hydrate")]
-    {
-        use std::cell::Cell;
-        use std::rc::Rc;
-        use wasm_bindgen::JsCast;
-        let timer_id: Rc<Cell<Option<i32>>> = Rc::new(Cell::new(None));
-        Effect::new({
-            let timer_id = timer_id.clone();
-            move |_| {
-                let val = query.get();
-                // Clear previous timer
-                if let Some(id) = timer_id.get() {
-                    leptos::prelude::window().clear_timeout_with_handle(id);
-                }
-                // Set new timer
-                let set_dq = set_debounced_query;
-                let timer_id_inner = timer_id.clone();
-                let cb = wasm_bindgen::closure::Closure::once_into_js(move || {
-                    set_dq.set(val);
-                    timer_id_inner.set(None);
-                });
-                if let Ok(id) = leptos::prelude::window()
-                    .set_timeout_with_callback_and_timeout_and_arguments_0(
-                        cb.as_ref().unchecked_ref(),
-                        300,
-                    )
-                {
-                    timer_id.set(Some(id));
-                }
-            }
-        });
-    }
-    // On SSR, just mirror query directly (no debounce needed)
-    #[cfg(not(feature = "hydrate"))]
-    {
-        Effect::new(move |_| {
-            set_debounced_query.set(query.get());
-        });
-    }
-
-    let search_result: Resource<Result<SearchResult, ServerFnError>> = Resource::new(
-        move || debounced_query.get(),
-        |q| async move {
-            if q.trim().is_empty() {
-                Ok(SearchResult {
-                    results: vec![],
-                    error: None,
-                })
-            } else {
-                search_artists(q).await
-            }
-        },
-    );
 
     view! {
         <PageShell active="library-artists">
-                <Transition fallback=move || view! {
-                    <div>
-                        <Breadcrumb items=vec![
-                            BreadcrumbItem::link("Library", "/library"),
-                            BreadcrumbItem::current("Artists"),
-                        ] />
-                        <div class="p-6 max-md:p-4">
-                            // Skeleton search bar
-                            <div class="mb-5 bg-white/70 dark:bg-zinc-800/60 rounded-xl border border-black/[.06] dark:border-white/[.08] p-4">
-                                <div class="h-9 w-full max-w-[360px] bg-zinc-200 dark:bg-zinc-700 rounded-lg animate-pulse"></div>
-                            </div>
-                            // Skeleton artist card grid
-                            <div class="bg-white/70 dark:bg-zinc-800/60 rounded-xl border border-black/[.06] dark:border-white/[.08] overflow-hidden">
-                                <div class="px-5 py-3 border-b border-black/[.06] dark:border-white/[.06]">
-                                    <div class="h-4 w-28 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse"></div>
-                                </div>
-                                <div class="p-4 grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
-                                    {(0..8).map(|_| view! {
-                                        <div class="rounded-xl p-4 flex items-center gap-3.5 border border-black/[.04] dark:border-white/[.04] animate-pulse">
-                                            <div class="size-12 rounded-full bg-zinc-200 dark:bg-zinc-700 shrink-0"></div>
-                                            <div class="flex-1 min-w-0">
-                                                <div class="h-4 w-28 bg-zinc-200 dark:bg-zinc-700 rounded mb-2"></div>
-                                                <div class="h-3 w-40 bg-zinc-200 dark:bg-zinc-700 rounded"></div>
-                                            </div>
-                                        </div>
-                                    }).collect_view()}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                }>
-                    {move || {
-                        data.get().map(|result| match result {
-                            Err(e) => view! {
-                                <div class="p-6 max-md:p-4">
-                                    <ErrorPanel
-                                        message="Failed to load artists."
-                                        details=e.to_string()
-                                        retry_href="/library"
-                                    />
-                                </div>
-                            }.into_any(),
-                            Ok(data) => {
-                                view! {
-                                    <ArtistsContent
-                                        data=data
-                                        query=query
-                                        set_query=set_query
-                                        search_result=search_result
-                                        show_header=true
-                                    />
-                                }.into_any()
-                            }
-                        })
-                    }}
-                </Transition>
+            <ArtistsTabContent show_header=true />
         </PageShell>
     }
 }
@@ -268,46 +146,9 @@ pub fn ArtistsTabContent(show_header: bool) -> impl IntoView {
     let url_query = leptos_router::hooks::use_query_map();
     let initial_q = url_query.read_untracked().get("q").unwrap_or_default();
 
-    let (query, set_query) = signal(initial_q.clone());
-    let (debounced_query, set_debounced_query) = signal(initial_q);
-
-    #[cfg(feature = "hydrate")]
-    {
-        use std::cell::Cell;
-        use std::rc::Rc;
-        use wasm_bindgen::JsCast;
-        let timer_id: Rc<Cell<Option<i32>>> = Rc::new(Cell::new(None));
-        Effect::new({
-            let timer_id = timer_id.clone();
-            move |_| {
-                let val = query.get();
-                if let Some(id) = timer_id.get() {
-                    leptos::prelude::window().clear_timeout_with_handle(id);
-                }
-                let set_dq = set_debounced_query;
-                let timer_id_inner = timer_id.clone();
-                let cb = wasm_bindgen::closure::Closure::once_into_js(move || {
-                    set_dq.set(val);
-                    timer_id_inner.set(None);
-                });
-                if let Ok(id) = leptos::prelude::window()
-                    .set_timeout_with_callback_and_timeout_and_arguments_0(
-                        cb.as_ref().unchecked_ref(),
-                        300,
-                    )
-                {
-                    timer_id.set(Some(id));
-                }
-            }
-        });
-    }
-
-    #[cfg(not(feature = "hydrate"))]
-    {
-        Effect::new(move |_| {
-            set_debounced_query.set(query.get());
-        });
-    }
+    let (query_rw, debounced_query) = use_debounced_signal(initial_q);
+    let query = query_rw.read_only();
+    let set_query = query_rw.write_only();
 
     let search_result: Resource<Result<SearchResult, ServerFnError>> = Resource::new(
         move || debounced_query.get(),

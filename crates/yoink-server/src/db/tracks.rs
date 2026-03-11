@@ -24,8 +24,6 @@ struct TrackRow {
 impl From<TrackRow> for TrackInfo {
     fn from(r: TrackRow) -> Self {
         let secs = r.duration_secs.unwrap_or(0) as u32;
-        let mins = secs / 60;
-        let rem = secs % 60;
         Self {
             id: r.id,
             title: r.title,
@@ -33,7 +31,7 @@ impl From<TrackRow> for TrackInfo {
             disc_number: r.disc_number as u32,
             track_number: r.track_number as u32,
             duration_secs: secs,
-            duration_display: format!("{mins}:{rem:02}"),
+            duration_display: yoink_shared::format_duration(secs),
             isrc: r.isrc,
             explicit: r.explicit,
             quality_override: r
@@ -178,21 +176,6 @@ pub(crate) async fn has_wanted_tracks(
     .fetch_one(pool)
     .await?;
     Ok(count > 0)
-}
-
-pub(crate) async fn find_track_by_provider_link(
-    pool: &SqlitePool,
-    provider: &str,
-    external_id: &str,
-) -> Result<Option<Uuid>, sqlx::Error> {
-    sqlx::query_scalar!(
-        r#"SELECT track_id as "track_id!: Uuid"
-           FROM track_provider_links WHERE provider = $1 AND external_id = $2"#,
-        provider,
-        external_id,
-    )
-    .fetch_optional(pool)
-    .await
 }
 
 pub(crate) async fn find_track_by_album_isrc(
@@ -539,12 +522,12 @@ mod tests {
             .await
             .unwrap();
 
-        let found = super::find_track_by_provider_link(&pool, "tidal", "T123")
+        let found = crate::db::find_track_by_provider_link(&pool, "tidal", "T123")
             .await
             .unwrap();
         assert_eq!(found, Some(tracks[0].id));
 
-        let not_found = super::find_track_by_provider_link(&pool, "tidal", "NOPE")
+        let not_found = crate::db::find_track_by_provider_link(&pool, "tidal", "NOPE")
             .await
             .unwrap();
         assert!(not_found.is_none());

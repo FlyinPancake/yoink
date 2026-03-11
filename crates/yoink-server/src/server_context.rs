@@ -103,6 +103,7 @@ fn build_search_fn(state: &AppState) -> yoink_shared::SearchArtistsFn {
                             country: a.country,
                             tags: a.tags,
                             popularity: a.popularity,
+                            already_monitored: None,
                         },
                     ));
                 }
@@ -143,6 +144,7 @@ fn build_search_scoped_fn(state: &AppState) -> yoink_shared::SearchArtistsScoped
                         country: a.country,
                         tags: a.tags,
                         popularity: a.popularity,
+                        already_monitored: None,
                     }
                 })
                 .collect();
@@ -516,10 +518,6 @@ fn build_search_tracks_fn(state: &AppState) -> yoink_shared::SearchTracksFn {
 
             for (provider_id, tracks) in all_results {
                 for t in tracks {
-                    let secs = t.duration_secs;
-                    let mins = secs / 60;
-                    let rem = secs % 60;
-
                     let album_cover_url = t
                         .album_cover_ref
                         .as_deref()
@@ -531,7 +529,7 @@ fn build_search_tracks_fn(state: &AppState) -> yoink_shared::SearchTracksFn {
                         title: t.title,
                         version: t.version,
                         duration_secs: t.duration_secs,
-                        duration_display: format!("{mins}:{rem:02}"),
+                        duration_display: yoink_shared::format_duration(t.duration_secs),
                         isrc: t.isrc,
                         explicit: t.explicit,
                         artist_name: t.artist_name,
@@ -579,7 +577,7 @@ fn build_fetch_library_tracks_fn(state: &AppState) -> yoink_shared::FetchLibrary
                 let artist_name = artist_names
                     .get(&album.artist_id)
                     .cloned()
-                    .unwrap_or_else(|| "Unknown Artist".to_string());
+                    .unwrap_or_else(|| yoink_shared::UNKNOWN_ARTIST.to_string());
 
                 rows.extend(tracks.into_iter().map(|track| yoink_shared::LibraryTrack {
                     track,
@@ -690,36 +688,37 @@ async fn load_or_backfill_album_tracks(
                     };
 
                     let existing_track = tracks.iter().find(|track| track.id == local_track_id);
-                    let secs = provider_track.duration_secs;
-                    let mins = secs / 60;
-                    let rem = secs % 60;
-                    let track_info = yoink_shared::TrackInfo {
-                        id: local_track_id,
-                        title: provider_track.title,
-                        version: provider_track.version,
-                        disc_number: provider_track.disc_number.unwrap_or(1),
-                        track_number: provider_track.track_number,
-                        duration_secs: secs,
-                        duration_display: format!("{mins}:{rem:02}"),
-                        isrc: provider_track.isrc,
-                        explicit: provider_track.explicit,
-                        quality_override: existing_track.and_then(|track| track.quality_override),
-                        track_artist: provider_track.artists.or_else(|| {
-                            existing_track.and_then(|track| track.track_artist.clone())
-                        }),
-                        file_path: existing_track.and_then(|track| track.file_path.clone()),
-                        monitored: existing_track.map(|track| track.monitored).unwrap_or_else(
-                            || album.as_ref().map(|album| album.monitored).unwrap_or(false),
-                        ),
-                        acquired: existing_track
-                            .map(|track| track.acquired)
-                            .unwrap_or_else(|| {
-                                album
-                                    .as_ref()
-                                    .map(|album| album.monitored && album.acquired)
-                                    .unwrap_or(false)
-                            }),
-                    };
+                    let merged_artist = provider_track.artists.clone().or_else(|| {
+                        existing_track.and_then(|track| track.track_artist.clone())
+                    });
+                    let provider_ext_id = provider_track.external_id.clone();
+                    let track_info = provider_track.into_track_info(
+                        crate::providers::LocalTrackOverrides {
+                            id: local_track_id,
+                            quality_override: existing_track
+                                .and_then(|track| track.quality_override),
+                            track_artist: merged_artist,
+                            file_path: existing_track
+                                .and_then(|track| track.file_path.clone()),
+                            monitored: existing_track
+                                .map(|track| track.monitored)
+                                .unwrap_or_else(|| {
+                                    album
+                                        .as_ref()
+                                        .map(|album| album.monitored)
+                                        .unwrap_or(false)
+                                }),
+                            acquired: existing_track
+                                .map(|track| track.acquired)
+                                .unwrap_or_else(|| {
+                                    album
+                                        .as_ref()
+                                        .map(|album| album.monitored && album.acquired)
+                                        .unwrap_or(false)
+                                }),
+                            ..Default::default()
+                        },
+                    );
 
                     db::upsert_track(&state.db, &track_info, album_id)
                         .await
@@ -728,7 +727,7 @@ async fn load_or_backfill_album_tracks(
                         &state.db,
                         local_track_id,
                         &link.provider,
-                        &provider_track.external_id,
+                        &provider_ext_id,
                     )
                     .await
                     .map_err(|e| format!("failed to persist track provider link: {e}"))?;

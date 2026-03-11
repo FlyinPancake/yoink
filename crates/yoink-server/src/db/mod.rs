@@ -34,14 +34,14 @@ pub(crate) use match_suggestions::{
 };
 pub(crate) use provider_links::{
     AlbumProviderLink, ArtistProviderLink, delete_artist_provider_link,
-    find_album_by_provider_link, find_artist_by_provider_link, load_album_provider_links,
-    load_artist_provider_links, upsert_album_provider_link, upsert_artist_provider_link,
-    upsert_track_provider_link,
+    find_album_by_provider_link, find_artist_by_provider_link, find_track_by_provider_link,
+    load_album_provider_links, load_artist_provider_links, upsert_album_provider_link,
+    upsert_artist_provider_link, upsert_track_provider_link,
 };
 pub(crate) use tracks::{
     all_monitored_tracks_acquired, find_track_by_album_isrc, find_track_by_album_position,
-    find_track_by_provider_link, has_wanted_tracks, load_tracks_for_album, update_track_flags,
-    update_track_quality_override, upsert_track,
+    has_wanted_tracks, load_tracks_for_album, update_track_flags, update_track_quality_override,
+    upsert_track,
 };
 
 /// Open (or create) the database and run migrations.

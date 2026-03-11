@@ -28,8 +28,7 @@ pub struct SearchAlbumsResult {
 
 #[server(GetLibraryAlbumsData, "/leptos")]
 pub async fn get_library_albums_data() -> Result<LibraryAlbumsData, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let artists = ctx.monitored_artists.read().await.clone();
     let all_albums = ctx.monitored_albums.read().await.clone();
@@ -57,8 +56,7 @@ pub async fn get_library_albums_data() -> Result<LibraryAlbumsData, ServerFnErro
 
 #[server(SearchAlbums, "/leptos")]
 pub async fn search_albums(query: String) -> Result<SearchAlbumsResult, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
 
     let q = query.trim().to_string();
     if q.is_empty() {
@@ -187,8 +185,8 @@ pub fn LibraryAlbumsTab() -> impl IntoView {
                                                             let artist_name = artist_names
                                                                 .get(&album.artist_id)
                                                                 .cloned()
-                                                                .unwrap_or_else(|| "Unknown Artist".to_string());
-                                                            let href = format!("/artists/{}/albums/{}", album.artist_id, album.id);
+.unwrap_or_else(|| yoink_shared::UNKNOWN_ARTIST.to_string());
+                                                             let href = format!("/artists/{}/albums/{}", album.artist_id, album.id);
                                                             let badge = if album.acquired {
                                                                 SleeveBadge::Acquired
                                                             } else if album.wanted || album.partially_wanted {

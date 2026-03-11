@@ -15,6 +15,7 @@ mod server_context;
 mod services;
 mod state;
 mod ui;
+mod util;
 
 #[cfg(test)]
 mod fk_regressions;

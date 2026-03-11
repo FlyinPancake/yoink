@@ -40,8 +40,7 @@ fn import_status_badge_variant(status: &ImportMatchStatus) -> BadgeVariant {
 
 #[server(PreviewImportLibrary, "/leptos")]
 pub async fn preview_import_library() -> Result<Vec<ImportPreviewItem>, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
     (ctx.preview_import)().await.map_err(ServerFnError::new)
 }
 
@@ -54,8 +53,7 @@ pub async fn preview_import_library() -> Result<Vec<ImportPreviewItem>, ServerFn
 pub async fn confirm_import_action(
     items: Vec<ImportConfirmation>,
 ) -> Result<ImportResultSummary, ServerFnError> {
-    let ctx = use_context::<yoink_shared::ServerContext>()
-        .ok_or_else(|| ServerFnError::new("ServerContext not available"))?;
+    let ctx = crate::actions::require_ctx()?;
     (ctx.confirm_import)(items)
         .await
         .map_err(ServerFnError::new)
