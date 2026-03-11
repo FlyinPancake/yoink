@@ -1,10 +1,8 @@
-use tracing::info;
+use tracing::{info, warn};
 
-use crate::{
-    error::{AppError, AppResult},
-    services,
-    state::AppState,
-};
+use yoink_shared::{ImportConfirmation, ManualImportMode};
+
+use crate::{error::AppResult, services, state::AppState};
 
 pub(super) async fn retag_library(state: &AppState) -> AppResult<()> {
     let s = state.clone();
@@ -60,12 +58,40 @@ pub(super) async fn confirm_import(
         "Confirmed import completed"
     );
     if !summary.errors.is_empty() {
-        return Err(AppError::conflict(format!(
-            "Imported {}/{} albums. Errors: {}",
-            summary.imported,
-            summary.total_selected,
-            summary.errors.join("; ")
-        )));
+        warn!(
+            imported = summary.imported,
+            total = summary.total_selected,
+            errors = %summary.errors.join("; "),
+            "Confirmed import completed with partial failures"
+        );
+    }
+    Ok(())
+}
+
+pub(super) async fn confirm_external_import(
+    state: &AppState,
+    source_path: String,
+    mode: ManualImportMode,
+    items: Vec<ImportConfirmation>,
+) -> AppResult<()> {
+    let summary = services::confirm_external_import(state, &source_path, mode, items).await?;
+    info!(
+        total = summary.total_selected,
+        imported = summary.imported,
+        artists_added = summary.artists_added,
+        failed = summary.failed,
+        source = %source_path,
+        mode = ?mode,
+        "External import completed"
+    );
+    if !summary.errors.is_empty() {
+        warn!(
+            imported = summary.imported,
+            total = summary.total_selected,
+            source = %source_path,
+            errors = %summary.errors.join("; "),
+            "External import completed with partial failures"
+        );
     }
     Ok(())
 }

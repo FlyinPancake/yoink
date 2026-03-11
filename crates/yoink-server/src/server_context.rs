@@ -46,6 +46,9 @@ pub(crate) fn build_server_context(state: &AppState) -> yoink_shared::ServerCont
     let search_albums_fn = build_search_albums_fn(state);
     let search_tracks_fn = build_search_tracks_fn(state);
     let fetch_library_tracks_fn = build_fetch_library_tracks_fn(state);
+    let browse_path_fn = build_browse_path_fn();
+    let preview_external_import_fn = build_preview_external_import_fn(state);
+    let confirm_external_import_fn = build_confirm_external_import_fn(state);
 
     yoink_shared::ServerContext {
         auth_enabled: state.auth.enabled(),
@@ -68,6 +71,9 @@ pub(crate) fn build_server_context(state: &AppState) -> yoink_shared::ServerCont
         search_albums: search_albums_fn,
         search_tracks: search_tracks_fn,
         fetch_library_tracks: fetch_library_tracks_fn,
+        browse_path: browse_path_fn,
+        preview_external_import: preview_external_import_fn,
+        confirm_external_import: confirm_external_import_fn,
     }
 }
 
@@ -600,6 +606,43 @@ fn build_fetch_library_tracks_fn(state: &AppState) -> yoink_shared::FetchLibrary
             Ok(rows)
         })
     })
+}
+
+fn build_browse_path_fn() -> yoink_shared::BrowsePathFn {
+    std::sync::Arc::new(move |path: String| {
+        Box::pin(async move { services::browse_path(&path).await.map_err(Into::into) })
+    })
+}
+
+fn build_preview_external_import_fn(state: &AppState) -> yoink_shared::PreviewExternalImportFn {
+    let s = state.clone();
+    std::sync::Arc::new(move |source_path: String| {
+        let s = s.clone();
+        Box::pin(async move {
+            services::preview_external_import(&s, &source_path)
+                .await
+                .map_err(Into::into)
+        })
+    })
+}
+
+fn build_confirm_external_import_fn(state: &AppState) -> yoink_shared::ConfirmExternalImportFn {
+    let s = state.clone();
+    std::sync::Arc::new(
+        move |confirmation: yoink_shared::ExternalImportConfirmation| {
+            let s = s.clone();
+            Box::pin(async move {
+                services::confirm_external_import(
+                    &s,
+                    &confirmation.source_path,
+                    confirmation.mode,
+                    confirmation.items,
+                )
+                .await
+                .map_err(Into::into)
+            })
+        },
+    )
 }
 
 async fn load_or_backfill_album_tracks(

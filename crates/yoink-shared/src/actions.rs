@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{ImportConfirmation, Quality};
+use crate::{ImportConfirmation, ManualImportMode, Quality};
 
 /// A user-initiated action that the server can execute.
 ///
@@ -141,5 +141,12 @@ pub enum ServerAction {
     BulkToggleTrackMonitor {
         album_id: Uuid,
         monitored: bool,
+    },
+    /// Import files from an external path into the music library via copy or
+    /// hardlink.
+    ConfirmExternalImport {
+        source_path: String,
+        mode: ManualImportMode,
+        items: Vec<ImportConfirmation>,
     },
 }

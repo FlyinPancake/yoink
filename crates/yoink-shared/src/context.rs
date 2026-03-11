@@ -3,9 +3,10 @@
 use uuid::Uuid;
 
 use crate::{
-    ArtistImageOption, DownloadJob, ImportConfirmation, ImportPreviewItem, ImportResultSummary,
-    LibraryTrack, MatchSuggestion, MonitoredAlbum, MonitoredArtist, ProviderLink, Quality,
-    SearchAlbumResult, SearchArtistResult, SearchTrackResult, ServerAction, TrackInfo, YoinkError,
+    ArtistImageOption, BrowseEntry, DownloadJob, ExternalImportConfirmation, ImportConfirmation,
+    ImportPreviewItem, ImportResultSummary, LibraryTrack, MatchSuggestion, MonitoredAlbum,
+    MonitoredArtist, ProviderLink, Quality, SearchAlbumResult, SearchArtistResult,
+    SearchTrackResult, ServerAction, TrackInfo, YoinkError,
 };
 
 type AsyncFnResult<T> =
@@ -55,6 +56,16 @@ pub type SearchTracksFn =
 pub type FetchLibraryTracksFn =
     std::sync::Arc<dyn Fn() -> AsyncFnResult<Vec<LibraryTrack>> + Send + Sync>;
 
+pub type BrowsePathFn =
+    std::sync::Arc<dyn Fn(String) -> AsyncFnResult<Vec<BrowseEntry>> + Send + Sync>;
+
+pub type PreviewExternalImportFn =
+    std::sync::Arc<dyn Fn(String) -> AsyncFnResult<Vec<ImportPreviewItem>> + Send + Sync>;
+
+pub type ConfirmExternalImportFn = std::sync::Arc<
+    dyn Fn(ExternalImportConfirmation) -> AsyncFnResult<ImportResultSummary> + Send + Sync,
+>;
+
 /// Holds the shared in-memory state that server functions need to read.
 ///
 /// Provided via `leptos::context::provide_context` in main.rs and consumed via
@@ -81,4 +92,7 @@ pub struct ServerContext {
     pub search_albums: SearchAlbumsFn,
     pub search_tracks: SearchTracksFn,
     pub fetch_library_tracks: FetchLibraryTracksFn,
+    pub browse_path: BrowsePathFn,
+    pub preview_external_import: PreviewExternalImportFn,
+    pub confirm_external_import: ConfirmExternalImportFn,
 }

@@ -240,6 +240,14 @@ pub(crate) async fn dispatch_action_impl(
         ServerAction::ConfirmImport { items } => {
             library::confirm_import(&state, items).await?;
         }
+
+        ServerAction::ConfirmExternalImport {
+            source_path,
+            mode,
+            items,
+        } => {
+            library::confirm_external_import(&state, source_path, mode, items).await?;
+        }
     }
 
     Ok(())
