@@ -334,8 +334,6 @@ fn should_prefer_album(
     candidate.external_id > existing.external_id
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;

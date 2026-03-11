@@ -581,7 +581,7 @@ async fn process_track_download(
         disc_number: Some(disc_number.unwrap_or(1)),
         track_number: Some(track_number),
         explicit: Some(track.explicit),
-        duration_display: Some(String::new()),
+        ..Default::default()
     });
     if let Err(e) = db::upsert_track(&state.db, &track_info, job.album_id).await {
         warn!(track_id = %local_track_id, error = %e, "Failed to persist downloaded track to DB");
@@ -736,8 +736,6 @@ async fn download_playback_to_file(
     };
     super::io::download_payload_to_file(http, &io_payload, path).await
 }
-
-
 
 async fn resolve_playback_with_fallback(
     state: &AppState,

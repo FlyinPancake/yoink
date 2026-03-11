@@ -688,37 +688,31 @@ async fn load_or_backfill_album_tracks(
                     };
 
                     let existing_track = tracks.iter().find(|track| track.id == local_track_id);
-                    let merged_artist = provider_track.artists.clone().or_else(|| {
-                        existing_track.and_then(|track| track.track_artist.clone())
-                    });
+                    let merged_artist = provider_track
+                        .artists
+                        .clone()
+                        .or_else(|| existing_track.and_then(|track| track.track_artist.clone()));
                     let provider_ext_id = provider_track.external_id.clone();
-                    let track_info = provider_track.into_track_info(
-                        crate::providers::LocalTrackOverrides {
+                    let track_info =
+                        provider_track.into_track_info(crate::providers::LocalTrackOverrides {
                             id: local_track_id,
                             quality_override: existing_track
                                 .and_then(|track| track.quality_override),
                             track_artist: merged_artist,
-                            file_path: existing_track
-                                .and_then(|track| track.file_path.clone()),
-                            monitored: existing_track
-                                .map(|track| track.monitored)
-                                .unwrap_or_else(|| {
-                                    album
-                                        .as_ref()
-                                        .map(|album| album.monitored)
-                                        .unwrap_or(false)
-                                }),
-                            acquired: existing_track
-                                .map(|track| track.acquired)
-                                .unwrap_or_else(|| {
+                            file_path: existing_track.and_then(|track| track.file_path.clone()),
+                            monitored: existing_track.map(|track| track.monitored).unwrap_or_else(
+                                || album.as_ref().map(|album| album.monitored).unwrap_or(false),
+                            ),
+                            acquired: existing_track.map(|track| track.acquired).unwrap_or_else(
+                                || {
                                     album
                                         .as_ref()
                                         .map(|album| album.monitored && album.acquired)
                                         .unwrap_or(false)
-                                }),
+                                },
+                            ),
                             ..Default::default()
-                        },
-                    );
+                        });
 
                     db::upsert_track(&state.db, &track_info, album_id)
                         .await

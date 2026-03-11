@@ -352,8 +352,6 @@ fn track_title_overlap(left: &[ProviderTrack], right: &[ProviderTrack]) -> f64 {
     }
 }
 
-
-
 fn best_artist_candidate(
     local_artist_name: &str,
     candidates: Vec<ProviderArtist>,

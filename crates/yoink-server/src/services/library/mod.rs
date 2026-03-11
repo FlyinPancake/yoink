@@ -4,6 +4,7 @@ mod reconcile;
 mod sync;
 
 use crate::models::MonitoredAlbum;
+use crate::util::{is_audio_extension, normalize as normalize_text};
 
 pub(crate) use import::{confirm_import_library, preview_import_library, scan_and_import_library};
 pub(crate) use merge::merge_albums;
@@ -32,8 +33,6 @@ pub(crate) async fn recompute_partially_wanted(db: &sqlx::SqlitePool, album: &mu
             .unwrap_or(false);
     }
 }
-
-use crate::util::{is_audio_extension, normalize as normalize_text};
 
 fn parse_release_year(release_date: &str) -> Option<String> {
     let year = release_date.chars().take(4).collect::<String>();

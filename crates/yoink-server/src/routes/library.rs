@@ -89,9 +89,7 @@ async fn album_tracks(
             Ok((provider_tracks, _album_extra)) => {
                 let tracks: Vec<TrackInfo> = provider_tracks
                     .into_iter()
-                    .map(|track| {
-                        track.into_track_info(Default::default())
-                    })
+                    .map(|track| track.into_track_info(Default::default()))
                     .collect();
                 return (StatusCode::OK, Json(tracks)).into_response();
             }

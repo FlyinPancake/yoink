@@ -581,7 +581,9 @@ impl MetadataProvider for DeezerProvider {
                 let (album_title, album_external_id, album_cover_ref) = t
                     .album
                     .map(|al| (al.title, al.id.to_string(), al.md5_image))
-                    .unwrap_or_else(|| (yoink_shared::UNKNOWN_ALBUM.to_string(), String::new(), None));
+                    .unwrap_or_else(|| {
+                        (yoink_shared::UNKNOWN_ALBUM.to_string(), String::new(), None)
+                    });
 
                 ProviderSearchTrack {
                     external_id: t.id.to_string(),

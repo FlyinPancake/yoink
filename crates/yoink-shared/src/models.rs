@@ -461,4 +461,40 @@ mod tests {
         let track: TrackInfo = serde_json::from_value(json).unwrap();
         assert_eq!(track.quality_override, None);
     }
+
+    // ── SearchArtistResult serde ─────────────────────────────────
+
+    #[test]
+    fn already_monitored_defaults_to_none_when_missing() {
+        let json = serde_json::json!({
+            "provider": "tidal",
+            "external_id": "12345",
+            "name": "Test Artist",
+            "tags": [],
+        });
+        let result: SearchArtistResult = serde_json::from_value(json).unwrap();
+        assert_eq!(result.already_monitored, None);
+    }
+
+    #[test]
+    fn already_monitored_none_is_omitted_on_serialize() {
+        let result = SearchArtistResult {
+            provider: "tidal".to_string(),
+            external_id: "12345".to_string(),
+            name: "Test Artist".to_string(),
+            image_url: None,
+            url: None,
+            disambiguation: None,
+            artist_type: None,
+            country: None,
+            tags: vec![],
+            popularity: None,
+            already_monitored: None,
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert!(
+            !json.as_object().unwrap().contains_key("already_monitored"),
+            "already_monitored: None should be skipped in serialized JSON"
+        );
+    }
 }

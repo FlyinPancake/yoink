@@ -243,10 +243,7 @@ impl ProviderTrack {
             id: overrides.id,
             title: self.title,
             version: self.version,
-            disc_number: overrides
-                .disc_number
-                .or(self.disc_number)
-                .unwrap_or(1),
+            disc_number: overrides.disc_number.or(self.disc_number).unwrap_or(1),
             track_number: overrides.track_number.unwrap_or(self.track_number),
             duration_secs: secs,
             duration_display: overrides
@@ -270,10 +267,7 @@ impl ProviderTrack {
             id: overrides.id,
             title: self.title.clone(),
             version: self.version.clone(),
-            disc_number: overrides
-                .disc_number
-                .or(self.disc_number)
-                .unwrap_or(1),
+            disc_number: overrides.disc_number.or(self.disc_number).unwrap_or(1),
             track_number: overrides.track_number.unwrap_or(self.track_number),
             duration_secs: secs,
             duration_display: overrides
@@ -551,5 +545,132 @@ mod tests {
     fn provider_error_from_owned_string() {
         let err = ProviderError::rate_limited("x", "429");
         assert!(err.is_rate_limited());
+    }
+
+    // ── ProviderTrack conversion ────────────────────────────────
+
+    fn base_provider_track() -> ProviderTrack {
+        ProviderTrack {
+            external_id: "ext-1".to_string(),
+            title: "Song Title".to_string(),
+            version: Some("Remastered".to_string()),
+            track_number: 3,
+            disc_number: Some(2),
+            duration_secs: 210,
+            isrc: Some("USRC12345678".to_string()),
+            artists: Some("Artist A feat. B".to_string()),
+            explicit: true,
+            extra: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn into_track_info_defaults_use_provider_values() {
+        let pt = base_provider_track();
+        let id = uuid::Uuid::now_v7();
+        let info = pt.into_track_info(LocalTrackOverrides {
+            id,
+            ..Default::default()
+        });
+
+        assert_eq!(info.id, id);
+        assert_eq!(info.title, "Song Title");
+        assert_eq!(info.version.as_deref(), Some("Remastered"));
+        assert_eq!(info.disc_number, 2);
+        assert_eq!(info.track_number, 3);
+        assert_eq!(info.duration_secs, 210);
+        assert_eq!(info.duration_display, "3:30");
+        assert_eq!(info.isrc.as_deref(), Some("USRC12345678"));
+        assert!(info.explicit);
+        // Provider artists used as fallback when override is None
+        assert_eq!(info.track_artist.as_deref(), Some("Artist A feat. B"));
+        assert!(info.file_path.is_none());
+        assert!(!info.monitored);
+        assert!(!info.acquired);
+    }
+
+    #[test]
+    fn into_track_info_overrides_take_precedence() {
+        let pt = base_provider_track();
+        let id = uuid::Uuid::now_v7();
+        let info = pt.into_track_info(LocalTrackOverrides {
+            id,
+            disc_number: Some(5),
+            track_number: Some(99),
+            explicit: Some(false),
+            track_artist: Some("Override Artist".to_string()),
+            duration_display: Some("custom".to_string()),
+            file_path: Some("/music/file.flac".to_string()),
+            monitored: true,
+            acquired: true,
+            quality_override: Some(yoink_shared::Quality::Lossless),
+        });
+
+        assert_eq!(info.disc_number, 5);
+        assert_eq!(info.track_number, 99);
+        assert!(!info.explicit);
+        assert_eq!(info.track_artist.as_deref(), Some("Override Artist"));
+        assert_eq!(info.duration_display, "custom");
+        assert_eq!(info.file_path.as_deref(), Some("/music/file.flac"));
+        assert!(info.monitored);
+        assert!(info.acquired);
+        assert_eq!(info.quality_override, Some(yoink_shared::Quality::Lossless));
+    }
+
+    #[test]
+    fn into_track_info_disc_number_falls_back_to_one() {
+        let mut pt = base_provider_track();
+        pt.disc_number = None;
+        let info = pt.into_track_info(LocalTrackOverrides {
+            disc_number: None,
+            ..Default::default()
+        });
+        assert_eq!(info.disc_number, 1);
+    }
+
+    #[test]
+    fn into_track_info_track_artist_none_when_both_none() {
+        let mut pt = base_provider_track();
+        pt.artists = None;
+        let info = pt.into_track_info(LocalTrackOverrides {
+            track_artist: None,
+            ..Default::default()
+        });
+        assert!(info.track_artist.is_none());
+    }
+
+    #[test]
+    fn to_track_info_matches_into_semantics() {
+        let pt = base_provider_track();
+        let id = uuid::Uuid::now_v7();
+
+        let overrides_a = LocalTrackOverrides {
+            id,
+            track_artist: Some("Override".to_string()),
+            disc_number: Some(7),
+            explicit: Some(false),
+            ..Default::default()
+        };
+        let overrides_b = LocalTrackOverrides {
+            id,
+            track_artist: Some("Override".to_string()),
+            disc_number: Some(7),
+            explicit: Some(false),
+            ..Default::default()
+        };
+
+        let via_borrow = pt.to_track_info(overrides_a);
+        // Confirm the original is still usable after to_track_info.
+        assert_eq!(pt.title, "Song Title");
+        let via_move = pt.into_track_info(overrides_b);
+
+        assert_eq!(via_borrow.title, via_move.title);
+        assert_eq!(via_borrow.version, via_move.version);
+        assert_eq!(via_borrow.disc_number, via_move.disc_number);
+        assert_eq!(via_borrow.track_number, via_move.track_number);
+        assert_eq!(via_borrow.duration_display, via_move.duration_display);
+        assert_eq!(via_borrow.isrc, via_move.isrc);
+        assert_eq!(via_borrow.explicit, via_move.explicit);
+        assert_eq!(via_borrow.track_artist, via_move.track_artist);
     }
 }

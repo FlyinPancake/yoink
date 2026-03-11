@@ -91,172 +91,172 @@ pub fn LibraryAlbumsTab() -> impl IntoView {
     );
 
     view! {
-        <Transition fallback=move || view! { <div class="p-6 max-md:p-4"><div class=EMPTY>"Loading albums..."</div></div> }>
-            {move || {
-                data.get().map(|result| match result {
-                    Err(e) => view! { <div class="p-6 text-sm text-red-500">{e.to_string()}</div> }.into_any(),
-                    Ok(data) => {
-                        let artist_names: HashMap<_, _> = data
-                            .artists
-                            .into_iter()
-                            .map(|a| (a.id, a.name))
-                            .collect();
-                        let albums = StoredValue::new(data.albums);
+            <Transition fallback=move || view! { <div class="p-6 max-md:p-4"><div class=EMPTY>"Loading albums..."</div></div> }>
+                {move || {
+                    data.get().map(|result| match result {
+                        Err(e) => view! { <div class="p-6 text-sm text-red-500">{e.to_string()}</div> }.into_any(),
+                        Ok(data) => {
+                            let artist_names: HashMap<_, _> = data
+                                .artists
+                                .into_iter()
+                                .map(|a| (a.id, a.name))
+                                .collect();
+                            let albums = StoredValue::new(data.albums);
 
-                        view! {
-                            <div class="p-6 max-md:p-4 space-y-5">
-                                <Panel>
-                                    <PanelBody>
-                                        <div class="flex flex-wrap items-center gap-2">
-                                            <input
-                                                type="text"
-                                                class={cls!(SEARCH_INPUT, "max-w-[360px]")}
-                                                placeholder="Search albums (local + provider)..."
-                                                prop:value=move || query.get()
-                                                on:input=move |ev| set_query.set(event_target_value(&ev))
-                                            />
-                                            <select class=SELECT on:change=move |ev| set_filter_key.set(event_target_value(&ev))>
-                                                <option value="all" selected=true>"All"</option>
-                                                <option value="monitored">"Monitored"</option>
-                                                <option value="wanted">"Wanted"</option>
-                                                <option value="acquired">"Acquired"</option>
-                                            </select>
-                                            <select class=SELECT on:change=move |ev| set_sort_key.set(event_target_value(&ev))>
-                                                <option value="az">"A-Z"</option>
-                                                <option value="newest">"Newest"</option>
-                                                <option value="oldest">"Oldest"</option>
-                                                <option value="recent" selected=true>"Recently Added"</option>
-                                                <option value="artist">"By Artist"</option>
-                                            </select>
-                                        </div>
-                                    </PanelBody>
-                                </Panel>
+                            view! {
+                                <div class="p-6 max-md:p-4 space-y-5">
+                                    <Panel>
+                                        <PanelBody>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    class={cls!(SEARCH_INPUT, "max-w-[360px]")}
+                                                    placeholder="Search albums (local + provider)..."
+                                                    prop:value=move || query.get()
+                                                    on:input=move |ev| set_query.set(event_target_value(&ev))
+                                                />
+                                                <select class=SELECT on:change=move |ev| set_filter_key.set(event_target_value(&ev))>
+                                                    <option value="all" selected=true>"All"</option>
+                                                    <option value="monitored">"Monitored"</option>
+                                                    <option value="wanted">"Wanted"</option>
+                                                    <option value="acquired">"Acquired"</option>
+                                                </select>
+                                                <select class=SELECT on:change=move |ev| set_sort_key.set(event_target_value(&ev))>
+                                                    <option value="az">"A-Z"</option>
+                                                    <option value="newest">"Newest"</option>
+                                                    <option value="oldest">"Oldest"</option>
+                                                    <option value="recent" selected=true>"Recently Added"</option>
+                                                    <option value="artist">"By Artist"</option>
+                                                </select>
+                                            </div>
+                                        </PanelBody>
+                                    </Panel>
 
-                                <Panel>
-                                    <PanelHeader>
-                                        <PanelTitle>"Albums"</PanelTitle>
-                                    </PanelHeader>
-                                    <PanelBody class="p-4">
-                                        <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5 max-md:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] max-md:gap-3">
-                                            {move || {
-                                                let q = query.get().trim().to_lowercase();
-                                                let filter = filter_key.get();
-                                                let sort = sort_key.get();
-                                                albums.with_value(|all| {
-                                                    let mut items: Vec<_> = all
-                                                        .iter()
-                                                        .filter(|a| {
-                                                            if !q.is_empty() {
-                                                                let artist = artist_names.get(&a.artist_id).cloned().unwrap_or_default();
-                                                                if !a.title.to_lowercase().contains(&q)
-                                                                    && !artist.to_lowercase().contains(&q)
-                                                                {
-                                                                    return false;
+                                    <Panel>
+                                        <PanelHeader>
+                                            <PanelTitle>"Albums"</PanelTitle>
+                                        </PanelHeader>
+                                        <PanelBody class="p-4">
+                                            <div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5 max-md:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] max-md:gap-3">
+                                                {move || {
+                                                    let q = query.get().trim().to_lowercase();
+                                                    let filter = filter_key.get();
+                                                    let sort = sort_key.get();
+                                                    albums.with_value(|all| {
+                                                        let mut items: Vec<_> = all
+                                                            .iter()
+                                                            .filter(|a| {
+                                                                if !q.is_empty() {
+                                                                    let artist = artist_names.get(&a.artist_id).cloned().unwrap_or_default();
+                                                                    if !a.title.to_lowercase().contains(&q)
+                                                                        && !artist.to_lowercase().contains(&q)
+                                                                    {
+                                                                        return false;
+                                                                    }
                                                                 }
-                                                            }
-                                                            match filter.as_str() {
-                                                                "monitored" => a.monitored,
-                                                                "wanted" => a.wanted || a.partially_wanted,
-                                                                "acquired" => a.acquired,
-                                                                _ => true,
-                                                            }
-                                                        })
-                                                        .collect();
+                                                                match filter.as_str() {
+                                                                    "monitored" => a.monitored,
+                                                                    "wanted" => a.wanted || a.partially_wanted,
+                                                                    "acquired" => a.acquired,
+                                                                    _ => true,
+                                                                }
+                                                            })
+                                                            .collect();
 
-                                                    match sort.as_str() {
-                                                        "az" => items.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase())),
-                                                        "newest" => items.sort_by(|a, b| b.release_date.cmp(&a.release_date)),
-                                                        "oldest" => items.sort_by(|a, b| a.release_date.cmp(&b.release_date)),
-                                                        "artist" => items.sort_by(|a, b| {
-                                                            let an = artist_names.get(&a.artist_id).cloned().unwrap_or_default();
-                                                            let bn = artist_names.get(&b.artist_id).cloned().unwrap_or_default();
-                                                            an.to_lowercase().cmp(&bn.to_lowercase())
-                                                        }),
-                                                        _ => items.sort_by(|a, b| b.added_at.cmp(&a.added_at)),
-                                                    }
+                                                        match sort.as_str() {
+                                                            "az" => items.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase())),
+                                                            "newest" => items.sort_by(|a, b| b.release_date.cmp(&a.release_date)),
+                                                            "oldest" => items.sort_by(|a, b| a.release_date.cmp(&b.release_date)),
+                                                            "artist" => items.sort_by(|a, b| {
+                                                                let an = artist_names.get(&a.artist_id).cloned().unwrap_or_default();
+                                                                let bn = artist_names.get(&b.artist_id).cloned().unwrap_or_default();
+                                                                an.to_lowercase().cmp(&bn.to_lowercase())
+                                                            }),
+                                                            _ => items.sort_by(|a, b| b.added_at.cmp(&a.added_at)),
+                                                        }
 
-                                                    if items.is_empty() {
-                                                        return view! { <div class="col-span-full"><div class=EMPTY>"No matching albums"</div></div> }.into_any();
-                                                    }
+                                                        if items.is_empty() {
+                                                            return view! { <div class="col-span-full"><div class=EMPTY>"No matching albums"</div></div> }.into_any();
+                                                        }
 
-                                                    items
-                                                        .into_iter()
-                                                        .map(|album| {
-                                                            let artist_name = artist_names
-                                                                .get(&album.artist_id)
-                                                                .cloned()
-.unwrap_or_else(|| yoink_shared::UNKNOWN_ARTIST.to_string());
-                                                             let href = format!("/artists/{}/albums/{}", album.artist_id, album.id);
-                                                            let badge = if album.acquired {
-                                                                SleeveBadge::Acquired
-                                                            } else if album.wanted || album.partially_wanted {
-                                                                SleeveBadge::Wanted
-                                                            } else {
-                                                                SleeveBadge::None
-                                                            };
-                                                            let badge_signal = Signal::derive(move || badge);
-                                                            let is_explicit = album.explicit;
-                                                            view! {
-                                                                <AlbumCard
-                                                                    album=album.clone()
-                                                                    href=href
-                                                                    cover_resolution=640
-                                                                    sleeve_badge=badge_signal
-                                                                    show_explicit=is_explicit
-                                                                    subtitle=artist_name
-                                                                />
-                                                            }
-                                                        })
-                                                        .collect_view()
-                                                        .into_any()
-                                                })
-                                            }}
-                                        </div>
-                                    </PanelBody>
-                                </Panel>
+                                                        items
+                                                            .into_iter()
+                                                            .map(|album| {
+                                                                let artist_name = artist_names
+                                                                    .get(&album.artist_id)
+                                                                    .cloned()
+    .unwrap_or_else(|| yoink_shared::UNKNOWN_ARTIST.to_string());
+                                                                 let href = format!("/artists/{}/albums/{}", album.artist_id, album.id);
+                                                                let badge = if album.acquired {
+                                                                    SleeveBadge::Acquired
+                                                                } else if album.wanted || album.partially_wanted {
+                                                                    SleeveBadge::Wanted
+                                                                } else {
+                                                                    SleeveBadge::None
+                                                                };
+                                                                let badge_signal = Signal::derive(move || badge);
+                                                                let is_explicit = album.explicit;
+                                                                view! {
+                                                                    <AlbumCard
+                                                                        album=album.clone()
+                                                                        href=href
+                                                                        cover_resolution=640
+                                                                        sleeve_badge=badge_signal
+                                                                        show_explicit=is_explicit
+                                                                        subtitle=artist_name
+                                                                    />
+                                                                }
+                                                            })
+                                                            .collect_view()
+                                                            .into_any()
+                                                    })
+                                                }}
+                                            </div>
+                                        </PanelBody>
+                                    </Panel>
 
-                                <Suspense>
-                                    {move || {
-                                        if query.get().trim().is_empty() {
-                                            return Some(view! { <span></span> }.into_any());
-                                        }
-                                        search_result.get().map(|res| match res {
-                                            Err(e) => view! { <div class="text-sm text-red-500">{e.to_string()}</div> }.into_any(),
-                                            Ok(sr) => {
-                                                if sr.results.is_empty() {
-                                                    return view! { <span></span> }.into_any();
-                                                }
-                                                let results = StoredValue::new(sr.results);
-                                                view! {
-                                                    <Panel>
-                                                        <PanelHeader>
-                                                            <PanelTitle>"Add Albums From Providers"</PanelTitle>
-                                                        </PanelHeader>
-                                                        <PanelBody class="p-0!">
-                                                            <div class="divide-y divide-black/[.04] dark:divide-white/[.04]">
-                                                                <For
-                                                                    each=move || results.with_value(|results| results.clone())
-                                                                    key=|result| provider_result_key(&result.provider, &result.external_id)
-                                                                    let:result
-                                                                >
-                                                                    <ProviderAlbumSearchRow result=result />
-                                                                </For>
-                                                            </div>
-                                                        </PanelBody>
-                                                    </Panel>
-                                                }.into_any()
+                                    <Suspense>
+                                        {move || {
+                                            if query.get().trim().is_empty() {
+                                                return Some(view! { <span></span> }.into_any());
                                             }
-                                        })
-                                    }}
-                                </Suspense>
-                            </div>
+                                            search_result.get().map(|res| match res {
+                                                Err(e) => view! { <div class="text-sm text-red-500">{e.to_string()}</div> }.into_any(),
+                                                Ok(sr) => {
+                                                    if sr.results.is_empty() {
+                                                        return view! { <span></span> }.into_any();
+                                                    }
+                                                    let results = StoredValue::new(sr.results);
+                                                    view! {
+                                                        <Panel>
+                                                            <PanelHeader>
+                                                                <PanelTitle>"Add Albums From Providers"</PanelTitle>
+                                                            </PanelHeader>
+                                                            <PanelBody class="p-0!">
+                                                                <div class="divide-y divide-black/[.04] dark:divide-white/[.04]">
+                                                                    <For
+                                                                        each=move || results.with_value(|results| results.clone())
+                                                                        key=|result| provider_result_key(&result.provider, &result.external_id)
+                                                                        let:result
+                                                                    >
+                                                                        <ProviderAlbumSearchRow result=result />
+                                                                    </For>
+                                                                </div>
+                                                            </PanelBody>
+                                                        </Panel>
+                                                    }.into_any()
+                                                }
+                                            })
+                                        }}
+                                    </Suspense>
+                                </div>
+                            }
+                            .into_any()
                         }
-                        .into_any()
-                    }
-                })
-            }}
-        </Transition>
-    }
+                    })
+                }}
+            </Transition>
+        }
 }
 
 #[component]

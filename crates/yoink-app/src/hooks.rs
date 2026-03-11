@@ -13,6 +13,10 @@ pub fn use_debounced_signal(initial: String) -> (RwSignal<String>, ReadSignal<St
 }
 
 /// Like [`use_debounced_signal`] but with a configurable delay.
+///
+/// When the raw value is cleared (set to an empty string), the debounced
+/// signal is flushed synchronously so downstream resources cancel
+/// immediately rather than waiting for the timeout.
 pub fn use_debounced_signal_with_delay(
     initial: String,
     _delay_ms: i32,
@@ -31,9 +35,20 @@ pub fn use_debounced_signal_with_delay(
             let timer_id = timer_id.clone();
             move |_| {
                 let val = raw.get();
+
+                // Always cancel any outstanding timer first.
                 if let Some(id) = timer_id.get() {
                     leptos::prelude::window().clear_timeout_with_handle(id);
+                    timer_id.set(None);
                 }
+
+                // Flush immediately when the value is cleared so
+                // downstream resources cancel without waiting.
+                if val.is_empty() {
+                    set_debounced.set(val);
+                    return;
+                }
+
                 let timer_id_inner = timer_id.clone();
                 let cb = wasm_bindgen::closure::Closure::once_into_js(move || {
                     set_debounced.set(val);
