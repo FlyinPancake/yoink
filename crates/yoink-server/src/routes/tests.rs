@@ -19,7 +19,7 @@ use super::helpers::sanitize_next_target;
 
 /// Helper: send a GET request to a path and return the status + body bytes.
 async fn get(state: crate::state::AppState, path: &str) -> (StatusCode, Vec<u8>) {
-    let app = build_router(state);
+    let (app, _) = build_router(state).split_for_parts();
     let req = Request::builder().uri(path).body(Body::empty()).unwrap();
     let resp = app.oneshot(req).await.unwrap();
     let status = resp.status();
@@ -31,7 +31,10 @@ async fn get(state: crate::state::AppState, path: &str) -> (StatusCode, Vec<u8>)
 }
 
 fn app_with_auth(state: crate::state::AppState) -> Router {
-    build_router(state.clone()).layer(middleware::from_fn_with_state(state, enforce_auth))
+    build_router(state.clone())
+        .split_for_parts()
+        .0
+        .layer(middleware::from_fn_with_state(state, enforce_auth))
 }
 
 async fn send(app: Router, req: Request<Body>) -> (StatusCode, axum::http::HeaderMap, Vec<u8>) {

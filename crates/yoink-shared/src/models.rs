@@ -1,11 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::ParseQualityError;
 
 /// Normalized quality level, provider-agnostic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub enum Quality {
     /// Hi-res lossless (up to FLAC 24-bit/192kHz).
     HiRes,
@@ -50,7 +51,7 @@ impl std::str::FromStr for Quality {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DownloadStatus {
     Queued,
@@ -72,7 +73,7 @@ impl DownloadStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DownloadJob {
     pub id: Uuid,
     pub album_id: Uuid,
@@ -88,7 +89,7 @@ pub struct DownloadJob {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MonitoredArtist {
     pub id: Uuid,
     pub name: String,
@@ -102,7 +103,7 @@ pub struct MonitoredArtist {
 
 /// A raw artist credit from a provider, stored on the album.
 /// Used to display all album artists even when some aren't monitored locally.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct ArtistCredit {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -111,7 +112,7 @@ pub struct ArtistCredit {
     pub external_id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct MonitoredAlbum {
     pub id: Uuid,
     /// Primary (first) artist — kept for backward compatibility and as a
@@ -142,7 +143,7 @@ pub struct MonitoredAlbum {
     pub added_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TrackInfo {
     pub id: Uuid,
     pub title: String,
@@ -166,7 +167,7 @@ pub struct TrackInfo {
 }
 
 /// A track with its parent album and artist context, for library-wide views.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct LibraryTrack {
     pub track: TrackInfo,
     pub album_id: Uuid,
@@ -177,7 +178,7 @@ pub struct LibraryTrack {
 }
 
 /// Provider link info for the UI.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ProviderLink {
     pub provider: String,
     pub external_id: String,
@@ -185,7 +186,7 @@ pub struct ProviderLink {
     pub external_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AuthStatus {
     pub auth_enabled: bool,
     pub authenticated: bool,
@@ -194,7 +195,7 @@ pub struct AuthStatus {
 }
 
 /// Potential cross-provider match suggestion.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MatchSuggestion {
     pub id: Uuid,
     pub scope_type: String,
@@ -218,14 +219,14 @@ pub struct MatchSuggestion {
 }
 
 /// An artist image option from a linked provider.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ArtistImageOption {
     pub provider: String,
     pub image_url: String,
 }
 
 /// A search result from a metadata provider.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchArtistResult {
     pub provider: String,
     pub external_id: String,
@@ -244,7 +245,7 @@ pub struct SearchArtistResult {
 }
 
 /// An album search result from a metadata provider.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchAlbumResult {
     pub provider: String,
     pub external_id: String,
@@ -261,7 +262,7 @@ pub struct SearchAlbumResult {
 }
 
 /// A track search result from a metadata provider.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchTrackResult {
     pub provider: String,
     pub external_id: String,

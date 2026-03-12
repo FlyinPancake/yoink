@@ -29,6 +29,8 @@ use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::{debug, error, info, warn};
+use utoipa::OpenApi;
+use utoipa_scalar::{Scalar, Servable};
 
 use crate::{
     app_config::AppConfig,
@@ -46,6 +48,15 @@ use crate::{
 
 use yoink_app::{App, shell::shell};
 use yoink_shared::Quality;
+
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    tags(
+        (name = routes::auth::TAG, description = routes::auth::TAG_DESCRIPTION),
+        (name = routes::images::TAG, description = routes::images::TAG_DESCRIPTION),
+    )
+)]
+struct ApiDoc;
 
 #[tokio::main]
 async fn main() {
@@ -112,7 +123,10 @@ async fn main() {
     };
 
     // ── Axum app ────────────────────────────────────────────────
-    let app = build_router(state.clone())
+    let (router, openapi) = build_router(state.clone()).split_for_parts();
+    let openapi = ApiDoc::openapi().merge_from(openapi);
+    let app = router
+        .merge(Scalar::with_url("/docs", openapi))
         .route(
             "/leptos/{*fn_name}",
             get(server_fn_handler.clone()).post(server_fn_handler),
@@ -126,6 +140,7 @@ async fn main() {
             "/yoink.svg",
             ServeDir::new(format!("{}/yoink.svg", site_root)),
         )
+
         .fallback(leptos_handler())
         .layer(middleware::from_fn_with_state(
             state.clone(),

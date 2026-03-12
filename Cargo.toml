@@ -67,6 +67,14 @@ tracing-subscriber = { version = "0.3", features = [
   "fmt",
   "json",
 ] }
+utoipa = { version = "5.4.0", features = [
+  "axum_extras",
+  "chrono",
+  "uuid",
+  "url",
+] }
+utoipa-axum = "0.2.0"
+utoipa-scalar = { version = "0.3.0", features = ["axum"] }
 
 # ── Client (WASM) ──────────────────────────────────────────
 wasm-bindgen = "0.2"

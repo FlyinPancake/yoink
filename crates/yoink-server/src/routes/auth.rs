@@ -1,12 +1,12 @@
 use axum::{
-    Extension, Form, Json, Router,
+    Extension, Form, Json,
     extract::State,
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Redirect},
-    routing::{get, post},
 };
 use serde::Deserialize;
 use tracing::warn;
+use utoipa_axum::{router::OpenApiRouter, routes};
 use veil::Redact;
 
 use crate::{
@@ -20,7 +20,11 @@ use crate::{
 
 use super::helpers::{redirect_with_error, sanitize_next_target};
 
-#[derive(Deserialize, Redact)]
+pub(crate) const TAG: &str = "Authentication";
+pub(crate) const TAG_DESCRIPTION: &str =
+    "Endpoints for user authentication and credential management";
+
+#[derive(Deserialize, Redact, utoipa::ToSchema)]
 pub(super) struct LoginForm {
     pub(super) username: String,
     #[redact]
@@ -29,7 +33,7 @@ pub(super) struct LoginForm {
     pub(super) next: Option<String>,
 }
 
-#[derive(Deserialize, Redact)]
+#[derive(Deserialize, Redact, utoipa::ToSchema)]
 pub(super) struct CredentialsForm {
     pub(super) username: String,
     #[serde(default)]
@@ -41,14 +45,29 @@ pub(super) struct CredentialsForm {
     pub(super) confirm_password: String,
 }
 
-pub(super) fn router() -> Router<AppState> {
-    Router::new()
-        .route("/api/auth/status", get(auth_status))
-        .route("/auth/login", post(login))
-        .route("/auth/logout", post(logout))
-        .route("/auth/credentials", post(update_credentials))
+pub(super) fn router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(auth_status))
+        .routes(routes!(login))
+        .routes(routes!(logout))
+        .routes(routes!(update_credentials))
 }
 
+/// Authentication status
+///
+/// Returns the current authentication status of the user making the request.
+/// If authentication is disabled, returns a default status indicating that authentication is not required.
+/// If authentication is enabled, checks the session cookie and returns whether the user is authenticated, their username, and whether they must change their password.
+#[utoipa::path(
+    get,
+    path = "/api/auth/status",
+    tag = TAG,
+    responses(
+        (status = 200, description = "Authentication status retrieved successfully", body = yoink_shared::AuthStatus),
+        (status = 401, description = "User is not authenticated"),
+        (status = 500, description = "Failed to retrieve authentication status"),
+    )
+)]
 pub(super) async fn auth_status(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -90,6 +109,21 @@ pub(super) async fn auth_status(
     }
 }
 
+/// Login endpoint
+///
+/// Expects form data with `username`, `password`, and optional `next` fields.
+/// If authentication is successful, sets a session cookie and redirects the client to the URL specified in `next`
+/// (or a default page if not provided). If authentication fails, redirects back to the login page with an error message.
+#[utoipa::path(
+    post,
+    path = "/auth/login",
+    tag = TAG,
+    responses(
+        (status = 303, description = "Login successful, client should redirect to the URL in the Location header"),
+        (status = 400, description = "Invalid login form data"),
+        (status = 500, description = "Login failed due to server error"),
+    )
+)]
 async fn login(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -128,6 +162,19 @@ async fn login(
     }
 }
 
+/// Logout endpoint
+///
+/// Invalidates the user's session on the server and clears the session cookie on the client.
+/// Redirects to the login page if authentication is enabled, or to the home page otherwise.
+#[utoipa::path(
+    post,
+    path = "/auth/logout",
+    tag = TAG,
+    responses(
+        (status = 303, description = "Logout successful, client should redirect to the URL in the Location header"),
+        (status = 500, description = "Logout failed due to server error"),
+    )
+)]
 async fn logout(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let secure = is_secure_request(&headers);
     let location = if state.auth.enabled() { "/login" } else { "/" };
@@ -148,6 +195,19 @@ async fn logout(State(state): State<AppState>, headers: HeaderMap) -> impl IntoR
         .into_response()
 }
 
+/// Update credentials
+///
+/// Allows an authenticated user to update their username and/or password.
+#[utoipa::path(
+    post,
+    path = "/auth/update-credentials",
+    tag = TAG,
+    responses(
+        (status = 303, description = "Credentials updated successfully, client should redirect to the URL in the Location header"),
+        (status = 400, description = "Invalid form data"),
+        (status = 500, description = "Failed to update credentials due to server error"),
+    )
+)]
 pub(super) async fn update_credentials(
     State(state): State<AppState>,
     headers: HeaderMap,

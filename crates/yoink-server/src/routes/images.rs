@@ -1,25 +1,37 @@
 use std::time::Duration;
 
 use axum::{
-    Router,
     extract::{Path, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
-    routing::get,
 };
 use tracing::{debug, warn};
+use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::state::AppState;
 
-pub(super) fn router() -> Router<AppState> {
-    Router::new()
-        .route("/api/image/{image_id}/{size}", get(proxy_tidal_image))
-        .route(
-            "/api/image/{provider}/{image_id}/{size}",
-            get(proxy_provider_image),
-        )
+pub(crate) const TAG: &str = "Images";
+pub(crate) const TAG_DESCRIPTION: &str = "Image proxying for registered providers";
+
+pub(super) fn router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(proxy_tidal_image))
+        .routes(routes!(proxy_provider_image))
 }
 
+/// Proxy Tidal image
+///
+/// Proxies an image from Tidal's CDN, validating the image ID and size parameters before fetching the image and returning it to the client.
+#[utoipa::path(
+    get,
+    path = "/api/image/{image_id}/{size}",
+    tag = TAG,
+    responses(
+        (status = 200, description = "The proxied image", content_type = "image/jpeg"),
+        (status = 400, description = "Invalid request parameters"),
+        (status = 502, description = "Upstream error")
+    )
+)]
 async fn proxy_tidal_image(
     State(state): State<AppState>,
     Path((image_id, size)): Path<(String, u16)>,
@@ -27,6 +39,19 @@ async fn proxy_tidal_image(
     proxy_image_impl(&state, "tidal", &image_id, size).await
 }
 
+/// Proxy provider image
+///
+/// Proxies an image from a registered provider
+#[utoipa::path(
+    get,
+    path = "/api/image/{provider}/{image_id}/{size}",
+    tag = TAG,
+    responses(
+        (status = 200, description = "The proxied image", content_type = "image/jpeg"),
+        (status = 400, description = "Invalid request parameters"),
+        (status = 502, description = "Upstream error")
+    )
+)]
 async fn proxy_provider_image(
     State(state): State<AppState>,
     Path((provider, image_id, size)): Path<(String, String, u16)>,
