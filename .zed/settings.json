@@ -1,0 +1,38 @@
+{
+  "languages": {
+    "JavaScript": {
+      "language_servers": [
+        "typescript-language-server",
+        "!vstls",
+        "!eslint",
+        "...",
+      ],
+    },
+    "TypeScript": {
+      "language_servers": [
+        "typescript-language-server",
+        "!vstls",
+        "!eslint",
+        "...",
+      ],
+      "prettier": {
+        "allowed": false,
+      },
+    },
+    "TSX": {
+      "language_servers": [
+        "typescript-language-server",
+        "!vstls",
+        "!eslint",
+        "...",
+      ],
+    },
+    "CSS": {
+      "language_servers": [
+        "tailwindcss-intellisense-css",
+        "!vscode-css-language-server",
+        "...",
+      ],
+    },
+  },
+}

@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": [],
+  "sortTailwindcss": {
+    "functions": ["cn", "cva"],
+    "stylesheet": "src/styles.css"
+  },
+  "trailingComma": "all"
+}

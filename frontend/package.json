@@ -3,12 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev --port 3000",
+    "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "lint": "eslint",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx}\"",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -43,11 +45,17 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
     "jsdom": "^27.0.0",
+    "oxfmt": "^0.39.0",
+    "oxlint": "^1.54.0",
+    "oxlint-tsgolint": "^0.16.0",
     "prettier": "^3.5.3",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "typescript": "^5.7.2",
-    "vite": "^7.1.7",
+    "vite": "npm:rolldown-vite@7.1.7",
     "vitest": "^3.0.5",
     "web-vitals": "^5.1.0"
+  },
+  "overrides": {
+    "vite": "npm:rolldown-vite@7.1.7"
   }
 }
