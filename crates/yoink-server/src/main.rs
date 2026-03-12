@@ -14,7 +14,6 @@ mod routes;
 mod server_context;
 mod services;
 mod state;
-mod ui;
 mod util;
 
 #[cfg(test)]
@@ -199,7 +198,6 @@ fn build_registry(app_config: &AppConfig) -> ProviderRegistry {
         ));
         registry.register_metadata(Arc::clone(&tidal) as Arc<dyn providers::MetadataProvider>);
         registry.register_download(Arc::clone(&tidal) as Arc<dyn providers::DownloadSource>);
-        registry.set_tidal(Arc::clone(&tidal));
         info!("Tidal provider enabled");
     }
 

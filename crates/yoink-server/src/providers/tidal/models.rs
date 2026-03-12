@@ -6,7 +6,6 @@
 
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 // ── Tidal API response types ────────────────────────────────────────
@@ -220,18 +219,6 @@ pub(crate) struct RankedInstance {
 /// JSON shape of an uptime feed response listing API, streaming, and down instances.
 #[derive(Debug, Deserialize)]
 pub(crate) struct UptimeFeed {
-    pub api: Vec<FeedInstance>,
-    pub streaming: Vec<FeedInstance>,
-    pub down: Vec<DownInstance>,
-}
-
-/// Serializable snapshot of current instance state.
-#[derive(Debug, Serialize)]
-pub(crate) struct InstancesResponse {
-    pub manual_override: Option<String>,
-    pub active_base_url: Option<String>,
-    pub last_refresh: Option<DateTime<Utc>>,
-    pub ranked: Vec<RankedInstance>,
     pub api: Vec<FeedInstance>,
     pub streaming: Vec<FeedInstance>,
     pub down: Vec<DownInstance>,

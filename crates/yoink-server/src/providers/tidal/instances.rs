@@ -13,7 +13,7 @@ use chrono::{DateTime, Utc};
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
-use super::models::{DownInstance, FeedInstance, InstancesResponse, RankedInstance, UptimeFeed};
+use super::models::{DownInstance, FeedInstance, RankedInstance, UptimeFeed};
 
 /// How long cached instance data is considered fresh before a re-fetch.
 const INSTANCE_CACHE_TTL: Duration = Duration::from_secs(300);
@@ -177,32 +177,6 @@ async fn refresh_instances(cache: &RwLock<InstanceCache>, http: &reqwest::Client
     c.streaming = merged_streaming;
     c.down = dedup_down(merged_down);
     c.ranked = ranked;
-}
-
-/// Assemble an [`InstancesResponse`] snapshot for the debug endpoint.
-pub(crate) async fn list_instances_payload(
-    manual_override: Option<&str>,
-    cache: &RwLock<InstanceCache>,
-    http: &reqwest::Client,
-) -> InstancesResponse {
-    ensure_instances_fresh(cache, http).await;
-    let c = cache.read().await;
-    debug!(
-        ranked = c.ranked.len(),
-        api = c.api.len(),
-        streaming = c.streaming.len(),
-        down = c.down.len(),
-        "Returning cached instance list"
-    );
-    InstancesResponse {
-        manual_override: manual_override.map(String::from),
-        active_base_url: c.active_base_url.clone(),
-        last_refresh: c.last_refresh,
-        ranked: c.ranked.clone(),
-        api: c.api.clone(),
-        streaming: c.streaming.clone(),
-        down: c.down.clone(),
-    }
 }
 
 // ── Pure helpers ────────────────────────────────────────────────────

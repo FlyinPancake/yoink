@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use super::tidal::TidalProvider;
 use super::{
     DownloadSource, MetadataProvider, ProviderArtist, ProviderError, ProviderSearchAlbum,
     ProviderSearchTrack,
@@ -10,8 +9,6 @@ use super::{
 pub(crate) struct ProviderRegistry {
     metadata: Vec<Arc<dyn MetadataProvider>>,
     download: Vec<Arc<dyn DownloadSource>>,
-    /// Concrete reference to the Tidal provider for Tidal-specific endpoints (e.g. instances).
-    tidal: Option<Arc<TidalProvider>>,
 }
 
 impl ProviderRegistry {
@@ -19,18 +16,7 @@ impl ProviderRegistry {
         Self {
             metadata: Vec::new(),
             download: Vec::new(),
-            tidal: None,
         }
-    }
-
-    /// Store a concrete reference to the Tidal provider for Tidal-specific endpoints.
-    pub fn set_tidal(&mut self, tidal: Arc<TidalProvider>) {
-        self.tidal = Some(tidal);
-    }
-
-    /// Get the concrete Tidal provider (for the /api/tidal/instances endpoint).
-    pub fn tidal_provider(&self) -> Option<&TidalProvider> {
-        self.tidal.as_deref()
     }
 
     /// Register a provider that implements MetadataProvider.

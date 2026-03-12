@@ -70,16 +70,6 @@ impl TidalProvider {
         )
         .await
     }
-
-    /// Build the instances payload for the `/api/tidal/instances` endpoint.
-    pub async fn list_instances_payload(&self) -> models::InstancesResponse {
-        instances::list_instances_payload(
-            self.manual_base_url.as_deref(),
-            &self.instance_cache,
-            &self.http,
-        )
-        .await
-    }
 }
 
 #[async_trait]
