@@ -9,38 +9,165 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppWantedRouteImport } from './routes/_app/wanted'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppSearchRouteImport } from './routes/_app/search'
+import { Route as AppDownloadsRouteImport } from './routes/_app/downloads'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppLibraryIndexRouteImport } from './routes/_app/library/index'
+import { Route as AppLibraryTracksRouteImport } from './routes/_app/library/tracks'
+import { Route as AppLibraryArtistsRouteImport } from './routes/_app/library/artists'
+import { Route as AppLibraryAlbumsRouteImport } from './routes/_app/library/albums'
 
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppWantedRoute = AppWantedRouteImport.update({
+  id: '/wanted',
+  path: '/wanted',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSearchRoute = AppSearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDownloadsRoute = AppDownloadsRouteImport.update({
+  id: '/downloads',
+  path: '/downloads',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLibraryIndexRoute = AppLibraryIndexRouteImport.update({
+  id: '/library/',
+  path: '/library/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLibraryTracksRoute = AppLibraryTracksRouteImport.update({
+  id: '/library/tracks',
+  path: '/library/tracks',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLibraryArtistsRoute = AppLibraryArtistsRouteImport.update({
+  id: '/library/artists',
+  path: '/library/artists',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLibraryAlbumsRoute = AppLibraryAlbumsRouteImport.update({
+  id: '/library/albums',
+  path: '/library/albums',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/downloads': typeof AppDownloadsRoute
+  '/search': typeof AppSearchRoute
+  '/settings': typeof AppSettingsRoute
+  '/wanted': typeof AppWantedRoute
+  '/library/albums': typeof AppLibraryAlbumsRoute
+  '/library/artists': typeof AppLibraryArtistsRoute
+  '/library/tracks': typeof AppLibraryTracksRoute
+  '/library/': typeof AppLibraryIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/downloads': typeof AppDownloadsRoute
+  '/search': typeof AppSearchRoute
+  '/settings': typeof AppSettingsRoute
+  '/wanted': typeof AppWantedRoute
+  '/library/albums': typeof AppLibraryAlbumsRoute
+  '/library/artists': typeof AppLibraryArtistsRoute
+  '/library/tracks': typeof AppLibraryTracksRoute
+  '/library': typeof AppLibraryIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/downloads': typeof AppDownloadsRoute
+  '/_app/search': typeof AppSearchRoute
+  '/_app/settings': typeof AppSettingsRoute
+  '/_app/wanted': typeof AppWantedRoute
+  '/_app/library/albums': typeof AppLibraryAlbumsRoute
+  '/_app/library/artists': typeof AppLibraryArtistsRoute
+  '/_app/library/tracks': typeof AppLibraryTracksRoute
+  '/_app/library/': typeof AppLibraryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/downloads'
+    | '/search'
+    | '/settings'
+    | '/wanted'
+    | '/library/albums'
+    | '/library/artists'
+    | '/library/tracks'
+    | '/library/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/dashboard'
+    | '/downloads'
+    | '/search'
+    | '/settings'
+    | '/wanted'
+    | '/library/albums'
+    | '/library/artists'
+    | '/library/tracks'
+    | '/library'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/_app/dashboard'
+    | '/_app/downloads'
+    | '/_app/search'
+    | '/_app/settings'
+    | '/_app/wanted'
+    | '/_app/library/albums'
+    | '/_app/library/artists'
+    | '/_app/library/tracks'
+    | '/_app/library/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +175,101 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/wanted': {
+      id: '/_app/wanted'
+      path: '/wanted'
+      fullPath: '/wanted'
+      preLoaderRoute: typeof AppWantedRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/search': {
+      id: '/_app/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof AppSearchRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/downloads': {
+      id: '/_app/downloads'
+      path: '/downloads'
+      fullPath: '/downloads'
+      preLoaderRoute: typeof AppDownloadsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/library/': {
+      id: '/_app/library/'
+      path: '/library'
+      fullPath: '/library/'
+      preLoaderRoute: typeof AppLibraryIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/library/tracks': {
+      id: '/_app/library/tracks'
+      path: '/library/tracks'
+      fullPath: '/library/tracks'
+      preLoaderRoute: typeof AppLibraryTracksRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/library/artists': {
+      id: '/_app/library/artists'
+      path: '/library/artists'
+      fullPath: '/library/artists'
+      preLoaderRoute: typeof AppLibraryArtistsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/library/albums': {
+      id: '/_app/library/albums'
+      path: '/library/albums'
+      fullPath: '/library/albums'
+      preLoaderRoute: typeof AppLibraryAlbumsRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppRouteChildren {
+  AppDashboardRoute: typeof AppDashboardRoute
+  AppDownloadsRoute: typeof AppDownloadsRoute
+  AppSearchRoute: typeof AppSearchRoute
+  AppSettingsRoute: typeof AppSettingsRoute
+  AppWantedRoute: typeof AppWantedRoute
+  AppLibraryAlbumsRoute: typeof AppLibraryAlbumsRoute
+  AppLibraryArtistsRoute: typeof AppLibraryArtistsRoute
+  AppLibraryTracksRoute: typeof AppLibraryTracksRoute
+  AppLibraryIndexRoute: typeof AppLibraryIndexRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppDashboardRoute: AppDashboardRoute,
+  AppDownloadsRoute: AppDownloadsRoute,
+  AppSearchRoute: AppSearchRoute,
+  AppSettingsRoute: AppSettingsRoute,
+  AppWantedRoute: AppWantedRoute,
+  AppLibraryAlbumsRoute: AppLibraryAlbumsRoute,
+  AppLibraryArtistsRoute: AppLibraryArtistsRoute,
+  AppLibraryTracksRoute: AppLibraryTracksRoute,
+  AppLibraryIndexRoute: AppLibraryIndexRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
