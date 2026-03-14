@@ -139,12 +139,10 @@
     border-radius: 12px;
     overflow: hidden;
     transition:
-      transform 0.2s,
       box-shadow 0.2s,
       border-color 0.2s;
   }
   .sleeve:hover {
-    transform: translateY(-4px);
     box-shadow: 0 12px 40px rgba(var(--glow-rgb), 0.18);
     border-color: rgba(var(--glow-rgb), 0.38);
   }

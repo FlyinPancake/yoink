@@ -9,7 +9,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
 use yoink_shared::{
-    ArtistImageOption, MatchSuggestion, MonitoredAlbum, MonitoredArtist, ProviderLink,
+    ArtistImageOption, MatchSuggestion, MonitoredAlbum, MonitoredArtist, ProviderLink, Quality,
     SearchArtistResult, ServerAction,
 };
 
@@ -85,6 +85,7 @@ struct ArtistDetailResponse {
     albums: Vec<MonitoredAlbum>,
     provider_links: Vec<ProviderLink>,
     match_suggestions: Vec<MatchSuggestion>,
+    default_quality: Quality,
 }
 
 pub(super) fn router() -> OpenApiRouter<AppState> {
@@ -237,6 +238,7 @@ async fn get_artist(
         albums,
         provider_links,
         match_suggestions,
+        default_quality: state.default_quality,
     }))
 }
 

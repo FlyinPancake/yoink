@@ -21,6 +21,7 @@ import {
   useDismissMatchSuggestion,
   useFetchArtistBio,
   useRefreshArtistMatchSuggestions,
+  useSetAlbumQuality,
   useSyncArtist,
   useToggleAlbumMonitor,
   useToggleArtistMonitor,
@@ -28,6 +29,7 @@ import {
   useUpdateArtist,
 } from "@/lib/api/mutations";
 
+import { MonitorButton } from "@/components/monitor-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -64,6 +66,7 @@ type MonitoredArtist = components["schemas"]["MonitoredArtist"];
 type MonitoredAlbum = components["schemas"]["MonitoredAlbum"];
 type ProviderLink = components["schemas"]["ProviderLink"];
 type MatchSuggestion = components["schemas"]["MatchSuggestion"];
+type Quality = components["schemas"]["Quality"];
 
 export const Route = createFileRoute("/_app/artists/$artistId/")({
   component: ArtistDetailPage,
@@ -98,18 +101,39 @@ function albumTypeLabel(albumType: string | null | undefined): string {
   return map[albumType.toLowerCase()] ?? albumType;
 }
 
+const ALBUM_TYPE_ORDER = [
+  "album",
+  "ep",
+  "single",
+  "compilation",
+  "live",
+  "remix",
+  "soundtrack",
+  "other",
+] as const;
+
+const ALBUM_TYPE_GROUP_LABELS: Record<string, string> = {
+  album: "Albums",
+  ep: "EPs",
+  single: "Singles",
+  compilation: "Compilations",
+  live: "Live",
+  remix: "Remixes",
+  soundtrack: "Soundtracks",
+  other: "Other",
+};
+
+function albumTypeKey(albumType: string | null | undefined): string {
+  const key = (albumType ?? "album").toLowerCase();
+  return ALBUM_TYPE_ORDER.includes(key as (typeof ALBUM_TYPE_ORDER)[number])
+    ? key
+    : "other";
+}
+
 function albumTypeRank(albumType: string | null | undefined): number {
-  const order = [
-    "album",
-    "ep",
-    "single",
-    "compilation",
-    "live",
-    "remix",
-    "soundtrack",
-    "other",
-  ];
-  const idx = order.indexOf((albumType ?? "album").toLowerCase());
+  const idx = ALBUM_TYPE_ORDER.indexOf(
+    albumTypeKey(albumType) as (typeof ALBUM_TYPE_ORDER)[number],
+  );
   return idx === -1 ? 999 : idx;
 }
 
@@ -161,6 +185,7 @@ function ArtistDetailPage() {
       albums={data.albums}
       providerLinks={data.provider_links}
       matchSuggestions={data.match_suggestions}
+      defaultQuality={data.default_quality}
     />
   );
 }
@@ -216,21 +241,22 @@ function ArtistDetailContent({
   albums,
   providerLinks,
   matchSuggestions,
+  defaultQuality,
 }: {
   artist: MonitoredArtist;
   albums: Array<MonitoredAlbum>;
   providerLinks: Array<ProviderLink>;
   matchSuggestions: Array<MatchSuggestion>;
+  defaultQuality: Quality;
 }) {
   const navigate = useNavigate();
-  const [albumSort, setAlbumSort] = useState("type");
+  const [albumSort, setAlbumSort] = useState("newest");
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
 
   const deleteArtist = useDeleteArtist();
   const syncArtist = useSyncArtist();
   const toggleMonitor = useToggleArtistMonitor();
-  const discographyRef = useSleeveGlow([albums.length, albumSort]);
 
   const albumCount = albums.length;
   const monitoredCount = albums.filter((a) => a.monitored).length;
@@ -241,8 +267,9 @@ function ArtistDetailContent({
     (m) => m.status === "pending",
   );
 
-  const sortedAlbums = useMemo(() => {
-    const sorted = [...albums];
+  /** Sort a list of albums by the current sort mode. */
+  const sortList = (list: MonitoredAlbum[]): MonitoredAlbum[] => {
+    const sorted = [...list];
     switch (albumSort) {
       case "az":
         sorted.sort((a, b) =>
@@ -263,16 +290,29 @@ function ArtistDetailContent({
             a.title.localeCompare(b.title),
         );
         break;
-      default: // "type"
-        sorted.sort(
-          (a, b) =>
-            albumTypeRank(a.album_type) - albumTypeRank(b.album_type) ||
-            (b.release_date ?? "").localeCompare(a.release_date ?? "") ||
-            a.title.localeCompare(b.title),
-        );
-        break;
     }
     return sorted;
+  };
+
+  /** Albums grouped by type, each group sorted by the active sort. */
+  const albumGroups = useMemo(() => {
+    const buckets = new Map<string, MonitoredAlbum[]>();
+    for (const album of albums) {
+      const key = albumTypeKey(album.album_type);
+      const bucket = buckets.get(key);
+      if (bucket) {
+        bucket.push(album);
+      } else {
+        buckets.set(key, [album]);
+      }
+    }
+    return [...buckets.entries()]
+      .sort(([a], [b]) => albumTypeRank(a) - albumTypeRank(b))
+      .map(([type, items]) => ({
+        type,
+        label: ALBUM_TYPE_GROUP_LABELS[type] ?? type,
+        albums: sortList(items),
+      }));
   }, [albums, albumSort]);
 
   return (
@@ -423,7 +463,6 @@ function ArtistDetailContent({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="type">By Type</SelectItem>
                     <SelectItem value="az">A - Z</SelectItem>
                     <SelectItem value="newest">Newest First</SelectItem>
                     <SelectItem value="oldest">Oldest First</SelectItem>
@@ -434,20 +473,22 @@ function ArtistDetailContent({
           </div>
         </div>
 
-        {sortedAlbums.length === 0 ? (
+        {albumGroups.length === 0 ? (
           <div className="px-5 py-8 text-center text-sm text-muted-foreground">
             No albums synced. Hit Sync Albums to fetch from provider.
           </div>
         ) : (
-          <div className="p-4">
-            <div
-              ref={discographyRef}
-              className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5 max-md:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] max-md:gap-3"
-            >
-              {sortedAlbums.map((album) => (
-                <AlbumCard key={album.id} album={album} artistId={artist.id} />
-              ))}
-            </div>
+          <div className="space-y-6 p-4">
+            {albumGroups.map((group) => (
+              <AlbumGroupSection
+                key={group.type}
+                label={group.label}
+                albums={group.albums}
+                artistId={artist.id}
+                defaultQuality={defaultQuality}
+                albumSort={albumSort}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -694,16 +735,59 @@ function MatchSuggestionsPanel({
   );
 }
 
+// ── Album group section ────────────────────────────────────────
+
+function AlbumGroupSection({
+  label,
+  albums,
+  artistId,
+  defaultQuality,
+  albumSort,
+}: {
+  label: string;
+  albums: Array<MonitoredAlbum>;
+  artistId: string;
+  defaultQuality: Quality;
+  albumSort: string;
+}) {
+  const gridRef = useSleeveGlow([albums.length, albumSort]);
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-semibold">{label}</h3>
+        <span className="text-xs text-muted-foreground">{albums.length}</span>
+      </div>
+      <div
+        ref={gridRef}
+        className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5 max-md:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] max-md:gap-3"
+      >
+        {albums.map((album) => (
+          <AlbumCard
+            key={album.id}
+            album={album}
+            artistId={artistId}
+            defaultQuality={defaultQuality}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ── Album card ─────────────────────────────────────────────────
 
 function AlbumCard({
   album,
   artistId,
+  defaultQuality,
 }: {
   album: MonitoredAlbum;
   artistId: string;
+  defaultQuality: Quality;
 }) {
   const toggleAlbumMonitor = useToggleAlbumMonitor();
+  const setAlbumQuality = useSetAlbumQuality();
   const releaseDate = album.release_date ?? "\u2014";
   const at = albumTypeLabel(album.album_type);
 
@@ -754,16 +838,24 @@ function AlbumCard({
         </div>
       </Link>
       <div className="absolute bottom-2 right-2">
-        <Switch
-          checked={album.monitored}
-          onCheckedChange={(checked: boolean) =>
+        <MonitorButton
+          monitored={album.monitored}
+          onToggleMonitor={() =>
             toggleAlbumMonitor.mutate({
               params: { path: { album_id: album.id } },
-              body: { monitored: checked },
+              body: { monitored: !album.monitored },
             })
           }
-          aria-label={`Monitor ${album.title}`}
-          className="scale-75"
+          qualityOverride={album.quality_override ?? null}
+          defaultQuality={defaultQuality}
+          onQualityChange={(quality) =>
+            setAlbumQuality.mutate({
+              params: { path: { album_id: album.id } },
+              body: { quality },
+            })
+          }
+          pending={toggleAlbumMonitor.isPending || setAlbumQuality.isPending}
+          variant="compact"
         />
       </div>
     </div>
