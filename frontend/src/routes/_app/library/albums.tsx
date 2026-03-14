@@ -1,6 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { $api } from "@/lib/api";
+import type { components } from "@/lib/api/types.gen";
+import { useSleeveGlow } from "@/hooks/use-sleeve-glow";
 import { Skeleton } from "@/components/ui/skeleton";
+
+type MonitoredAlbum = components["schemas"]["MonitoredAlbum"];
 
 export const Route = createFileRoute("/_app/library/albums")({
   component: AlbumsPage,
@@ -73,70 +77,89 @@ function AlbumsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {albums.map((album) => {
-            const artistName =
-              album.artist_credits?.[0]?.name ??
-              artistMap.get(album.artist_id) ??
-              "Unknown Artist";
+        <AlbumGrid albums={albums} artistMap={artistMap} />
+      )}
+    </div>
+  );
+}
 
-            return (
-              <Link
-                key={album.id}
-                to="/artists/$artistId/albums/$albumId"
-                params={{
-                  artistId: album.artist_id,
-                  albumId: album.id,
-                }}
-                className="group overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md"
-              >
-                <div className="aspect-square bg-muted">
-                  {album.cover_url ? (
-                    <img
-                      src={album.cover_url}
-                      alt={album.title}
-                      className="size-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex size-full items-center justify-center text-4xl font-bold text-muted-foreground/30">
-                      {album.title.charAt(0)}
-                    </div>
+function AlbumGrid({
+  albums,
+  artistMap,
+}: {
+  albums: MonitoredAlbum[];
+  artistMap: Map<string, string>;
+}) {
+  const gridRef = useSleeveGlow([albums.length]);
+
+  return (
+    <div
+      ref={gridRef}
+      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+    >
+      {albums.map((album) => {
+        const artistName =
+          album.artist_credits?.[0]?.name ??
+          artistMap.get(album.artist_id) ??
+          "Unknown Artist";
+
+        return (
+          <div key={album.id} className="sleeve group">
+            <Link
+              to="/artists/$artistId/albums/$albumId"
+              params={{
+                artistId: album.artist_id,
+                albumId: album.id,
+              }}
+              className="block"
+            >
+              <div className="relative aspect-square bg-muted">
+                {album.cover_url ? (
+                  <img
+                    src={album.cover_url}
+                    alt={album.title}
+                    className="sleeve-cover"
+                    crossOrigin="anonymous"
+                  />
+                ) : (
+                  <div className="flex size-full items-center justify-center text-4xl font-bold text-muted-foreground/30">
+                    {album.title.charAt(0)}
+                  </div>
+                )}
+              </div>
+              <div className="p-4">
+                <p className="truncate font-semibold">{album.title}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {artistName} &middot;{" "}
+                  {album.release_date?.slice(0, 4) ?? "Unknown"}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {album.album_type && (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                      {album.album_type}
+                    </span>
+                  )}
+                  {album.acquired && (
+                    <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-500">
+                      Acquired
+                    </span>
+                  )}
+                  {album.wanted && (
+                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
+                      Wanted
+                    </span>
+                  )}
+                  {album.partially_wanted && !album.wanted && (
+                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
+                      Partial
+                    </span>
                   )}
                 </div>
-                <div className="p-4">
-                  <p className="truncate font-semibold">{album.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {artistName} &middot;{" "}
-                    {album.release_date?.slice(0, 4) ?? "Unknown"}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {album.album_type && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                        {album.album_type}
-                      </span>
-                    )}
-                    {album.acquired && (
-                      <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-500">
-                        Acquired
-                      </span>
-                    )}
-                    {album.wanted && (
-                      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
-                        Wanted
-                      </span>
-                    )}
-                    {album.partially_wanted && !album.wanted && (
-                      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
-                        Partial
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
+              </div>
+            </Link>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -51,15 +51,21 @@ function applyGlow(img: HTMLImageElement) {
   if (!sleeve || sleeve.dataset.glowApplied === "1") return;
   try {
     const colour = pickGlowColour(img);
-    if (!colour) return;
-    sleeve.style.setProperty(
-      "--glow-rgb",
-      `${String(colour.r)}, ${String(colour.g)}, ${String(colour.b)}`,
-    );
-    sleeve.dataset.glowApplied = "1";
+    if (colour) {
+      sleeve.style.setProperty(
+        "--glow-rgb",
+        `${String(colour.r)}, ${String(colour.g)}, ${String(colour.b)}`,
+      );
+    } else {
+      // No saturated colour found (B&W / grey cover) — disable glow
+      sleeve.classList.add("sleeve--no-glow");
+    }
   } catch {
-    /* cross-origin or tainted canvas — fall back to default blue */
+    // Cross-origin or tainted canvas — disable glow rather than showing
+    // the blue fallback colour
+    sleeve.classList.add("sleeve--no-glow");
   }
+  sleeve.dataset.glowApplied = "1";
 }
 
 // ── Colour extraction ──────────────────────────────────────────

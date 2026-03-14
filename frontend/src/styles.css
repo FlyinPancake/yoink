@@ -127,3 +127,56 @@
     @apply font-sans;
   }
 }
+
+@layer components {
+  /* Album sleeve cards — glow extracted from cover art via useSleeveGlow */
+  .sleeve {
+    position: relative;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 12px;
+    overflow: hidden;
+    transition:
+      transform 0.2s,
+      box-shadow 0.2s,
+      border-color 0.2s;
+  }
+  .sleeve:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(var(--glow-rgb), 0.18);
+    border-color: rgba(var(--glow-rgb), 0.38);
+  }
+
+  /* When colour extraction failed or produced no result, use a
+     neutral lift instead of the blue fallback glow */
+  .sleeve--no-glow:hover,
+  .sleeve:not([style*="--glow-rgb"]):hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    border-color: rgba(0, 0, 0, 0.12);
+  }
+
+  .dark .sleeve {
+    background: rgba(24, 24, 27, 0.6);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .dark .sleeve:hover {
+    box-shadow: 0 12px 40px rgba(var(--glow-rgb), 0.3);
+    border-color: rgba(var(--glow-rgb), 0.5);
+  }
+
+  .dark .sleeve--no-glow:hover,
+  .dark .sleeve:not([style*="--glow-rgb"]):hover {
+    box-shadow: 0 8px 24px rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .sleeve-cover {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
