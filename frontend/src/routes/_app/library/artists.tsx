@@ -4,6 +4,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/library/artists")({
   component: ArtistsPage,
+  staticData: {
+    breadcrumb: "Artists",
+  },
 });
 
 function ArtistsPage() {

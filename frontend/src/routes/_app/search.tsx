@@ -26,6 +26,9 @@ type SearchTrackResult = components["schemas"]["SearchTrackResult"];
 
 export const Route = createFileRoute("/_app/search")({
   component: SearchPage,
+  staticData: {
+    breadcrumb: "Search",
+  },
 });
 
 function SearchPage() {

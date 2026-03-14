@@ -11,6 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
+  staticData: {
+    breadcrumb: "Dashboard",
+  },
 });
 
 function StatCard({

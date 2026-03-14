@@ -4,6 +4,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsPage,
+  staticData: {
+    breadcrumb: "Settings",
+  },
 });
 
 function SettingsPage() {

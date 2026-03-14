@@ -8,6 +8,9 @@ type MonitoredAlbum = components["schemas"]["MonitoredAlbum"];
 
 export const Route = createFileRoute("/_app/library/albums")({
   component: AlbumsPage,
+  staticData: {
+    breadcrumb: "Albums",
+  },
 });
 
 function AlbumsPage() {

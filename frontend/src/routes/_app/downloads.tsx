@@ -19,6 +19,9 @@ type DownloadStatus = components["schemas"]["DownloadStatus"];
 
 export const Route = createFileRoute("/_app/downloads")({
   component: DownloadsPage,
+  staticData: {
+    breadcrumb: "Downloads",
+  },
 });
 
 const statusConfig: Record<

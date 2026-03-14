@@ -15,6 +15,9 @@ type MatchSuggestion = components["schemas"]["MatchSuggestion"];
 
 export const Route = createFileRoute("/_app/artists/$artistId/merge-albums")({
   component: MergeAlbumsPage,
+  staticData: {
+    breadcrumb: "Merge Albums",
+  },
 });
 
 // ── Helpers ────────────────────────────────────────────────────

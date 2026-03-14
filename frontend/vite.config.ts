@@ -14,15 +14,15 @@ const config = defineConfig({
         port: 5173,
       },
       devProxy: {
-        "/api/**": "http://localhost:3000"
-      }
+        "/api/**": "http://localhost:3000",
+      },
     }),
     // this is the plugin that enables path aliases
     viteTsConfigPaths({
       projects: ["./tsconfig.json"],
     }),
     tailwindcss(),
-    tanstackStart(),
+    tanstackStart({ spa: { enabled: true } }),
     viteReact(),
   ],
   server: {},

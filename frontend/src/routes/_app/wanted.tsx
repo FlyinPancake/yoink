@@ -4,6 +4,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/wanted")({
   component: WantedPage,
+  staticData: {
+    breadcrumb: "Wanted",
+  },
 });
 
 function WantedPage() {

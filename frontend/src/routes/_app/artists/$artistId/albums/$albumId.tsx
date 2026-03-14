@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
-  BookmarkIcon,
   CheckIcon,
   DownloadIcon,
   ExternalLinkIcon,
@@ -11,7 +10,7 @@ import {
 } from "lucide-react";
 
 import type { components } from "@/lib/api/types.gen";
-import { $api } from "@/lib/api";
+import { $api, queryKeys } from "@/lib/api";
 import {
   useAcceptMatchSuggestion,
   useDismissMatchSuggestion,
@@ -22,6 +21,7 @@ import {
   useToggleAlbumMonitor,
   useToggleSingleTrackMonitor,
 } from "@/lib/api/mutations";
+import { MonitorButton } from "@/components/monitor-button";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,13 +36,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 type MonitoredAlbum = components["schemas"]["MonitoredAlbum"];
 type MonitoredArtist = components["schemas"]["MonitoredArtist"];
@@ -56,6 +49,13 @@ type ResolvedArtistCredit = components["schemas"]["ResolvedArtistCredit"];
 export const Route = createFileRoute("/_app/artists/$artistId/albums/$albumId")(
   {
     component: AlbumDetailPage,
+    loader: async ({ context, params }) =>
+      context.queryClient.ensureQueryData(queryKeys.albums.detail(params.albumId)),
+    staticData: {
+      breadcrumb: (match) =>
+        (match.loaderData as { album?: { title?: string } } | undefined)?.album
+          ?.title ?? "Album",
+    },
   },
 );
 
@@ -102,8 +102,6 @@ function formatDuration(totalSecs: number): string {
   }
   return `${String(totalMins)} min ${String(secs).padStart(2, "0")} sec`;
 }
-
-const QUALITY_OPTIONS: Array<Quality> = ["HiRes", "Lossless", "High", "Low"];
 
 // ── Page component ─────────────────────────────────────────────
 
@@ -307,22 +305,26 @@ function AlbumDetailContent({
                 {retryDownload.isPending ? "Starting..." : "Download"}
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
+            <MonitorButton
+              monitored={album.monitored}
+              onToggleMonitor={() =>
                 toggleAlbumMonitor.mutate({
                   params: { path: { album_id: album.id } },
                   body: { monitored: !album.monitored },
                 })
               }
-            >
-              <BookmarkIcon
-                className="mr-1.5 size-3.5"
-                fill={album.monitored ? "currentColor" : "none"}
-              />
-              {album.monitored ? "Unmonitor" : "Monitor"}
-            </Button>
+              qualityOverride={album.quality_override ?? null}
+              defaultQuality={defaultQuality}
+              onQualityChange={(quality) =>
+                setAlbumQuality.mutate({
+                  params: { path: { album_id: album.id } },
+                  body: { quality },
+                })
+              }
+              pending={
+                toggleAlbumMonitor.isPending || setAlbumQuality.isPending
+              }
+            />
             {album.acquired && (
               <Button
                 variant="destructive"
@@ -451,26 +453,6 @@ function AlbumDetailContent({
                   ))}
                 </div>
               )}
-
-              {/* Quality selector */}
-              <div className="mt-3 flex max-w-60 flex-col gap-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Download Quality
-                </label>
-                <QualitySelect
-                  selected={album.quality_override ?? null}
-                  defaultQuality={defaultQuality}
-                  onChange={(quality) =>
-                    setAlbumQuality.mutate({
-                      params: { path: { album_id: album.id } },
-                      body: { quality },
-                    })
-                  }
-                />
-                <span className="text-[11px] text-muted-foreground">
-                  Applies to tracks without their own override.
-                </span>
-              </div>
             </div>
           </div>
         </div>
@@ -560,39 +542,6 @@ function JobStatusBadge({ job }: { job: DownloadJob }) {
   );
 }
 
-// ── Quality select ─────────────────────────────────────────────
-
-function QualitySelect({
-  selected,
-  defaultQuality,
-  onChange,
-}: {
-  selected: Quality | null;
-  defaultQuality: Quality;
-  onChange: (quality: Quality | null) => void;
-}) {
-  return (
-    <Select
-      value={selected ?? "default"}
-      onValueChange={(value) =>
-        onChange(value === "default" ? null : (value as Quality))
-      }
-    >
-      <SelectTrigger className="h-7 w-full text-xs">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="default">Use default ({defaultQuality})</SelectItem>
-        {QUALITY_OPTIONS.map((q) => (
-          <SelectItem key={q} value={q}>
-            {q}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
 // ── Track list ─────────────────────────────────────────────────
 
 function TrackList({
@@ -677,7 +626,10 @@ function TrackRow({
         albumId={albumId}
         monitored={track.monitored}
         acquired={track.acquired}
+        qualityOverride={track.quality_override ?? null}
+        effectiveAlbumQuality={effectiveAlbumQuality}
         toggleMutation={toggleTrackMonitor}
+        setTrackQuality={setTrackQuality}
       />
 
       <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
@@ -703,23 +655,6 @@ function TrackRow({
             {track.track_artist}
           </span>
         )}
-        <div className="mt-1.5 flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Quality
-          </span>
-          <QualitySelect
-            selected={track.quality_override ?? null}
-            defaultQuality={effectiveAlbumQuality}
-            onChange={(quality) =>
-              setTrackQuality.mutate({
-                params: {
-                  path: { album_id: albumId, track_id: track.id },
-                },
-                body: { quality },
-              })
-            }
-          />
-        </div>
         {/* ISRC + file path */}
         {(track.isrc ?? track.file_path) && (
           <div className="mt-0.5 flex flex-wrap items-center gap-2">
@@ -754,13 +689,19 @@ function TrackStatusIndicator({
   albumId,
   monitored,
   acquired,
+  qualityOverride,
+  effectiveAlbumQuality,
   toggleMutation,
+  setTrackQuality,
 }: {
   trackId: string;
   albumId: string;
   monitored: boolean;
   acquired: boolean;
+  qualityOverride: Quality | null;
+  effectiveAlbumQuality: Quality;
   toggleMutation: ReturnType<typeof useToggleSingleTrackMonitor>;
+  setTrackQuality: ReturnType<typeof useSetTrackQuality>;
 }) {
   if (acquired) {
     return (
@@ -773,44 +714,36 @@ function TrackStatusIndicator({
     );
   }
 
-  if (monitored) {
-    return (
-      <button
-        type="button"
-        className="flex size-5 shrink-0 cursor-pointer items-center justify-center border-none bg-transparent p-0 text-amber-500 transition-colors duration-150 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300"
-        title="Monitored for download - click to unmonitor"
-        onClick={(e) => {
-          e.stopPropagation();
+  return (
+    <div
+      className="shrink-0"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <MonitorButton
+        variant="compact"
+        monitored={monitored}
+        onToggleMonitor={() =>
           toggleMutation.mutate({
             params: {
               path: { album_id: albumId, track_id: trackId },
             },
-            body: { monitored: false },
-          });
-        }}
-      >
-        <BookmarkIcon className="size-3.5" fill="currentColor" />
-      </button>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className="flex size-5 shrink-0 cursor-pointer items-center justify-center border-none bg-transparent p-0 text-muted-foreground/30 transition-colors duration-150 hover:text-amber-500 dark:hover:text-amber-400"
-      title="Not monitored - click to monitor"
-      onClick={(e) => {
-        e.stopPropagation();
-        toggleMutation.mutate({
-          params: {
-            path: { album_id: albumId, track_id: trackId },
-          },
-          body: { monitored: true },
-        });
-      }}
-    >
-      <BookmarkIcon className="size-3.5" />
-    </button>
+            body: { monitored: !monitored },
+          })
+        }
+        qualityOverride={qualityOverride}
+        defaultQuality={effectiveAlbumQuality}
+        onQualityChange={(quality) =>
+          setTrackQuality.mutate({
+            params: {
+              path: { album_id: albumId, track_id: trackId },
+            },
+            body: { quality },
+          })
+        }
+        pending={toggleMutation.isPending || setTrackQuality.isPending}
+      />
+    </div>
   );
 }
 

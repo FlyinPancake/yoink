@@ -5,6 +5,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/library/tracks")({
   component: TracksPage,
+  staticData: {
+    breadcrumb: "Tracks",
+  },
 });
 
 function TracksPage() {
