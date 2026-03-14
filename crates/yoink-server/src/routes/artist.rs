@@ -1,0 +1,610 @@
+use axum::{
+    Json,
+    extract::{Path, Query, State},
+    http::StatusCode,
+};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use utoipa_axum::{router::OpenApiRouter, routes};
+use uuid::Uuid;
+
+use yoink_shared::{
+    ArtistImageOption, MatchSuggestion, MonitoredAlbum, MonitoredArtist, ProviderLink,
+    SearchArtistResult, ServerAction,
+};
+
+use crate::{
+    actions::dispatch_action_impl, db, error::AppError, server_context::build_server_context,
+    state::AppState,
+};
+
+use super::helpers::{ApiErrorResponse, app_error_response, parse_uuid, yoink_error_response};
+
+pub(crate) const TAG: &str = "Artist";
+pub(crate) const TAG_DESCRIPTION: &str = "Endpoints for artist search, lookup, and lifecycle";
+
+type ApiResult<T> = Result<Json<T>, ApiErrorResponse>;
+type ApiStatusResult = Result<StatusCode, ApiErrorResponse>;
+
+#[derive(Debug, Deserialize, ToSchema)]
+struct ArtistSearchQuery {
+    query: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+struct DeleteArtistQuery {
+    #[serde(default)]
+    remove_files: bool,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+struct CreateArtistRequest {
+    name: String,
+    provider: String,
+    external_id: String,
+    #[serde(default)]
+    image_url: Option<String>,
+    #[serde(default)]
+    external_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+struct UpdateArtistRequest {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    image_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+struct ToggleArtistMonitorRequest {
+    monitored: bool,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+struct LinkArtistProviderRequest {
+    provider: String,
+    external_id: String,
+    #[serde(default)]
+    external_url: Option<String>,
+    #[serde(default)]
+    external_name: Option<String>,
+    #[serde(default)]
+    image_ref: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+struct UnlinkArtistProviderRequest {
+    provider: String,
+    external_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+struct ArtistDetailResponse {
+    artist: MonitoredArtist,
+    albums: Vec<MonitoredAlbum>,
+    provider_links: Vec<ProviderLink>,
+    match_suggestions: Vec<MatchSuggestion>,
+}
+
+pub(super) fn router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(search_artists))
+        .routes(routes!(list_artists))
+        .routes(routes!(create_artist))
+        .routes(routes!(get_artist))
+        .routes(routes!(update_artist))
+        .routes(routes!(delete_artist))
+        .routes(routes!(toggle_artist_monitor))
+        .routes(routes!(sync_artist))
+        .routes(routes!(fetch_artist_bio))
+        .routes(routes!(list_artist_providers))
+        .routes(routes!(link_artist_provider))
+        .routes(routes!(unlink_artist_provider))
+        .routes(routes!(get_artist_images))
+        .routes(routes!(refresh_match_suggestions))
+}
+
+#[utoipa::path(
+    get,
+    path = "/search",
+    tag = TAG,
+    params(
+        ("query" = String, Query, description = "Artist search query")
+    ),
+    responses(
+        (status = 200, description = "Search results across all providers", body = Vec<SearchArtistResult>),
+        (status = 503, description = "Provider search unavailable"),
+    )
+)]
+/// Search Artists
+///
+/// Searches all registered metadata providers for artists matching the query
+/// string and returns the aggregated results.
+async fn search_artists(
+    State(state): State<AppState>,
+    Query(query): Query<ArtistSearchQuery>,
+) -> ApiResult<Vec<SearchArtistResult>> {
+    let trimmed = query.query.trim();
+    if trimmed.is_empty() {
+        return Ok(Json(Vec::new()));
+    }
+
+    let ctx = build_server_context(&state);
+    let results = (ctx.search_artists)(trimmed.to_string())
+        .await
+        .map_err(yoink_error_response)?;
+    Ok(Json(results))
+}
+
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = TAG,
+    responses(
+        (status = 200, description = "All local artists", body = Vec<MonitoredArtist>),
+        (status = 500, description = "Failed to load artists"),
+    )
+)]
+/// List Artists
+///
+/// Returns all locally monitored artists from the library database.
+async fn list_artists(State(state): State<AppState>) -> ApiResult<Vec<MonitoredArtist>> {
+    let artists = db::load_artists(&state.db)
+        .await
+        .map_err(|error| app_error_response(error.into()))?;
+    Ok(Json(artists))
+}
+
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = TAG,
+    request_body = CreateArtistRequest,
+    responses(
+        (status = 201, description = "Artist created"),
+        (status = 409, description = "Artist already exists"),
+        (status = 500, description = "Failed to create artist"),
+    )
+)]
+/// Create Artist
+///
+/// Adds an artist from provider metadata, persists the provider link, and
+/// triggers the existing artist sync flow.
+async fn create_artist(
+    State(state): State<AppState>,
+    Json(request): Json<CreateArtistRequest>,
+) -> ApiStatusResult {
+    dispatch_action_impl(
+        state,
+        ServerAction::AddArtist {
+            name: request.name,
+            provider: request.provider,
+            external_id: request.external_id,
+            image_url: request.image_url,
+            external_url: request.external_url,
+        },
+    )
+    .await
+    .map_err(app_error_response)?;
+
+    Ok(StatusCode::CREATED)
+}
+
+#[utoipa::path(
+    get,
+    path = "/{artist_id}",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID")
+    ),
+    responses(
+        (status = 200, description = "Artist detail payload", body = ArtistDetailResponse),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to load artist detail"),
+    )
+)]
+/// Get Artist
+///
+/// Returns the local artist, related albums, provider links, and match
+/// suggestions for a single artist.
+async fn get_artist(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+) -> ApiResult<ArtistDetailResponse> {
+    let artist_id = parse_artist_id(&artist_id)?;
+    let artist = require_artist(&state, artist_id).await?;
+
+    let albums = {
+        let albums = state.monitored_albums.read().await;
+        albums
+            .iter()
+            .filter(|album| album.artist_id == artist_id || album.artist_ids.contains(&artist_id))
+            .cloned()
+            .collect()
+    };
+
+    let ctx = build_server_context(&state);
+    let provider_links = (ctx.fetch_artist_links)(artist_id)
+        .await
+        .map_err(yoink_error_response)?;
+    let match_suggestions = (ctx.fetch_artist_match_suggestions)(artist_id)
+        .await
+        .map_err(yoink_error_response)?;
+
+    Ok(Json(ArtistDetailResponse {
+        artist,
+        albums,
+        provider_links,
+        match_suggestions,
+    }))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/{artist_id}",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID")
+    ),
+    request_body = UpdateArtistRequest,
+    responses(
+        (status = 204, description = "Artist updated"),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to update artist"),
+    )
+)]
+/// Update Artist
+///
+/// Updates editable local artist fields such as name and image URL.
+async fn update_artist(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+    Json(request): Json<UpdateArtistRequest>,
+) -> ApiStatusResult {
+    let artist_id = parse_artist_id(&artist_id)?;
+    require_artist(&state, artist_id).await?;
+
+    dispatch_action_impl(
+        state,
+        ServerAction::UpdateArtist {
+            artist_id,
+            name: request.name,
+            image_url: request.image_url,
+        },
+    )
+    .await
+    .map_err(app_error_response)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/{artist_id}",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID"),
+        ("remove_files" = Option<bool>, Query, description = "Whether to remove downloaded files")
+    ),
+    responses(
+        (status = 204, description = "Artist removed"),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to remove artist"),
+    )
+)]
+/// Delete Artist
+///
+/// Removes an artist from the local library and optionally removes downloaded
+/// files associated with that artist.
+async fn delete_artist(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+    Query(query): Query<DeleteArtistQuery>,
+) -> ApiStatusResult {
+    let artist_id = parse_artist_id(&artist_id)?;
+    require_artist(&state, artist_id).await?;
+
+    dispatch_action_impl(
+        state,
+        ServerAction::RemoveArtist {
+            artist_id,
+            remove_files: query.remove_files,
+        },
+    )
+    .await
+    .map_err(app_error_response)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    patch,
+    path = "/{artist_id}/monitor",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID")
+    ),
+    request_body = ToggleArtistMonitorRequest,
+    responses(
+        (status = 204, description = "Artist monitor flag updated"),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to toggle artist monitor"),
+    )
+)]
+/// Toggle Artist Monitor
+///
+/// Enables or disables full monitoring for an artist.
+async fn toggle_artist_monitor(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+    Json(request): Json<ToggleArtistMonitorRequest>,
+) -> ApiStatusResult {
+    let artist_id = parse_artist_id(&artist_id)?;
+    require_artist(&state, artist_id).await?;
+
+    dispatch_action_impl(
+        state,
+        ServerAction::ToggleArtistMonitor {
+            artist_id,
+            monitored: request.monitored,
+        },
+    )
+    .await
+    .map_err(app_error_response)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = "/{artist_id}/sync",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID")
+    ),
+    responses(
+        (status = 204, description = "Artist albums synced"),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to sync artist albums"),
+    )
+)]
+/// Sync Artist
+///
+/// Triggers a discography sync for the specified artist using its linked
+/// provider metadata.
+async fn sync_artist(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+) -> ApiStatusResult {
+    let artist_id = parse_artist_id(&artist_id)?;
+    require_artist(&state, artist_id).await?;
+
+    dispatch_action_impl(state, ServerAction::SyncArtistAlbums { artist_id })
+        .await
+        .map_err(app_error_response)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = "/{artist_id}/fetch-bio",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID")
+    ),
+    responses(
+        (status = 204, description = "Artist bio refresh triggered"),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to refresh artist bio"),
+    )
+)]
+/// Fetch Artist Bio
+///
+/// Starts a background refresh of the artist biography from linked providers.
+async fn fetch_artist_bio(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+) -> ApiStatusResult {
+    let artist_id = parse_artist_id(&artist_id)?;
+    require_artist(&state, artist_id).await?;
+
+    dispatch_action_impl(state, ServerAction::FetchArtistBio { artist_id })
+        .await
+        .map_err(app_error_response)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    get,
+    path = "/{artist_id}/provider",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID")
+    ),
+    responses(
+        (status = 200, description = "Provider links for the artist", body = Vec<ProviderLink>),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to load provider links"),
+    )
+)]
+/// List Artist Providers
+///
+/// Returns the provider links currently attached to a local artist.
+async fn list_artist_providers(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+) -> ApiResult<Vec<ProviderLink>> {
+    let artist_id = parse_artist_id(&artist_id)?;
+    require_artist(&state, artist_id).await?;
+
+    let ctx = build_server_context(&state);
+    let links = (ctx.fetch_artist_links)(artist_id)
+        .await
+        .map_err(yoink_error_response)?;
+
+    Ok(Json(links))
+}
+
+#[utoipa::path(
+    post,
+    path = "/{artist_id}/provider",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID")
+    ),
+    request_body = LinkArtistProviderRequest,
+    responses(
+        (status = 204, description = "Provider linked to artist"),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to link provider"),
+    )
+)]
+/// Link Artist Provider
+///
+/// Attaches a provider identity to an existing local artist.
+async fn link_artist_provider(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+    Json(request): Json<LinkArtistProviderRequest>,
+) -> ApiStatusResult {
+    let artist_id = parse_artist_id(&artist_id)?;
+    require_artist(&state, artist_id).await?;
+
+    dispatch_action_impl(
+        state,
+        ServerAction::LinkArtistProvider {
+            artist_id,
+            provider: request.provider,
+            external_id: request.external_id,
+            external_url: request.external_url,
+            external_name: request.external_name,
+            image_ref: request.image_ref,
+        },
+    )
+    .await
+    .map_err(app_error_response)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/{artist_id}/provider",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID")
+    ),
+    request_body = UnlinkArtistProviderRequest,
+    responses(
+        (status = 204, description = "Provider unlinked from artist"),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to unlink provider"),
+    )
+)]
+/// Unlink Artist Provider
+///
+/// Removes a provider identity from an existing local artist.
+async fn unlink_artist_provider(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+    Json(request): Json<UnlinkArtistProviderRequest>,
+) -> ApiStatusResult {
+    let artist_id = parse_artist_id(&artist_id)?;
+    require_artist(&state, artist_id).await?;
+
+    dispatch_action_impl(
+        state,
+        ServerAction::UnlinkArtistProvider {
+            artist_id,
+            provider: request.provider,
+            external_id: request.external_id,
+        },
+    )
+    .await
+    .map_err(app_error_response)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    get,
+    path = "/{artist_id}/image",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID")
+    ),
+    responses(
+        (status = 200, description = "Available artist images from linked providers", body = Vec<ArtistImageOption>),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to fetch artist images"),
+    )
+)]
+/// Get Artist Images
+///
+/// Returns candidate artist images collected from the artist's linked
+/// providers.
+async fn get_artist_images(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+) -> ApiResult<Vec<ArtistImageOption>> {
+    let artist_id = parse_artist_id(&artist_id)?;
+    require_artist(&state, artist_id).await?;
+
+    let ctx = build_server_context(&state);
+    let images = (ctx.fetch_artist_images)(artist_id)
+        .await
+        .map_err(yoink_error_response)?;
+
+    Ok(Json(images))
+}
+
+#[utoipa::path(
+    post,
+    path = "/{artist_id}/match-suggestion/refresh",
+    tag = TAG,
+    params(
+        ("artist_id" = String, Path, description = "Artist UUID")
+    ),
+    responses(
+        (status = 204, description = "Artist match suggestions refreshed"),
+        (status = 404, description = "Artist not found"),
+        (status = 500, description = "Failed to refresh match suggestions"),
+    )
+)]
+/// Refresh Match Suggestions
+///
+/// Recomputes pending artist match suggestions for the specified artist.
+async fn refresh_match_suggestions(
+    State(state): State<AppState>,
+    Path(artist_id): Path<String>,
+) -> ApiStatusResult {
+    let artist_id = parse_artist_id(&artist_id)?;
+    require_artist(&state, artist_id).await?;
+
+    dispatch_action_impl(state, ServerAction::RefreshMatchSuggestions { artist_id })
+        .await
+        .map_err(app_error_response)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn parse_artist_id(raw: &str) -> Result<Uuid, ApiErrorResponse> {
+    parse_uuid(raw, "artist_id")
+}
+
+async fn require_artist(
+    state: &AppState,
+    artist_id: Uuid,
+) -> Result<MonitoredArtist, ApiErrorResponse> {
+    let artists = state.monitored_artists.read().await;
+    artists
+        .iter()
+        .find(|artist| artist.id == artist_id)
+        .cloned()
+        .ok_or_else(|| {
+            app_error_response(AppError::not_found("artist", Some(artist_id.to_string())))
+        })
+}

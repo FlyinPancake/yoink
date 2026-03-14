@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -6,12 +8,19 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { connectSSE } from "@/lib/api";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
 });
 
 function AppLayout() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    return connectSSE(queryClient);
+  }, [queryClient]);
+
   return (
     <SidebarProvider>
       <AppSidebar />

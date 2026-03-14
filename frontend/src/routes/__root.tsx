@@ -1,11 +1,21 @@
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
+import {
+  HeadContent,
+  Scripts,
+  createRootRouteWithContext,
+} from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
+import type { QueryClient } from "@tanstack/react-query";
 
 import appCss from "../styles.css?url";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-export const Route = createRootRoute({
+interface RouterContext {
+  queryClient: QueryClient;
+}
+
+export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
       {
@@ -16,7 +26,7 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "TanStack Start Starter",
+        title: "yoink",
       },
     ],
     links: [
@@ -50,6 +60,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             {
               name: "Tanstack Router",
               render: <TanStackRouterDevtoolsPanel />,
+            },
+            {
+              name: "Tanstack Query",
+              render: <ReactQueryDevtoolsPanel />,
             },
           ]}
         />

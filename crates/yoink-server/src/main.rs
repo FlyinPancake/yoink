@@ -26,7 +26,6 @@ use std::{sync::Arc, time::Duration};
 use axum::{middleware, routing::get};
 use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
-use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::{debug, error, info, warn};
 use utoipa::OpenApi;
@@ -41,19 +40,27 @@ use crate::{
         soulseek::SoulSeekSource, tidal::TidalProvider,
     },
     routes::build_router,
-    server_context::build_server_context,
     services::{download_worker_loop, reconcile_library_files},
     state::AppState,
 };
 
-use yoink_app::{App, shell::shell};
 use yoink_shared::Quality;
 
 #[derive(utoipa::OpenApi)]
 #[openapi(
     tags(
+        (name = routes::album::TAG, description = routes::album::TAG_DESCRIPTION),
+        (name = routes::artist::TAG, description = routes::artist::TAG_DESCRIPTION),
         (name = routes::auth::TAG, description = routes::auth::TAG_DESCRIPTION),
+        (name = routes::dashboard::TAG, description = routes::dashboard::TAG_DESCRIPTION),
         (name = routes::images::TAG, description = routes::images::TAG_DESCRIPTION),
+        (name = routes::import::TAG, description = routes::import::TAG_DESCRIPTION),
+        (name = routes::job::TAG, description = routes::job::TAG_DESCRIPTION),
+        (name = routes::match_suggestion::TAG, description = routes::match_suggestion::TAG_DESCRIPTION),
+        (name = routes::provider::TAG, description = routes::provider::TAG_DESCRIPTION),
+        (name = routes::search::TAG, description = routes::search::TAG_DESCRIPTION),
+        (name = routes::track::TAG, description = routes::track::TAG_DESCRIPTION),
+        (name = routes::wanted::TAG, description = routes::wanted::TAG_DESCRIPTION)
     )
 )]
 struct ApiDoc;
@@ -65,9 +72,6 @@ async fn main() {
     });
 
     init_logging(&app_config.log_format);
-
-    // Initialise the Leptos/Tokio executor so SSR rendering can spawn futures.
-    let _leptos_routes = leptos_axum::generate_route_list(App);
 
     let music_root = app_config.music_root_path();
     let default_quality = app_config.default_quality;
@@ -101,47 +105,16 @@ async fn main() {
     // ── Background tasks ────────────────────────────────────────
     spawn_background_tasks(&state);
 
-    // ── Build Leptos server context ─────────────────────────────
-    let server_ctx = build_server_context(&state);
-    let site_root = app_config.leptos_site_root.clone();
-
-    let provide_server_ctx = {
-        let ctx = server_ctx.clone();
-        move || {
-            leptos::context::provide_context(ctx.clone());
-        }
-    };
-
-    let server_fn_ctx = provide_server_ctx.clone();
-    let server_fn_handler = move |req: axum::http::Request<axum::body::Body>| async move {
-        leptos_axum::handle_server_fns_with_context(server_fn_ctx, req).await
-    };
-
-    let leptos_handler = || {
-        let ctx = provide_server_ctx.clone();
-        get(leptos_axum::render_app_to_stream_with_context(ctx, shell))
-    };
-
     // ── Axum app ────────────────────────────────────────────────
     let (router, openapi) = build_router(state.clone()).split_for_parts();
     let openapi = ApiDoc::openapi().merge_from(openapi);
+    let openapi_json = openapi.clone();
     let app = router
         .merge(Scalar::with_url("/docs", openapi))
         .route(
-            "/leptos/{*fn_name}",
-            get(server_fn_handler.clone()).post(server_fn_handler),
+            "/docs/openapi.json",
+            get(move || async move { axum::Json(openapi_json) }),
         )
-        .nest_service("/pkg", ServeDir::new(format!("{}/pkg", site_root)))
-        .nest_service(
-            "/favicon.ico",
-            ServeDir::new(format!("{}/favicon.ico", site_root)),
-        )
-        .nest_service(
-            "/yoink.svg",
-            ServeDir::new(format!("{}/yoink.svg", site_root)),
-        )
-
-        .fallback(leptos_handler())
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::middleware::enforce_auth,
@@ -188,7 +161,7 @@ async fn main() {
         default_quality = %default_quality,
         download_lyrics = app_config.download_lyrics,
         warning = %quality_warning,
-        "Leptos SSR app started"
+        "yoink server started"
     );
     axum::serve(
         listener,

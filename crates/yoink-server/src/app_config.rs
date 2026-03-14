@@ -7,7 +7,6 @@ use yoink_shared::Quality;
 
 const DEFAULT_MUSIC_ROOT: &str = "./music";
 const DEFAULT_DATABASE_URL: &str = "sqlite:./yoink.db?mode=rwc";
-const DEFAULT_SITE_ROOT: &str = "target/site";
 const DEFAULT_LOG_FORMAT: &str = "pretty";
 const DEFAULT_SLSKD_BASE_URL: &str = "http://127.0.0.1:5030";
 const DEFAULT_SLSKD_DOWNLOADS_DIR: &str = "./development/slskd-data/downloads";
@@ -79,9 +78,6 @@ struct RawAppConfig {
     #[conf(from = "DATABASE_URL", default = "sqlite:./yoink.db?mode=rwc")]
     pub(crate) database_url: String,
 
-    #[conf(from = "LEPTOS_SITE_ROOT", default = "target/site")]
-    pub(crate) leptos_site_root: String,
-
     #[conf(from = "LOG_FORMAT", default = "pretty")]
     pub(crate) log_format: String,
 
@@ -119,7 +115,6 @@ pub(crate) struct AppConfig {
     pub(crate) music_root: String,
     pub(crate) default_quality: Quality,
     pub(crate) database_url: String,
-    pub(crate) leptos_site_root: String,
     pub(crate) log_format: String,
     pub(crate) download_lyrics: bool,
     pub(crate) download_max_parallel_tracks: usize,
@@ -150,7 +145,6 @@ impl AppConfig {
         let music_root = normalize_string(&raw.music_root, DEFAULT_MUSIC_ROOT);
         let default_quality = raw.default_quality;
         let database_url = normalize_string(&raw.database_url, DEFAULT_DATABASE_URL);
-        let leptos_site_root = normalize_string(&raw.leptos_site_root, DEFAULT_SITE_ROOT);
         let log_format = normalize_string(&raw.log_format, DEFAULT_LOG_FORMAT).to_ascii_lowercase();
         let download_max_parallel_tracks = raw.download_max_parallel_tracks.clamp(1, 16);
         let auth_session_secret =
@@ -178,7 +172,6 @@ impl AppConfig {
             music_root,
             default_quality,
             database_url,
-            leptos_site_root,
             log_format,
             download_lyrics: raw.download_lyrics,
             download_max_parallel_tracks,

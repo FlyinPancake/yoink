@@ -29,7 +29,7 @@ fn search_relevance_score(query: &str, name: &str) -> f64 {
     (jw + prefix_bonus + contains_bonus).min(1.0)
 }
 
-/// Build the `ServerContext` that wires Leptos server functions to the real `AppState`.
+/// Build the `ServerContext` that wires shared service functions to the real `AppState`.
 pub(crate) fn build_server_context(state: &AppState) -> yoink_shared::ServerContext {
     let search_fn = build_search_fn(state);
     let search_scoped_fn = build_search_scoped_fn(state);

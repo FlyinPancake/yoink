@@ -9,7 +9,14 @@ import { nitro } from "nitro/vite";
 const config = defineConfig({
   plugins: [
     devtools(),
-    nitro(),
+    nitro({
+      devServer: {
+        port: 5173,
+      },
+      devProxy: {
+        "/api/**": "http://localhost:3000"
+      }
+    }),
     // this is the plugin that enables path aliases
     viteTsConfigPaths({
       projects: ["./tsconfig.json"],
@@ -18,13 +25,7 @@ const config = defineConfig({
     tanstackStart(),
     viteReact(),
   ],
-  server: {
-    proxy: {
-      "/api": {
-        target: "http://localhost:3000",
-      },
-    },
-  },
+  server: {},
 });
 
 export default config;

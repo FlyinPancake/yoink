@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppWantedRouteImport } from './routes/_app/wanted'
@@ -20,7 +21,15 @@ import { Route as AppLibraryIndexRouteImport } from './routes/_app/library/index
 import { Route as AppLibraryTracksRouteImport } from './routes/_app/library/tracks'
 import { Route as AppLibraryArtistsRouteImport } from './routes/_app/library/artists'
 import { Route as AppLibraryAlbumsRouteImport } from './routes/_app/library/albums'
+import { Route as AppArtistsArtistIdIndexRouteImport } from './routes/_app/artists/$artistId/index'
+import { Route as AppArtistsArtistIdMergeAlbumsRouteImport } from './routes/_app/artists/$artistId/merge-albums'
+import { Route as AppArtistsArtistIdAlbumsAlbumIdRouteImport } from './routes/_app/artists/$artistId/albums/$albumId'
 
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
@@ -75,9 +84,27 @@ const AppLibraryAlbumsRoute = AppLibraryAlbumsRouteImport.update({
   path: '/library/albums',
   getParentRoute: () => AppRoute,
 } as any)
+const AppArtistsArtistIdIndexRoute = AppArtistsArtistIdIndexRouteImport.update({
+  id: '/artists/$artistId/',
+  path: '/artists/$artistId/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppArtistsArtistIdMergeAlbumsRoute =
+  AppArtistsArtistIdMergeAlbumsRouteImport.update({
+    id: '/artists/$artistId/merge-albums',
+    path: '/artists/$artistId/merge-albums',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppArtistsArtistIdAlbumsAlbumIdRoute =
+  AppArtistsArtistIdAlbumsAlbumIdRouteImport.update({
+    id: '/artists/$artistId/albums/$albumId',
+    path: '/artists/$artistId/albums/$albumId',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/dashboard': typeof AppDashboardRoute
   '/downloads': typeof AppDownloadsRoute
   '/search': typeof AppSearchRoute
@@ -87,9 +114,13 @@ export interface FileRoutesByFullPath {
   '/library/artists': typeof AppLibraryArtistsRoute
   '/library/tracks': typeof AppLibraryTracksRoute
   '/library/': typeof AppLibraryIndexRoute
+  '/artists/$artistId/merge-albums': typeof AppArtistsArtistIdMergeAlbumsRoute
+  '/artists/$artistId/': typeof AppArtistsArtistIdIndexRoute
+  '/artists/$artistId/albums/$albumId': typeof AppArtistsArtistIdAlbumsAlbumIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/dashboard': typeof AppDashboardRoute
   '/downloads': typeof AppDownloadsRoute
   '/search': typeof AppSearchRoute
@@ -99,11 +130,15 @@ export interface FileRoutesByTo {
   '/library/artists': typeof AppLibraryArtistsRoute
   '/library/tracks': typeof AppLibraryTracksRoute
   '/library': typeof AppLibraryIndexRoute
+  '/artists/$artistId/merge-albums': typeof AppArtistsArtistIdMergeAlbumsRoute
+  '/artists/$artistId': typeof AppArtistsArtistIdIndexRoute
+  '/artists/$artistId/albums/$albumId': typeof AppArtistsArtistIdAlbumsAlbumIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/downloads': typeof AppDownloadsRoute
   '/_app/search': typeof AppSearchRoute
@@ -113,11 +148,15 @@ export interface FileRoutesById {
   '/_app/library/artists': typeof AppLibraryArtistsRoute
   '/_app/library/tracks': typeof AppLibraryTracksRoute
   '/_app/library/': typeof AppLibraryIndexRoute
+  '/_app/artists/$artistId/merge-albums': typeof AppArtistsArtistIdMergeAlbumsRoute
+  '/_app/artists/$artistId/': typeof AppArtistsArtistIdIndexRoute
+  '/_app/artists/$artistId/albums/$albumId': typeof AppArtistsArtistIdAlbumsAlbumIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/login'
     | '/dashboard'
     | '/downloads'
     | '/search'
@@ -127,9 +166,13 @@ export interface FileRouteTypes {
     | '/library/artists'
     | '/library/tracks'
     | '/library/'
+    | '/artists/$artistId/merge-albums'
+    | '/artists/$artistId/'
+    | '/artists/$artistId/albums/$albumId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/login'
     | '/dashboard'
     | '/downloads'
     | '/search'
@@ -139,10 +182,14 @@ export interface FileRouteTypes {
     | '/library/artists'
     | '/library/tracks'
     | '/library'
+    | '/artists/$artistId/merge-albums'
+    | '/artists/$artistId'
+    | '/artists/$artistId/albums/$albumId'
   id:
     | '__root__'
     | '/'
     | '/_app'
+    | '/login'
     | '/_app/dashboard'
     | '/_app/downloads'
     | '/_app/search'
@@ -152,15 +199,26 @@ export interface FileRouteTypes {
     | '/_app/library/artists'
     | '/_app/library/tracks'
     | '/_app/library/'
+    | '/_app/artists/$artistId/merge-albums'
+    | '/_app/artists/$artistId/'
+    | '/_app/artists/$artistId/albums/$albumId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app': {
       id: '/_app'
       path: ''
@@ -238,6 +296,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLibraryAlbumsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/artists/$artistId/': {
+      id: '/_app/artists/$artistId/'
+      path: '/artists/$artistId'
+      fullPath: '/artists/$artistId/'
+      preLoaderRoute: typeof AppArtistsArtistIdIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/artists/$artistId/merge-albums': {
+      id: '/_app/artists/$artistId/merge-albums'
+      path: '/artists/$artistId/merge-albums'
+      fullPath: '/artists/$artistId/merge-albums'
+      preLoaderRoute: typeof AppArtistsArtistIdMergeAlbumsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/artists/$artistId/albums/$albumId': {
+      id: '/_app/artists/$artistId/albums/$albumId'
+      path: '/artists/$artistId/albums/$albumId'
+      fullPath: '/artists/$artistId/albums/$albumId'
+      preLoaderRoute: typeof AppArtistsArtistIdAlbumsAlbumIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -251,6 +330,9 @@ interface AppRouteChildren {
   AppLibraryArtistsRoute: typeof AppLibraryArtistsRoute
   AppLibraryTracksRoute: typeof AppLibraryTracksRoute
   AppLibraryIndexRoute: typeof AppLibraryIndexRoute
+  AppArtistsArtistIdMergeAlbumsRoute: typeof AppArtistsArtistIdMergeAlbumsRoute
+  AppArtistsArtistIdIndexRoute: typeof AppArtistsArtistIdIndexRoute
+  AppArtistsArtistIdAlbumsAlbumIdRoute: typeof AppArtistsArtistIdAlbumsAlbumIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -263,6 +345,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppLibraryArtistsRoute: AppLibraryArtistsRoute,
   AppLibraryTracksRoute: AppLibraryTracksRoute,
   AppLibraryIndexRoute: AppLibraryIndexRoute,
+  AppArtistsArtistIdMergeAlbumsRoute: AppArtistsArtistIdMergeAlbumsRoute,
+  AppArtistsArtistIdIndexRoute: AppArtistsArtistIdIndexRoute,
+  AppArtistsArtistIdAlbumsAlbumIdRoute: AppArtistsArtistIdAlbumsAlbumIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -270,6 +355,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

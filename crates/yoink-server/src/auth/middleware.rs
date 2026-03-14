@@ -116,7 +116,7 @@ fn is_force_setup_allowed_path(path: &str) -> bool {
 }
 
 fn is_api_like_path(path: &str) -> bool {
-    path.starts_with("/api/") || path.starts_with("/leptos/")
+    path.starts_with("/api/")
 }
 
 #[cfg(test)]

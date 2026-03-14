@@ -8,10 +8,10 @@ edition = "2024"
 
 [workspace.dependencies]
 # ── Shared ───────────────────────────────────────────────────
-chrono = { version = "0.4", features = ["clock", "serde", "wasmbind"] }
+chrono = { version = "0.4", features = ["clock", "serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-uuid = { version = "1", features = ["v7", "serde", "js"] }
+uuid = { version = "1", features = ["v7", "serde"] }
 async-trait = "0.1"
 thiserror = "2"
 argon2 = "0.5"
@@ -19,12 +19,6 @@ cookie = "0.18"
 rand = "0.9"
 sha2 = "0.10"
 veil = "0.3"
-
-# ── Leptos ecosystem ────────────────────────────────────────
-leptos = "0.8"
-leptos_router = "0.8"
-leptos_axum = "0.8"
-lucide-leptos = { version = "2", features = ["all-icons"] }
 
 # ── Server ──────────────────────────────────────────────────
 axum = { version = "0.8", features = ["form", "json", "macros"] }
@@ -60,7 +54,7 @@ tokio = { version = "1", features = [
 ] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["fs", "normalize-path", "trace"] }
+tower-http = { version = "0.6", features = ["normalize-path", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = [
   "env-filter",
@@ -76,47 +70,5 @@ utoipa = { version = "5.4.0", features = [
 utoipa-axum = "0.2.0"
 utoipa-scalar = { version = "0.3.0", features = ["axum"] }
 
-# ── Client (WASM) ──────────────────────────────────────────
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = [
-  "Document",
-  "DomRect",
-  "Element",
-  "HtmlElement",
-  "HtmlInputElement",
-  "Window",
-  "NodeList",
-  "Storage",
-  "MediaQueryList",
-  "Event",
-  "EventTarget",
-  "InputEvent",
-  "KeyboardEvent",
-  "MouseEvent",
-  "FocusEvent",
-  "AbortController",
-  "AbortSignal",
-  "Headers",
-  "Request",
-  "RequestInit",
-  "RequestMode",
-  "Response",
-  "EventSource",
-] }
-
 # ── Internal crates ─────────────────────────────────────────
 yoink-shared = { path = "crates/yoink-shared" }
-yoink-app = { path = "crates/yoink-app" }
-
-[[workspace.metadata.leptos]]
-name = "yoink"
-output-name = "yoink"
-site-root = "target/site"
-site-pkg-dir = "pkg"
-assets-dir = "public"
-site-addr = "127.0.0.1:3000"
-reload-port = 3001
-tailwind-input-file = "style/tailwind.css"
-bin-package = "yoink-server"
-lib-package = "yoink-client"

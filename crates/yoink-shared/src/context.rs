@@ -1,4 +1,4 @@
-//! Server-side context for Leptos server functions (SSR only).
+//! Server-side context shared between API route handlers.
 
 use uuid::Uuid;
 
@@ -66,10 +66,10 @@ pub type ConfirmExternalImportFn = std::sync::Arc<
     dyn Fn(ExternalImportConfirmation) -> AsyncFnResult<ImportResultSummary> + Send + Sync,
 >;
 
-/// Holds the shared in-memory state that server functions need to read.
+/// Holds the shared in-memory state that API route handlers need to read.
 ///
-/// Provided via `leptos::context::provide_context` in main.rs and consumed via
-/// `use_context::<ServerContext>()` inside `#[server]` functions.
+/// Built from `AppState` and passed to route handlers that need access
+/// to provider-backed operations.
 #[derive(Clone)]
 pub struct ServerContext {
     pub auth_enabled: bool,

@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 // ── External (manual) import types ──────────────────────────────────
 
 /// How files are integrated into the music library during an external import.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ManualImportMode {
     /// Create a full independent copy of each file.
@@ -24,7 +25,7 @@ impl ManualImportMode {
 }
 
 /// A single entry returned by the server-side path browser.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct BrowseEntry {
     /// Display name (file or directory name, not full path).
     pub name: String,
@@ -38,7 +39,7 @@ pub struct BrowseEntry {
 
 /// User-confirmed external import: which source to import, how, and the
 /// individual album-level confirmations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ExternalImportConfirmation {
     /// Absolute path on the server that was scanned.
     pub source_path: String,
@@ -51,7 +52,7 @@ pub struct ExternalImportConfirmation {
 // ── Library-scan import types ───────────────────────────────────────
 
 /// Match quality for a discovered local album during import preview.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ImportMatchStatus {
     /// Exact match found (artist + album title + year all agree).
@@ -89,7 +90,7 @@ impl ImportMatchStatus {
 }
 
 /// A candidate album match for a discovered local folder.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ImportAlbumCandidate {
     pub album_id: Option<Uuid>,
     pub artist_id: Uuid,
@@ -105,7 +106,7 @@ pub struct ImportAlbumCandidate {
 }
 
 /// A discovered local album directory with match candidates.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ImportPreviewItem {
     pub id: String,
     pub relative_path: String,
@@ -120,7 +121,7 @@ pub struct ImportPreviewItem {
 }
 
 /// User-confirmed import selection for a single item.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ImportConfirmation {
     pub preview_id: String,
     pub artist_name: String,
@@ -131,7 +132,7 @@ pub struct ImportConfirmation {
 }
 
 /// Summary of a confirmed import run.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ImportResultSummary {
     pub total_selected: usize,
     pub imported: usize,

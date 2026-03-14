@@ -8,11 +8,6 @@ name = "yoink-server"
 
 [dependencies]
 yoink-shared = { workspace = true, features = ["ssr"] }
-yoink-app = { workspace = true, features = ["ssr"] }
-
-leptos = { workspace = true, features = ["ssr"] }
-leptos_axum.workspace = true
-leptos_router = { workspace = true, features = ["ssr"] }
 
 async-trait.workspace = true
 argon2.workspace = true

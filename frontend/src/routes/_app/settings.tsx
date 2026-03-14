@@ -1,10 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { $api } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsPage,
 });
 
 function SettingsPage() {
+  const { data: providers, isLoading: providersLoading } = $api.useQuery(
+    "get",
+    "/api/provider",
+  );
+  const { data: authStatus, isLoading: authLoading } = $api.useQuery(
+    "get",
+    "/api/auth/status",
+  );
+
   return (
     <div className="space-y-8">
       <div>
@@ -15,33 +26,6 @@ function SettingsPage() {
       </div>
 
       <div className="grid gap-6 max-w-2xl">
-        {/* General */}
-        <section className="rounded-xl border bg-card shadow-sm">
-          <div className="border-b px-5 py-4">
-            <h2 className="font-semibold">General</h2>
-            <p className="text-xs text-muted-foreground">
-              Core application settings.
-            </p>
-          </div>
-          <div className="divide-y">
-            <SettingRow
-              label="Music directory"
-              value="/data/music"
-              description="Root path where acquired files are stored."
-            />
-            <SettingRow
-              label="Default quality"
-              value="Lossless"
-              description="Preferred download quality when no override is set."
-            />
-            <SettingRow
-              label="Naming template"
-              value="{artist}/{album}/{track_number} - {title}"
-              description="File naming pattern for acquired tracks."
-            />
-          </div>
-        </section>
-
         {/* Providers */}
         <section className="rounded-xl border bg-card shadow-sm">
           <div className="border-b px-5 py-4">
@@ -50,32 +34,32 @@ function SettingsPage() {
               Metadata and download source configuration.
             </p>
           </div>
-          <div className="divide-y">
-            <SettingRow
-              label="Tidal"
-              value="Connected"
-              description="Metadata + lossless downloads."
-              status="ok"
-            />
-            <SettingRow
-              label="Deezer"
-              value="Connected"
-              description="Fallback metadata source."
-              status="ok"
-            />
-            <SettingRow
-              label="MusicBrainz"
-              value="Connected"
-              description="Open metadata database."
-              status="ok"
-            />
-            <SettingRow
-              label="Soulseek"
-              value="Not configured"
-              description="Peer-to-peer file sharing network."
-              status="warn"
-            />
-          </div>
+          {providersLoading ? (
+            <div className="divide-y">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-5 py-3.5">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="ml-auto h-4 w-16" />
+                </div>
+              ))}
+            </div>
+          ) : providers && providers.length > 0 ? (
+            <div className="divide-y">
+              {providers.map((provider) => (
+                <SettingRow
+                  key={provider}
+                  label={providerDisplayName(provider)}
+                  value="Connected"
+                  description={providerDescription(provider)}
+                  status="ok"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+              No providers configured.
+            </div>
+          )}
         </section>
 
         {/* Security */}
@@ -86,23 +70,64 @@ function SettingsPage() {
               Authentication and access control.
             </p>
           </div>
-          <div className="divide-y">
-            <SettingRow
-              label="Authentication"
-              value="Enabled"
-              description="Require login to access the application."
-              status="ok"
-            />
-            <SettingRow
-              label="API key"
-              value="yoink_ak_...x7f2"
-              description="Used for external integrations."
-            />
-          </div>
+          {authLoading ? (
+            <div className="divide-y">
+              <div className="flex items-center gap-4 px-5 py-3.5">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="ml-auto h-4 w-16" />
+              </div>
+            </div>
+          ) : authStatus ? (
+            <div className="divide-y">
+              <SettingRow
+                label="Authentication"
+                value={authStatus.auth_enabled ? "Enabled" : "Disabled"}
+                description="Require login to access the application."
+                status={authStatus.auth_enabled ? "ok" : "warn"}
+              />
+              {authStatus.authenticated && authStatus.username && (
+                <SettingRow
+                  label="Logged in as"
+                  value={authStatus.username}
+                  description="Current authenticated user."
+                />
+              )}
+            </div>
+          ) : (
+            <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+              Unable to load auth status.
+            </div>
+          )}
         </section>
       </div>
     </div>
   );
+}
+
+function providerDisplayName(provider: string): string {
+  const map: Record<string, string> = {
+    tidal: "Tidal",
+    deezer: "Deezer",
+    musicbrainz: "MusicBrainz",
+    soulseek: "Soulseek",
+    spotify: "Spotify",
+    qobuz: "Qobuz",
+    lastfm: "Last.fm",
+  };
+  return map[provider.toLowerCase()] ?? provider;
+}
+
+function providerDescription(provider: string): string {
+  const map: Record<string, string> = {
+    tidal: "Metadata + lossless downloads.",
+    deezer: "Fallback metadata source.",
+    musicbrainz: "Open metadata database.",
+    soulseek: "Peer-to-peer file sharing network.",
+    spotify: "Metadata from Spotify.",
+    qobuz: "Hi-res lossless downloads.",
+    lastfm: "Scrobbling and metadata.",
+  };
+  return map[provider.toLowerCase()] ?? "Metadata provider.";
 }
 
 function SettingRow({

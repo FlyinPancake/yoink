@@ -475,19 +475,3 @@ async fn forced_setup_login_redirects_to_setup_page() {
         Some("/setup/password")
     );
 }
-
-#[tokio::test]
-async fn server_fn_path_requires_auth() {
-    let (state, _tmp) = test_app_state_with_auth().await;
-    let app = Router::new()
-        .route("/leptos/test", axum_get(|| async { StatusCode::OK }))
-        .with_state(state.clone())
-        .layer(middleware::from_fn_with_state(state, enforce_auth));
-
-    let req = Request::builder()
-        .uri("/leptos/test")
-        .body(Body::empty())
-        .unwrap();
-    let (status, _, _) = send(app, req).await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-}
