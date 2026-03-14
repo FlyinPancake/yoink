@@ -3,19 +3,36 @@
  *
  * Each hook wraps $api.useMutation() with automatic query invalidation
  * so the UI stays in sync after mutations.
+ *
+ * The create hooks for artists, albums, and tracks also insert a record
+ * into the local-only `addedItemsCollection` (TanStack DB) so that the
+ * search page can show an instant "Added" badge without re-fetching.
  */
 
 import { useQueryClient } from "@tanstack/react-query";
 import { $api } from "./client";
+import { getCollections, addedItemKey } from "./collections";
+import type { AddedItem } from "./collections";
 
 // ── Artist mutations ───────────────────────────────────────────
 
 export function useCreateArtist() {
   const qc = useQueryClient();
   return $api.useMutation("post", "/api/artist", {
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       void qc.invalidateQueries({ queryKey: ["get", "/api/artist"] });
       void qc.invalidateQueries({ queryKey: ["get", "/api/dashboard"] });
+
+      // Record in TanStack DB so the search page shows "Added" instantly.
+      const { provider, external_id } = variables.body;
+      const { addedItemsCollection } = getCollections(qc);
+      const item: AddedItem = {
+        key: addedItemKey(provider, external_id),
+        provider,
+        external_id,
+        entity_type: "artist",
+      };
+      addedItemsCollection.insert(item);
     },
   });
 }
@@ -146,10 +163,21 @@ export function useRefreshArtistMatchSuggestions() {
 export function useCreateAlbum() {
   const qc = useQueryClient();
   return $api.useMutation("post", "/api/album", {
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       void qc.invalidateQueries({ queryKey: ["get", "/api/album"] });
       void qc.invalidateQueries({ queryKey: ["get", "/api/dashboard"] });
       void qc.invalidateQueries({ queryKey: ["get", "/api/wanted"] });
+
+      // Record in TanStack DB so the search page shows "Added" instantly.
+      const { provider, external_album_id } = variables.body;
+      const { addedItemsCollection } = getCollections(qc);
+      const item: AddedItem = {
+        key: addedItemKey(provider, external_album_id),
+        provider,
+        external_id: external_album_id,
+        entity_type: "album",
+      };
+      addedItemsCollection.insert(item);
     },
   });
 }
@@ -317,10 +345,21 @@ export function useRemoveAlbumArtist() {
 export function useCreateTrack() {
   const qc = useQueryClient();
   return $api.useMutation("post", "/api/track", {
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       void qc.invalidateQueries({ queryKey: ["get", "/api/track"] });
       void qc.invalidateQueries({ queryKey: ["get", "/api/album"] });
       void qc.invalidateQueries({ queryKey: ["get", "/api/dashboard"] });
+
+      // Record in TanStack DB so the search page shows "Added" instantly.
+      const { provider, external_track_id } = variables.body;
+      const { addedItemsCollection } = getCollections(qc);
+      const item: AddedItem = {
+        key: addedItemKey(provider, external_track_id),
+        provider,
+        external_id: external_track_id,
+        entity_type: "track",
+      };
+      addedItemsCollection.insert(item);
     },
   });
 }

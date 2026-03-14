@@ -14,62 +14,65 @@ import { Button } from "@/components/ui/button";
 import { fetchClient } from "@/lib/api";
 import { submitForm } from "@/lib/utils";
 
-interface LoginSearch {
+interface SetupPasswordSearch {
   error?: string;
-  next?: string;
 }
 
-export const Route = createFileRoute("/login")({
-  validateSearch: (search: Record<string, unknown>): LoginSearch => ({
+export const Route = createFileRoute("/setup/password")({
+  validateSearch: (search: Record<string, unknown>): SetupPasswordSearch => ({
     error: typeof search.error === "string" ? search.error : undefined,
-    next: typeof search.next === "string" ? search.next : undefined,
   }),
-  beforeLoad: async ({ search }) => {
+  beforeLoad: async () => {
     const { data } = await fetchClient.GET("/api/auth/status");
 
-    // If already authenticated, redirect away from login
-    if (data?.authenticated && !data.must_change_password) {
-      const next = (search as LoginSearch).next;
-      const safeDest =
-        next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
-      throw redirect({ to: safeDest });
+    // If auth is disabled or user is not authenticated, go home / login
+    if (!data || !data.auth_enabled) {
+      throw redirect({ to: "/" });
     }
 
-    if (data?.authenticated && data.must_change_password) {
-      throw redirect({ to: "/setup/password" });
+    if (!data.authenticated) {
+      throw redirect({ to: "/login" });
     }
+
+    // If user doesn't need to change password, they shouldn't be here
+    if (!data.must_change_password) {
+      throw redirect({ to: "/" });
+    }
+
+    return { authStatus: data };
   },
-  component: LoginPage,
+  component: SetupPasswordPage,
 });
 
-function LoginPage() {
-  const { error, next } = useSearch({ from: "/login" });
-
-  // Sanitize redirect: must start with / and not //
-  const safeNext =
-    next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+function SetupPasswordPage() {
+  const { error } = useSearch({ from: "/setup/password" });
 
   const form = useForm({
     defaultValues: {
       username: "",
-      password: "",
+      new_password: "",
+      confirm_password: "",
     },
     onSubmit: ({ value }) => {
-      submitForm("/auth/login", {
-        ...value,
-        next: safeNext,
-      });
+      submitForm("/auth/update-credentials", value);
     },
     validators: {
       onSubmit: ({ value }) => {
-        const errors: string[] = [];
+        const errors: Record<string, string> = {};
         if (!value.username.trim()) {
-          errors.push("Username is required");
+          errors.username = "Username is required";
         }
-        if (!value.password) {
-          errors.push("Password is required");
+        if (!value.new_password) {
+          errors.new_password = "Password is required";
+        } else if (value.new_password.length < 8) {
+          errors.new_password = "Password must be at least 8 characters";
         }
-        return errors.length > 0 ? errors.join(", ") : undefined;
+        if (value.new_password !== value.confirm_password) {
+          errors.confirm_password = "Passwords do not match";
+        }
+        return Object.keys(errors).length > 0
+          ? `${Object.values(errors).join(", ")}`
+          : undefined;
       },
     },
   });
@@ -84,9 +87,9 @@ function LoginPage() {
               alt="yoink"
               className="size-10 rounded-xl shadow-[0_8px_20px_rgba(59,130,246,.12)]"
             />
-            <CardTitle>Sign in to yoink</CardTitle>
+            <CardTitle>Set up your credentials</CardTitle>
             <CardDescription>
-              Enter your credentials to access your library
+              Choose a username and password to secure your yoink instance.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -108,9 +111,9 @@ function LoginPage() {
               <form.Field name="username">
                 {(field) => (
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="login-username">Username</Label>
+                    <Label htmlFor="setup-username">Username</Label>
                     <Input
-                      id="login-username"
+                      id="setup-username"
                       type="text"
                       autoComplete="username"
                       required
@@ -127,14 +130,38 @@ function LoginPage() {
                 )}
               </form.Field>
 
-              <form.Field name="password">
+              <form.Field name="new_password">
                 {(field) => (
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="login-password">Password</Label>
+                    <Label htmlFor="setup-new-password">New Password</Label>
                     <Input
-                      id="login-password"
+                      id="setup-new-password"
                       type="password"
-                      autoComplete="current-password"
+                      autoComplete="new-password"
+                      required
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                    />
+                    {field.state.meta.errors.length > 0 && (
+                      <p className="text-xs text-red-600 dark:text-red-400">
+                        {field.state.meta.errors.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </form.Field>
+
+              <form.Field name="confirm_password">
+                {(field) => (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="setup-confirm-password">
+                      Confirm Password
+                    </Label>
+                    <Input
+                      id="setup-confirm-password"
+                      type="password"
+                      autoComplete="new-password"
                       required
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
@@ -167,7 +194,7 @@ function LoginPage() {
                     className="w-full"
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? "Signing in..." : "Sign In"}
+                    {isSubmitting ? "Saving..." : "Set Credentials"}
                   </Button>
                 )}
               </form.Subscribe>

@@ -6,11 +6,14 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use sqlx::SqlitePool;
+
 use crate::{
+    db,
     error::AppError,
     redirects::{percent_encode_component, sanitize_relative_target},
 };
-use yoink_shared::YoinkError;
+use yoink_shared::{SearchAlbumResult, SearchArtistResult, SearchTrackResult, YoinkError};
 
 // ── Shared JSON error envelope ──────────────────────────────────────
 
@@ -76,4 +79,42 @@ pub(super) fn redirect_with_error(base: &str, message: &str, next: Option<&str>)
 
 pub(super) fn sanitize_next_target(next: Option<&str>) -> String {
     sanitize_relative_target(next)
+}
+
+// ── Search result enrichment ────────────────────────────────────────
+
+/// Mark each artist search result with `already_monitored` by checking
+/// the `artist_provider_links` table for a matching `(provider, external_id)`.
+pub(super) async fn enrich_artist_results(pool: &SqlitePool, results: &mut [SearchArtistResult]) {
+    for r in results.iter_mut() {
+        if let Ok(maybe_id) =
+            db::find_artist_by_provider_link(pool, &r.provider, &r.external_id).await
+        {
+            r.already_monitored = Some(maybe_id.is_some());
+        }
+    }
+}
+
+/// Mark each album search result with `already_added` by checking
+/// the `album_provider_links` table for a matching `(provider, external_id)`.
+pub(super) async fn enrich_album_results(pool: &SqlitePool, results: &mut [SearchAlbumResult]) {
+    for r in results.iter_mut() {
+        if let Ok(maybe_id) =
+            db::find_album_by_provider_link(pool, &r.provider, &r.external_id).await
+        {
+            r.already_added = Some(maybe_id.is_some());
+        }
+    }
+}
+
+/// Mark each track search result with `already_added` by checking
+/// the `track_provider_links` table for a matching `(provider, external_id)`.
+pub(super) async fn enrich_track_results(pool: &SqlitePool, results: &mut [SearchTrackResult]) {
+    for r in results.iter_mut() {
+        if let Ok(maybe_id) =
+            db::find_track_by_provider_link(pool, &r.provider, &r.external_id).await
+        {
+            r.already_added = Some(maybe_id.is_some());
+        }
+    }
 }

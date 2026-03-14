@@ -505,6 +505,7 @@ fn build_search_albums_fn(state: &AppState) -> yoink_shared::SearchAlbumsFn {
                         explicit: a.explicit,
                         artist_name: a.artist_name,
                         artist_external_id: a.artist_external_id,
+                        already_added: None,
                     });
                 }
             }
@@ -543,6 +544,7 @@ fn build_search_tracks_fn(state: &AppState) -> yoink_shared::SearchTracksFn {
                         album_title: t.album_title,
                         album_external_id: t.album_external_id,
                         album_cover_url,
+                        already_added: None,
                     });
                 }
             }

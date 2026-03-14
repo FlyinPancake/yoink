@@ -18,7 +18,9 @@ use crate::{
     state::AppState,
 };
 
-use super::helpers::{ApiErrorResponse, app_error_response, parse_uuid, yoink_error_response};
+use super::helpers::{
+    ApiErrorResponse, app_error_response, enrich_artist_results, parse_uuid, yoink_error_response,
+};
 
 pub(crate) const TAG: &str = "Artist";
 pub(crate) const TAG_DESCRIPTION: &str = "Endpoints for artist search, lookup, and lifecycle";
@@ -132,9 +134,10 @@ async fn search_artists(
     }
 
     let ctx = build_server_context(&state);
-    let results = (ctx.search_artists)(trimmed.to_string())
+    let mut results = (ctx.search_artists)(trimmed.to_string())
         .await
         .map_err(yoink_error_response)?;
+    enrich_artist_results(&state.db, &mut results).await;
     Ok(Json(results))
 }
 

@@ -1334,6 +1334,11 @@ export interface components {
     };
     /** @description An album search result from a metadata provider. */
     SearchAlbumResult: {
+      /**
+       * @description `Some(true)` when the album is already in the library.
+       *     Only populated by server-side search handlers; defaults to `None`.
+       */
+      already_added?: boolean | null;
       album_type?: string | null;
       /** @description Provider-specific external ID for the primary artist. */
       artist_external_id: string;
@@ -1373,6 +1378,11 @@ export interface components {
     };
     /** @description A track search result from a metadata provider. */
     SearchTrackResult: {
+      /**
+       * @description `Some(true)` when the track is already in the library.
+       *     Only populated by server-side search handlers; defaults to `None`.
+       */
+      already_added?: boolean | null;
       album_cover_url?: string | null;
       album_external_id: string;
       /** @description Album info for context. */

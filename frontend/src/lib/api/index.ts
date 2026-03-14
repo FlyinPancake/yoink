@@ -8,12 +8,13 @@
 export { fetchClient, $api } from "./client";
 export { queryKeys } from "./queries";
 export { connectSSE } from "./events";
-export { getCollections } from "./collections";
+export { getCollections, addedItemKey } from "./collections";
 export type {
   MonitoredArtist,
   MonitoredAlbum,
   LibraryTrack,
   DownloadJob,
+  AddedItem,
 } from "./collections";
 export type { components, paths, operations } from "./types.gen";
 

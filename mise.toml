@@ -6,11 +6,15 @@
 [tasks.lint-server]
 run = "cargo clippy --package yoink-server -- -D warnings"
 
-[tasks.lint-client]
-run = "cargo clippy --package yoink-client -- -D warnings"
+[tasks.run-server]
+run = "cargo run -p yoink-server"
+sources = ["crates/**", "**/.env*"]
+
+[tasks.dev-server]
+run = "mise watch -r run-server"
 
 [tasks.lint]
-depends = ["lint-server", "lint-client"]
+depends = ["lint-server"]
 
 [tasks.dev]
 run = "cargo leptos watch"

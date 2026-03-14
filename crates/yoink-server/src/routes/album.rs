@@ -19,7 +19,8 @@ use crate::{
 };
 
 use super::helpers::{
-    ApiErrorResponse, app_error_response, parse_uuid as parse_uuid_param, yoink_error_response,
+    ApiErrorResponse, app_error_response, enrich_album_results, parse_uuid as parse_uuid_param,
+    yoink_error_response,
 };
 
 pub(crate) const TAG: &str = "Album";
@@ -151,9 +152,10 @@ async fn search_albums(
     }
 
     let ctx = build_server_context(&state);
-    let results = (ctx.search_albums)(trimmed.to_string())
+    let mut results = (ctx.search_albums)(trimmed.to_string())
         .await
         .map_err(yoink_error_response)?;
+    enrich_album_results(&state.db, &mut results).await;
     Ok(Json(results))
 }
 

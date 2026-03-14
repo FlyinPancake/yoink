@@ -20,6 +20,7 @@ import {
   SettingsIcon,
 } from "lucide-react";
 import { ThemeSelector } from "./theme-selector";
+import { $api } from "@/lib/api";
 
 const navMain = [
   {
@@ -64,6 +65,8 @@ const navSecondary = [
 ];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { data: authStatus } = $api.useQuery("get", "/api/auth/status");
+
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader className="flex flex-row items-center gap-2 justify-between">
@@ -81,9 +84,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={navMain} />
         <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={{ name: "Admin", email: "admin@yoink.local" }} />
-      </SidebarFooter>
+      {authStatus?.auth_enabled && (
+        <SidebarFooter>
+          <NavUser username={authStatus.username ?? ""} />
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 }

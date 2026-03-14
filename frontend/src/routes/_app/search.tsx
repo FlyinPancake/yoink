@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useLiveQuery } from "@tanstack/react-db";
 import {
   CheckCircle2Icon,
   DiscAlbumIcon,
@@ -10,7 +12,7 @@ import {
   SearchIcon,
 } from "lucide-react";
 
-import { $api } from "@/lib/api";
+import { $api, getCollections, addedItemKey } from "@/lib/api";
 import {
   useCreateArtist,
   useCreateAlbum,
@@ -31,6 +33,31 @@ export const Route = createFileRoute("/_app/search")({
   },
 });
 
+// ── Hook: session-local "added" set from TanStack DB ───────────
+
+/**
+ * Returns a reactive `Set<string>` of composite keys (`"provider:external_id"`)
+ * for items the user has added during this session.  Because it reads from the
+ * `addedItemsCollection` via `useLiveQuery`, the set updates immediately when a
+ * new item is inserted — no re-fetch needed.
+ */
+function useAddedItemKeys(): Set<string> {
+  const queryClient = useQueryClient();
+  const { addedItemsCollection } = getCollections(queryClient);
+
+  const { data } = useLiveQuery(addedItemsCollection);
+
+  const keys = new Set<string>();
+  if (data) {
+    for (const item of data) {
+      keys.add(item.key);
+    }
+  }
+  return keys;
+}
+
+// ── Page ───────────────────────────────────────────────────────
+
 function SearchPage() {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
@@ -41,6 +68,8 @@ function SearchPage() {
     { params: { query: { query: submitted } } },
     { enabled: submitted.length > 0 },
   );
+
+  const addedKeys = useAddedItemKeys();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,6 +149,7 @@ function SearchPage() {
                   <ArtistResultCard
                     key={`${artist.provider}-${artist.external_id}`}
                     artist={artist}
+                    addedKeys={addedKeys}
                   />
                 ))}
               </div>
@@ -138,6 +168,7 @@ function SearchPage() {
                   <AlbumResultCard
                     key={`${album.provider}-${album.external_id}`}
                     album={album}
+                    addedKeys={addedKeys}
                   />
                 ))}
               </div>
@@ -156,6 +187,7 @@ function SearchPage() {
                   <TrackResultRow
                     key={`${track.provider}-${track.external_id}`}
                     track={track}
+                    addedKeys={addedKeys}
                   />
                 ))}
               </div>
@@ -167,10 +199,31 @@ function SearchPage() {
   );
 }
 
+// ── Shared "Added" badge ───────────────────────────────────────
+
+function AddedBadge() {
+  return (
+    <Badge variant="secondary" className="shrink-0">
+      <CheckCircle2Icon className="mr-1 size-3" />
+      Added
+    </Badge>
+  );
+}
+
 // ── Artist search result card ──────────────────────────────────
 
-function ArtistResultCard({ artist }: { artist: SearchArtistResult }) {
+function ArtistResultCard({
+  artist,
+  addedKeys,
+}: {
+  artist: SearchArtistResult;
+  addedKeys: Set<string>;
+}) {
   const createArtist = useCreateArtist();
+
+  const isAdded =
+    artist.already_monitored ||
+    addedKeys.has(addedItemKey(artist.provider, artist.external_id));
 
   return (
     <div className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm">
@@ -198,11 +251,8 @@ function ArtistResultCard({ artist }: { artist: SearchArtistResult }) {
           )}
         </div>
       </div>
-      {artist.already_monitored ? (
-        <Badge variant="secondary" className="shrink-0">
-          <CheckCircle2Icon className="mr-1 size-3" />
-          Added
-        </Badge>
+      {isAdded ? (
+        <AddedBadge />
       ) : (
         <Button
           size="sm"
@@ -231,8 +281,18 @@ function ArtistResultCard({ artist }: { artist: SearchArtistResult }) {
 
 // ── Album search result card ───────────────────────────────────
 
-function AlbumResultCard({ album }: { album: SearchAlbumResult }) {
+function AlbumResultCard({
+  album,
+  addedKeys,
+}: {
+  album: SearchAlbumResult;
+  addedKeys: Set<string>;
+}) {
   const createAlbum = useCreateAlbum();
+
+  const isAdded =
+    album.already_added ||
+    addedKeys.has(addedItemKey(album.provider, album.external_id));
 
   return (
     <div className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm">
@@ -260,34 +320,48 @@ function AlbumResultCard({ album }: { album: SearchAlbumResult }) {
           </Badge>
         </div>
       </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className="shrink-0"
-        disabled={createAlbum.isPending}
-        onClick={() =>
-          createAlbum.mutate({
-            body: {
-              external_album_id: album.external_id,
-              artist_external_id: album.artist_external_id,
-              artist_name: album.artist_name,
-              provider: album.provider,
-              monitor_all: true,
-            },
-          })
-        }
-      >
-        <PlusIcon className="mr-1 size-3.5" />
-        {createAlbum.isPending ? "Adding..." : "Add"}
-      </Button>
+      {isAdded ? (
+        <AddedBadge />
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0"
+          disabled={createAlbum.isPending}
+          onClick={() =>
+            createAlbum.mutate({
+              body: {
+                external_album_id: album.external_id,
+                artist_external_id: album.artist_external_id,
+                artist_name: album.artist_name,
+                provider: album.provider,
+                monitor_all: true,
+              },
+            })
+          }
+        >
+          <PlusIcon className="mr-1 size-3.5" />
+          {createAlbum.isPending ? "Adding..." : "Add"}
+        </Button>
+      )}
     </div>
   );
 }
 
 // ── Track search result row ────────────────────────────────────
 
-function TrackResultRow({ track }: { track: SearchTrackResult }) {
+function TrackResultRow({
+  track,
+  addedKeys,
+}: {
+  track: SearchTrackResult;
+  addedKeys: Set<string>;
+}) {
   const createTrack = useCreateTrack();
+
+  const isAdded =
+    track.already_added ||
+    addedKeys.has(addedItemKey(track.provider, track.external_id));
 
   return (
     <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-2.5 shadow-sm">
@@ -311,26 +385,30 @@ function TrackResultRow({ track }: { track: SearchTrackResult }) {
           </Badge>
         </div>
       </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className="shrink-0"
-        disabled={createTrack.isPending}
-        onClick={() =>
-          createTrack.mutate({
-            body: {
-              external_track_id: track.external_id,
-              external_album_id: track.album_external_id,
-              artist_external_id: track.artist_external_id,
-              artist_name: track.artist_name,
-              provider: track.provider,
-            },
-          })
-        }
-      >
-        <PlusIcon className="mr-1 size-3.5" />
-        {createTrack.isPending ? "Adding..." : "Add"}
-      </Button>
+      {isAdded ? (
+        <AddedBadge />
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0"
+          disabled={createTrack.isPending}
+          onClick={() =>
+            createTrack.mutate({
+              body: {
+                external_track_id: track.external_id,
+                external_album_id: track.album_external_id,
+                artist_external_id: track.artist_external_id,
+                artist_name: track.artist_name,
+                provider: track.provider,
+              },
+            })
+          }
+        >
+          <PlusIcon className="mr-1 size-3.5" />
+          {createTrack.isPending ? "Adding..." : "Add"}
+        </Button>
+      )}
     </div>
   );
 }

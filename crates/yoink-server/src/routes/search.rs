@@ -10,7 +10,10 @@ use yoink_shared::{SearchAlbumResult, SearchArtistResult, SearchTrackResult};
 
 use crate::{server_context::build_server_context, state::AppState};
 
-use super::helpers::{ApiErrorResponse, yoink_error_response};
+use super::helpers::{
+    ApiErrorResponse, enrich_album_results, enrich_artist_results, enrich_track_results,
+    yoink_error_response,
+};
 
 pub(crate) const TAG: &str = "Search";
 pub(crate) const TAG_DESCRIPTION: &str = "Endpoints for aggregated provider search";
@@ -62,15 +65,20 @@ async fn search_all(
     }
 
     let ctx = build_server_context(&state);
-    let artists = (ctx.search_artists)(trimmed.to_string())
+    let mut artists = (ctx.search_artists)(trimmed.to_string())
         .await
         .map_err(yoink_error_response)?;
-    let albums = (ctx.search_albums)(trimmed.to_string())
+    let mut albums = (ctx.search_albums)(trimmed.to_string())
         .await
         .map_err(yoink_error_response)?;
-    let tracks = (ctx.search_tracks)(trimmed.to_string())
+    let mut tracks = (ctx.search_tracks)(trimmed.to_string())
         .await
         .map_err(yoink_error_response)?;
+
+    // Enrich results with "already in library" flags.
+    enrich_artist_results(&state.db, &mut artists).await;
+    enrich_album_results(&state.db, &mut albums).await;
+    enrich_track_results(&state.db, &mut tracks).await;
 
     Ok(Json(SearchAllResult {
         artists,

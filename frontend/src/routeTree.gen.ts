@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SetupPasswordRouteImport } from './routes/setup/password'
 import { Route as AppWantedRouteImport } from './routes/_app/wanted'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
@@ -19,8 +20,10 @@ import { Route as AppLibraryRouteImport } from './routes/_app/library'
 import { Route as AppDownloadsRouteImport } from './routes/_app/downloads'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppArtistsRouteImport } from './routes/_app/artists'
+import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppLibraryIndexRouteImport } from './routes/_app/library/index'
 import { Route as AppArtistsIndexRouteImport } from './routes/_app/artists/index'
+import { Route as AppSettingsSecurityRouteImport } from './routes/_app/settings/security'
 import { Route as AppLibraryTracksRouteImport } from './routes/_app/library/tracks'
 import { Route as AppLibraryArtistsRouteImport } from './routes/_app/library/artists'
 import { Route as AppLibraryAlbumsRouteImport } from './routes/_app/library/albums'
@@ -43,6 +46,11 @@ const AppRoute = AppRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupPasswordRoute = SetupPasswordRouteImport.update({
+  id: '/setup/password',
+  path: '/setup/password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppWantedRoute = AppWantedRouteImport.update({
@@ -80,6 +88,11 @@ const AppArtistsRoute = AppArtistsRouteImport.update({
   path: '/artists',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const AppLibraryIndexRoute = AppLibraryIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -89,6 +102,11 @@ const AppArtistsIndexRoute = AppArtistsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppArtistsRoute,
+} as any)
+const AppSettingsSecurityRoute = AppSettingsSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => AppSettingsRoute,
 } as any)
 const AppLibraryTracksRoute = AppLibraryTracksRouteImport.update({
   id: '/tracks',
@@ -148,14 +166,17 @@ export interface FileRoutesByFullPath {
   '/downloads': typeof AppDownloadsRoute
   '/library': typeof AppLibraryRouteWithChildren
   '/search': typeof AppSearchRoute
-  '/settings': typeof AppSettingsRoute
+  '/settings': typeof AppSettingsRouteWithChildren
   '/wanted': typeof AppWantedRoute
+  '/setup/password': typeof SetupPasswordRoute
   '/artists/$artistId': typeof AppArtistsArtistIdRouteWithChildren
   '/library/albums': typeof AppLibraryAlbumsRoute
   '/library/artists': typeof AppLibraryArtistsRoute
   '/library/tracks': typeof AppLibraryTracksRoute
+  '/settings/security': typeof AppSettingsSecurityRoute
   '/artists/': typeof AppArtistsIndexRoute
   '/library/': typeof AppLibraryIndexRoute
+  '/settings/': typeof AppSettingsIndexRoute
   '/artists/$artistId/albums': typeof AppArtistsArtistIdAlbumsRouteWithChildren
   '/artists/$artistId/merge-albums': typeof AppArtistsArtistIdMergeAlbumsRoute
   '/artists/$artistId/': typeof AppArtistsArtistIdIndexRoute
@@ -168,13 +189,15 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/downloads': typeof AppDownloadsRoute
   '/search': typeof AppSearchRoute
-  '/settings': typeof AppSettingsRoute
   '/wanted': typeof AppWantedRoute
+  '/setup/password': typeof SetupPasswordRoute
   '/library/albums': typeof AppLibraryAlbumsRoute
   '/library/artists': typeof AppLibraryArtistsRoute
   '/library/tracks': typeof AppLibraryTracksRoute
+  '/settings/security': typeof AppSettingsSecurityRoute
   '/artists': typeof AppArtistsIndexRoute
   '/library': typeof AppLibraryIndexRoute
+  '/settings': typeof AppSettingsIndexRoute
   '/artists/$artistId/merge-albums': typeof AppArtistsArtistIdMergeAlbumsRoute
   '/artists/$artistId': typeof AppArtistsArtistIdIndexRoute
   '/artists/$artistId/albums/$albumId': typeof AppArtistsArtistIdAlbumsAlbumIdRoute
@@ -190,14 +213,17 @@ export interface FileRoutesById {
   '/_app/downloads': typeof AppDownloadsRoute
   '/_app/library': typeof AppLibraryRouteWithChildren
   '/_app/search': typeof AppSearchRoute
-  '/_app/settings': typeof AppSettingsRoute
+  '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/wanted': typeof AppWantedRoute
+  '/setup/password': typeof SetupPasswordRoute
   '/_app/artists/$artistId': typeof AppArtistsArtistIdRouteWithChildren
   '/_app/library/albums': typeof AppLibraryAlbumsRoute
   '/_app/library/artists': typeof AppLibraryArtistsRoute
   '/_app/library/tracks': typeof AppLibraryTracksRoute
+  '/_app/settings/security': typeof AppSettingsSecurityRoute
   '/_app/artists/': typeof AppArtistsIndexRoute
   '/_app/library/': typeof AppLibraryIndexRoute
+  '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/artists/$artistId/albums': typeof AppArtistsArtistIdAlbumsRouteWithChildren
   '/_app/artists/$artistId/merge-albums': typeof AppArtistsArtistIdMergeAlbumsRoute
   '/_app/artists/$artistId/': typeof AppArtistsArtistIdIndexRoute
@@ -216,12 +242,15 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/wanted'
+    | '/setup/password'
     | '/artists/$artistId'
     | '/library/albums'
     | '/library/artists'
     | '/library/tracks'
+    | '/settings/security'
     | '/artists/'
     | '/library/'
+    | '/settings/'
     | '/artists/$artistId/albums'
     | '/artists/$artistId/merge-albums'
     | '/artists/$artistId/'
@@ -234,13 +263,15 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/downloads'
     | '/search'
-    | '/settings'
     | '/wanted'
+    | '/setup/password'
     | '/library/albums'
     | '/library/artists'
     | '/library/tracks'
+    | '/settings/security'
     | '/artists'
     | '/library'
+    | '/settings'
     | '/artists/$artistId/merge-albums'
     | '/artists/$artistId'
     | '/artists/$artistId/albums/$albumId'
@@ -257,12 +288,15 @@ export interface FileRouteTypes {
     | '/_app/search'
     | '/_app/settings'
     | '/_app/wanted'
+    | '/setup/password'
     | '/_app/artists/$artistId'
     | '/_app/library/albums'
     | '/_app/library/artists'
     | '/_app/library/tracks'
+    | '/_app/settings/security'
     | '/_app/artists/'
     | '/_app/library/'
+    | '/_app/settings/'
     | '/_app/artists/$artistId/albums'
     | '/_app/artists/$artistId/merge-albums'
     | '/_app/artists/$artistId/'
@@ -274,6 +308,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  SetupPasswordRoute: typeof SetupPasswordRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -297,6 +332,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup/password': {
+      id: '/setup/password'
+      path: '/setup/password'
+      fullPath: '/setup/password'
+      preLoaderRoute: typeof SetupPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/wanted': {
@@ -348,6 +390,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppArtistsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings/': {
+      id: '/_app/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AppSettingsIndexRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/library/': {
       id: '/_app/library/'
       path: '/'
@@ -361,6 +410,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/artists/'
       preLoaderRoute: typeof AppArtistsIndexRouteImport
       parentRoute: typeof AppArtistsRoute
+    }
+    '/_app/settings/security': {
+      id: '/_app/settings/security'
+      path: '/security'
+      fullPath: '/settings/security'
+      preLoaderRoute: typeof AppSettingsSecurityRouteImport
+      parentRoute: typeof AppSettingsRoute
     }
     '/_app/library/tracks': {
       id: '/_app/library/tracks'
@@ -491,13 +547,27 @@ const AppLibraryRouteWithChildren = AppLibraryRoute._addFileChildren(
   AppLibraryRouteChildren,
 )
 
+interface AppSettingsRouteChildren {
+  AppSettingsSecurityRoute: typeof AppSettingsSecurityRoute
+  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+}
+
+const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsSecurityRoute: AppSettingsSecurityRoute,
+  AppSettingsIndexRoute: AppSettingsIndexRoute,
+}
+
+const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
+  AppSettingsRouteChildren,
+)
+
 interface AppRouteChildren {
   AppArtistsRoute: typeof AppArtistsRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppDownloadsRoute: typeof AppDownloadsRoute
   AppLibraryRoute: typeof AppLibraryRouteWithChildren
   AppSearchRoute: typeof AppSearchRoute
-  AppSettingsRoute: typeof AppSettingsRoute
+  AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppWantedRoute: typeof AppWantedRoute
 }
 
@@ -507,7 +577,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDownloadsRoute: AppDownloadsRoute,
   AppLibraryRoute: AppLibraryRouteWithChildren,
   AppSearchRoute: AppSearchRoute,
-  AppSettingsRoute: AppSettingsRoute,
+  AppSettingsRoute: AppSettingsRouteWithChildren,
   AppWantedRoute: AppWantedRoute,
 }
 
@@ -517,6 +587,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  SetupPasswordRoute: SetupPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

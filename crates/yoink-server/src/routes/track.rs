@@ -11,7 +11,9 @@ use yoink_shared::{LibraryTrack, SearchTrackResult, ServerAction};
 
 use crate::{actions::dispatch_action_impl, server_context::build_server_context, state::AppState};
 
-use super::helpers::{ApiErrorResponse, app_error_response, yoink_error_response};
+use super::helpers::{
+    ApiErrorResponse, app_error_response, enrich_track_results, yoink_error_response,
+};
 
 pub(crate) const TAG: &str = "Track";
 pub(crate) const TAG_DESCRIPTION: &str = "Endpoints for track search and library track access";
@@ -66,9 +68,10 @@ async fn search_tracks(
     }
 
     let ctx = build_server_context(&state);
-    let results = (ctx.search_tracks)(trimmed.to_string())
+    let mut results = (ctx.search_tracks)(trimmed.to_string())
         .await
         .map_err(yoink_error_response)?;
+    enrich_track_results(&state.db, &mut results).await;
     Ok(Json(results))
 }
 

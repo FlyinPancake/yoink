@@ -259,6 +259,10 @@ pub struct SearchAlbumResult {
     pub artist_name: String,
     /// Provider-specific external ID for the primary artist.
     pub artist_external_id: String,
+    /// `Some(true)` when the album is already in the library.
+    /// Only populated by server-side search handlers; defaults to `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub already_added: Option<bool>,
 }
 
 /// A track search result from a metadata provider.
@@ -279,6 +283,10 @@ pub struct SearchTrackResult {
     pub album_title: String,
     pub album_external_id: String,
     pub album_cover_url: Option<String>,
+    /// `Some(true)` when the track is already in the library.
+    /// Only populated by server-side search handlers; defaults to `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub already_added: Option<bool>,
 }
 
 #[cfg(test)]
