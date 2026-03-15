@@ -4,171 +4,153 @@ Guidance for coding agents working in `yoink`.
 
 ## Project Snapshot
 
-- `yoink` is a Rust monorepo for a self-hosted music library manager.
-- Frontend: Leptos SSR + hydration, Tailwind CSS, WASM client crate.
-- Backend: Axum, Tokio, SQLx with SQLite, tracing-based logging.
-- Workspace members live under `crates/`:
-  - `yoink-server`: SSR server, routes, actions, providers, DB access.
-  - `yoink-app`: shared Leptos UI for SSR and hydration.
-  - `yoink-client`: WASM hydration entrypoint.
-  - `yoink-shared`: shared models, actions, errors, helpers.
-- Migrations live in `crates/yoink-server/migrations`.
+- `yoink` is a self-hosted music library manager.
+- Backend: Axum REST API with OpenAPI docs (utoipa + Scalar), Tokio, SQLx with SQLite, tracing.
+- Frontend: React 19 SPA in `frontend/` — TanStack Start (SPA mode), TanStack Router/Query/DB, shadcn/ui v4, Tailwind CSS v4. Built with Bun and Vite (rolldown-vite).
+- The built SPA is embedded into the server binary via `rust-embed` and served as a fallback.
+- Workspace crates under `crates/`:
+  - `yoink-server`: API server binary — routes, actions, providers, DB, auth, background services.
+  - `yoink-shared`: shared models, error types, actions enum, helpers. Used by the server with the `ssr` feature.
+- Migrations live in `crates/yoink-server/migrations/` (paired `.up.sql`/`.down.sql`).
 - SQLx offline metadata is committed under `.sqlx/`.
 
 ## Setup
 
-- Preferred tool bootstrap: `mise install` installs `cargo-leptos` and `sqlx-cli`.
-- Copy envs with `cp .env.example .env` for local dev.
-- Important envs are documented in `.env.example`.
-- Default local server address is `http://127.0.0.1:3000`.
+- Rust tools: `mise install` (installs `cargo-leptos`, `sqlx-cli`, `cargo-tarpaulin`).
+- Frontend deps: `bun install` inside `frontend/`.
+- Copy envs: `cp .env.example .env`.
+- Backend serves on `http://127.0.0.1:3000`; frontend dev server on `http://localhost:5173` (proxies `/api/**` and `/auth/**` to the backend).
 
 ## Core Commands
 
-### Development
+### Rust — Development & Build
 
-- Start the full app in watch mode: `mise run dev` or `cargo leptos watch`
-- Run Dockerized app: `docker compose up -d`
-- Run dev stack with `slskd`: `docker compose -f compose.dev.yaml up -d`
+- Run backend in dev: `mise run dev-server` or `cargo run -p yoink-server`
+- Watch mode (recompiles on change): `mise run dev-server` uses `mise watch`
+- Debug build: `cargo build -p yoink-server`
+- Release build (after `bun run build` in `frontend/`): `cargo build -p yoink-server --release`
+- Docker: `docker compose up -d` or `docker compose -f compose.dev.yaml up -d` (with slskd)
 
-### Build
+### Rust — Lint & Format
 
-- Production web build: `cargo leptos build --release`
-- Server-only debug build: `cargo build -p yoink-server`
-- WASM client build: `cargo build -p yoink-client --target wasm32-unknown-unknown`
-- Full workspace build: `cargo build --workspace`
+- Format: `cargo fmt` — Check only: `cargo fmt --check`
+- Lint: `mise run lint` or directly `cargo clippy --package yoink-server -- -D warnings`
+- No `rustfmt.toml` or `clippy.toml` — uses defaults with `-D warnings` on CI.
 
-### Lint and Format
+### Rust — Tests
 
-- Format all Rust code: `cargo fmt`
-- Check formatting without changing files: `cargo fmt --check`
-- Lint server crate strictly: `mise run lint-server`
-- Lint client crate strictly: `mise run lint-client`
-- Lint both configured crates: `mise run lint`
-- Direct strict clippy form: `cargo clippy --package yoink-server -- -D warnings`
-- Direct strict clippy form: `cargo clippy --package yoink-client -- -D warnings`
+- All workspace tests: `cargo test --workspace`
+- Server tests only: `cargo test -p yoink-server`
+- Shared crate tests only: `cargo test -p yoink-shared`
+- **Single test**: `cargo test -p yoink-server insert_and_load_artist`
+- Exact name form: `cargo test -p yoink-server db::artists::tests::insert_and_load_artist -- --exact`
+- List all test names: `cargo test -p yoink-server -- --list`
 
-### Tests
+### Frontend
 
-- Run all tests in workspace: `cargo test --workspace`
-- Run only server tests: `cargo test -p yoink-server`
-- Run only shared crate tests: `cargo test -p yoink-shared`
-- Build tests without running them: `cargo test --workspace --no-run`
+- Dev server: `bun run dev` (from `frontend/`, port 5173)
+- Production build: `bun run build` (from `frontend/`)
+- Lint (oxlint, type-aware): `bun run lint` — Auto-fix: `bun run lint:fix`
+- Format (oxfmt): `bun run fmt` — Check only: `bun run fmt:check`
+- Tests (vitest): `bun run test`
+- Regenerate API types from running server: `mise run gen-frontend-types`
 
-### Running a Single Test
-
-- Preferred quick form: `cargo test -p yoink-server insert_and_load_artist`
-- Exact-name form: `cargo test -p yoink-server db::artists::tests::insert_and_load_artist -- --exact`
-- Single async test works the same way: `cargo test -p yoink-server remove_artist_cascades`
-- Single shared-model test example: `cargo test -p yoink-shared parses_quality_variants`
-- To inspect exact names first: `cargo test -p yoink-server -- --list`
-
-## Command Notes
-
-- `cargo leptos build --release` is the production build path used in `Dockerfile`.
-- `cargo leptos watch` is the main local development workflow from `README.md` and `mise.toml`.
-- A validated single-test command is `cargo test -p yoink-server insert_and_load_artist`.
-- `cargo fmt --check` runs clean in the current repo state.
-- `cargo test --workspace --no-run` may take a while because it compiles the whole SSR/WASM workspace.
-
-## Repository Conventions
+## Rust Conventions
 
 ### Imports and Module Layout
 
-- Keep imports grouped logically: std first, external crates next, `crate::` imports last.
-- Use nested imports when they improve readability, as in `use std::{sync::Arc, time::Duration};`.
-- Favor explicit imports over glob imports, except for common local test helpers in test modules.
-- Declare top-level modules in `main.rs`/`lib.rs`; keep feature-gated test modules adjacent.
-- Keep related functionality split by domain: `actions`, `db`, `providers`, `services`, `pages`, `components`.
+- Group imports: std first, external crates next, `crate::` last.
+- Use nested imports for readability: `use std::{sync::Arc, time::Duration};`.
+- Favor explicit imports over globs, except test helper preludes.
+- Declare top-level modules in `main.rs`/`lib.rs`; keep `#[cfg(test)]` modules adjacent.
+- Domain split: `actions`, `db`, `providers`, `routes`, `services`, `auth`, `models`.
 
 ### Formatting
 
 - Follow `rustfmt` defaults; do not hand-format against the formatter.
-- The codebase uses trailing commas in multiline literals and calls; keep them.
-- Long chains are usually split one method per line.
-- Section dividers using comment banners are common in larger files; preserve the local style.
-- Doc comments are used for public or non-obvious APIs; avoid noisy comments for obvious code.
+- Trailing commas in multiline literals and calls.
+- Long method chains split one call per line.
+- Comment banners as section dividers are common in larger files; preserve them.
+- Doc comments for public or non-obvious APIs; skip noisy comments on obvious code.
 
 ### Types and Data Modeling
 
-- Prefer concrete domain structs/enums in `yoink-shared` for data crossing server/client boundaries.
-- Derive `Debug`, `Clone`, `Serialize`, and `Deserialize` where values cross server function boundaries.
-- Use `Uuid` for persistent entity identifiers.
-- Use small helper constructors on error enums instead of repeating string assembly at call sites.
-- Prefer enums over stringly typed state when the state is internal and finite.
-- Use `Option<T>` for partial provider data and nullable DB/UI fields.
+- Shared domain types live in `yoink-shared` and derive `Serialize`, `Deserialize`, `ToSchema`.
+- Use `Uuid` (v7) for persistent entity identifiers.
+- Annotate API-facing types with `#[derive(utoipa::ToSchema)]` for OpenAPI generation.
+- Annotate route handlers with `#[utoipa::path(...)]` for OpenAPI docs.
+- Prefer enums over stringly typed state; use `Option<T>` for nullable/partial fields.
+- Use small helper constructors on error enums instead of repeating string assembly.
 
 ### Naming
 
-- Types and enums: `UpperCamelCase`.
-- Functions, modules, and file names: `snake_case`.
-- Constants: `SCREAMING_SNAKE_CASE`.
-- Leptos components use `UpperCamelCase` function names and usually end with `Page`, `Dialog`, `Panel`, or similar UI nouns.
-- Boolean fields should read clearly, e.g. `monitored`, `acquired`, `wanted`, `explicit`.
-- Prefer descriptive verb-led async functions like `fetch_artist_bio`, `sync_artist_albums`, `remove_artist`.
+- Types/enums: `UpperCamelCase`. Functions/modules/files: `snake_case`. Constants: `SCREAMING_SNAKE_CASE`.
+- Boolean fields should read naturally: `monitored`, `acquired`, `wanted`, `explicit`.
+- Async functions: descriptive verb-led names like `fetch_artist_bio`, `sync_artist_albums`.
 
 ### Error Handling
 
-- On the server, prefer `AppResult<T>` / `AppError` for application flows.
-- For shared server-function failures, map to `yoink_shared::YoinkError` or `ServerFnError` as appropriate.
-- Add contextual error variants instead of flattening everything into generic strings.
-- Include operation/resource context in errors (`operation`, `resource`, `reason`, `service`, `path`).
-- Use `?` for propagation in normal flows.
-- Reserve `expect`/`unwrap` for tests, startup invariants, or truly impossible states.
+- Server errors: `AppResult<T>` / `AppError` (in `crates/yoink-server/src/error.rs`).
+- Shared errors: `YoinkError` (in `yoink-shared`). `AppError` converts into `YoinkError` for API responses.
+- Add contextual variants with `operation`, `resource`, `reason`, `service`, `path` fields.
+- Use `?` for propagation. Reserve `unwrap`/`expect` for tests, startup, or truly impossible states.
 - Log recoverable failures with `tracing` instead of silently swallowing them.
 
 ### Async and Concurrency
 
-- Tokio is the async runtime; prefer async-first APIs in server code.
-- Shared mutable state is commonly stored behind `Arc<RwLock<_>>` or `Arc<Notify>`.
-- Clone cheap handles like `AppState`, `reqwest::Client`, senders, and `Arc`s instead of fighting lifetimes.
-- Background loops should log failures and continue when safe, as in reconciliation/download workers.
+- Tokio runtime; prefer async-first APIs in server code.
+- Shared state behind `Arc<RwLock<_>>` or `Arc<Notify>`.
+- Clone cheap handles (`AppState`, `reqwest::Client`, `Arc`s) instead of fighting lifetimes.
+- Background loops (download workers, library reconciliation) should log failures and continue.
 
 ### Database and SQLx
 
-- Use `sqlx::query!` / `query_as!` macros for typed SQLite queries.
-- Keep SQL close to the DB function that owns it.
-- DB helpers usually return `Result<_, sqlx::Error>` and let higher layers map to `AppError`.
-- Schema changes require matching `.up.sql` and `.down.sql` migrations under `crates/yoink-server/migrations`.
-- Because `.sqlx/` is committed and Docker builds with `SQLX_OFFLINE=true`, keep SQLx metadata in sync when queries change.
+- Use `sqlx::query!` / `query_as!` for typed SQLite queries.
+- DB helpers return `Result<_, sqlx::Error>`; higher layers map to `AppError`.
+- Schema changes need paired `.up.sql` + `.down.sql` in `crates/yoink-server/migrations/`.
+- Keep `.sqlx/` metadata in sync when queries change (Docker builds use `SQLX_OFFLINE=true`).
 
-### Leptos and UI
+### Logging
 
-- Use `#[component]` for UI components and `#[server(...)]` for server functions.
-- Shared UI primitives live in `crates/yoink-app/src/components`.
-- Common Tailwind class strings are extracted into constants; reuse existing style constants before inventing new ones.
-- Tailwind-heavy UI is normal here; prefer readable constants over giant inline strings when patterns repeat.
-- Preserve the repo's glassy light/dark aesthetic and existing component vocabulary.
-- Use `Resource`, signals, and `StoredValue` patterns consistently with nearby code.
+- Use `tracing::{debug, info, warn, error}`, never `println!`.
+- Include enough context to debug provider/album/artist/job issues.
+- Logging is configured in `crates/yoink-server/src/logging.rs`; respect `LOG_FORMAT` env.
 
-### Logging and Observability
+### Testing
 
-- Use `tracing::{debug, info, warn, error}` macros, not `println!`.
-- Log enough context to debug provider, album, artist, job, or request issues.
-- Respect `LOG_FORMAT`; logging is configured centrally in `crates/yoink-server/src/logging.rs`.
+- Inline `#[cfg(test)]` modules near the owning code. Async tests use `#[tokio::test]`.
+- Reuse helpers from `crates/yoink-server/src/test_helpers.rs` (`test_db`, `test_app_state`, seed helpers, mock providers).
+- Use in-memory SQLite and tempdirs. Focused test names: `remove_artist_cascades`, `insert_and_load_artist`.
 
-### Testing Style
+## Frontend Conventions
 
-- Most tests are inline unit tests near the owning module under `#[cfg(test)]`.
-- Async tests use `#[tokio::test]`.
-- Reuse helpers from `crates/yoink-server/src/test_helpers.rs` for DB/state/provider setup.
-- Prefer focused test names that describe the behavior, e.g. `remove_artist_cascades`.
-- Use in-memory SQLite and tempdirs for server-side tests when possible.
+- **Routing**: TanStack Router file-based routing in `frontend/src/routes/`. Authenticated routes live under `_app/`.
+- **API layer**: `openapi-fetch` + `openapi-react-query` with types generated from the server's OpenAPI spec (`frontend/src/lib/api/types.gen.ts`). Centralised queries in `queries.ts`, mutations in `mutations.ts`.
+- **Real-time**: SSE connection to `/api/events` drives TanStack Query cache invalidation.
+- **State**: TanStack DB collections (`frontend/src/lib/api/collections.ts`) for normalised client-side data.
+- **Components**: shadcn/ui v4 primitives in `frontend/src/components/ui/`. App-level components alongside.
+- **Styling**: Tailwind CSS v4. `oxfmt` sorts classes for `cn()` and `cva()` calls. Use `cn()` from `@/lib/utils` for conditional classes.
+- **Path alias**: `@/*` maps to `frontend/src/*`.
+- **Linting/formatting**: `oxlint` (with type-aware checking via `oxlint-tsgolint`) is the primary linter. `oxfmt` is the formatter. ESLint config exists but defers to TanStack defaults.
 
 ## Agent Do / Don't
 
 - Do make small, local changes that match adjacent style.
 - Do update tests when changing behavior.
-- Do check whether a change affects both SSR and hydrated client paths.
+- Do regenerate frontend types (`mise run gen-frontend-types`) after changing API routes or response shapes.
+- Do annotate new routes/types with `utoipa` macros to keep the OpenAPI spec complete.
 - Do preserve provider-specific fallbacks and partial-data handling.
-- Don't introduce a Node-based workflow for app development; this repo is Rust-first.
-- Don't bypass existing shared models/actions when wiring new UI-server interactions.
+- Don't bypass shared models/actions when wiring new API-frontend interactions.
 - Don't delete `.sqlx/` metadata or migrations casually.
 - Don't replace structured tracing/error types with ad-hoc strings.
+- Don't mix up the two dev servers (Rust on :3000, frontend Vite on :5173).
 
 ## Suggested Validation After Changes
 
-- Default for small Rust changes: `cargo fmt --check && cargo test -p <relevant-crate>`
-- For server-side behavior changes: `cargo test -p yoink-server`
-- For shared model changes: `cargo test -p yoink-shared`
-- For UI or full-stack changes: `mise run lint && cargo test --workspace`
-- For release-sensitive changes: `cargo leptos build --release`
+- Small Rust changes: `cargo fmt --check && cargo test -p <relevant-crate>`
+- Server behavior changes: `cargo test -p yoink-server`
+- Shared model changes: `cargo test -p yoink-shared`
+- Frontend changes: `bun run lint && bun run fmt:check && bun run test` (in `frontend/`)
+- API contract changes: also run `mise run gen-frontend-types` to update generated types.
+- Full stack: `mise run lint && cargo test --workspace` plus frontend validation above.
+- Release: `bun run build` in `frontend/`, then `cargo build -p yoink-server --release`.

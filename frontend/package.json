@@ -10,8 +10,7 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",
-    "fmt:check": "oxfmt --check",
-    "typecheck": "tsc --noEmit"
+    "fmt:check": "oxfmt --check"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
