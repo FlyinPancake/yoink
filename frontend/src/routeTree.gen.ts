@@ -16,10 +16,10 @@ import { Route as SetupPasswordRouteImport } from './routes/setup/password'
 import { Route as AppWantedRouteImport } from './routes/_app/wanted'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
-import { Route as AppLibraryRouteImport } from './routes/_app/library'
 import { Route as AppDownloadsRouteImport } from './routes/_app/downloads'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
-import { Route as AppArtistsRouteImport } from './routes/_app/artists'
+import { Route as AppLibraryRouteRouteImport } from './routes/_app/library/route'
+import { Route as AppArtistsRouteRouteImport } from './routes/_app/artists/route'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppLibraryIndexRouteImport } from './routes/_app/library/index'
 import { Route as AppArtistsIndexRouteImport } from './routes/_app/artists/index'
@@ -68,11 +68,6 @@ const AppSearchRoute = AppSearchRouteImport.update({
   path: '/search',
   getParentRoute: () => AppRoute,
 } as any)
-const AppLibraryRoute = AppLibraryRouteImport.update({
-  id: '/library',
-  path: '/library',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppDownloadsRoute = AppDownloadsRouteImport.update({
   id: '/downloads',
   path: '/downloads',
@@ -83,7 +78,12 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
-const AppArtistsRoute = AppArtistsRouteImport.update({
+const AppLibraryRouteRoute = AppLibraryRouteRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppArtistsRouteRoute = AppArtistsRouteRouteImport.update({
   id: '/artists',
   path: '/artists',
   getParentRoute: () => AppRoute,
@@ -96,12 +96,12 @@ const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
 const AppLibraryIndexRoute = AppLibraryIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppLibraryRoute,
+  getParentRoute: () => AppLibraryRouteRoute,
 } as any)
 const AppArtistsIndexRoute = AppArtistsIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppArtistsRoute,
+  getParentRoute: () => AppArtistsRouteRoute,
 } as any)
 const AppSettingsSecurityRoute = AppSettingsSecurityRouteImport.update({
   id: '/security',
@@ -111,22 +111,22 @@ const AppSettingsSecurityRoute = AppSettingsSecurityRouteImport.update({
 const AppLibraryTracksRoute = AppLibraryTracksRouteImport.update({
   id: '/tracks',
   path: '/tracks',
-  getParentRoute: () => AppLibraryRoute,
+  getParentRoute: () => AppLibraryRouteRoute,
 } as any)
 const AppLibraryArtistsRoute = AppLibraryArtistsRouteImport.update({
   id: '/artists',
   path: '/artists',
-  getParentRoute: () => AppLibraryRoute,
+  getParentRoute: () => AppLibraryRouteRoute,
 } as any)
 const AppLibraryAlbumsRoute = AppLibraryAlbumsRouteImport.update({
   id: '/albums',
   path: '/albums',
-  getParentRoute: () => AppLibraryRoute,
+  getParentRoute: () => AppLibraryRouteRoute,
 } as any)
 const AppArtistsArtistIdRoute = AppArtistsArtistIdRouteImport.update({
   id: '/$artistId',
   path: '/$artistId',
-  getParentRoute: () => AppArtistsRoute,
+  getParentRoute: () => AppArtistsRouteRoute,
 } as any)
 const AppArtistsArtistIdIndexRoute = AppArtistsArtistIdIndexRouteImport.update({
   id: '/',
@@ -161,10 +161,10 @@ const AppArtistsArtistIdAlbumsAlbumIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/artists': typeof AppArtistsRouteWithChildren
+  '/artists': typeof AppArtistsRouteRouteWithChildren
+  '/library': typeof AppLibraryRouteRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/downloads': typeof AppDownloadsRoute
-  '/library': typeof AppLibraryRouteWithChildren
   '/search': typeof AppSearchRoute
   '/settings': typeof AppSettingsRouteWithChildren
   '/wanted': typeof AppWantedRoute
@@ -208,10 +208,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
-  '/_app/artists': typeof AppArtistsRouteWithChildren
+  '/_app/artists': typeof AppArtistsRouteRouteWithChildren
+  '/_app/library': typeof AppLibraryRouteRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/downloads': typeof AppDownloadsRoute
-  '/_app/library': typeof AppLibraryRouteWithChildren
   '/_app/search': typeof AppSearchRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/wanted': typeof AppWantedRoute
@@ -236,9 +236,9 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/artists'
+    | '/library'
     | '/dashboard'
     | '/downloads'
-    | '/library'
     | '/search'
     | '/settings'
     | '/wanted'
@@ -282,9 +282,9 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/artists'
+    | '/_app/library'
     | '/_app/dashboard'
     | '/_app/downloads'
-    | '/_app/library'
     | '/_app/search'
     | '/_app/settings'
     | '/_app/wanted'
@@ -362,13 +362,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSearchRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/library': {
-      id: '/_app/library'
-      path: '/library'
-      fullPath: '/library'
-      preLoaderRoute: typeof AppLibraryRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/downloads': {
       id: '/_app/downloads'
       path: '/downloads'
@@ -383,11 +376,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/library': {
+      id: '/_app/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof AppLibraryRouteRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/artists': {
       id: '/_app/artists'
       path: '/artists'
       fullPath: '/artists'
-      preLoaderRoute: typeof AppArtistsRouteImport
+      preLoaderRoute: typeof AppArtistsRouteRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/settings/': {
@@ -402,14 +402,14 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/library/'
       preLoaderRoute: typeof AppLibraryIndexRouteImport
-      parentRoute: typeof AppLibraryRoute
+      parentRoute: typeof AppLibraryRouteRoute
     }
     '/_app/artists/': {
       id: '/_app/artists/'
       path: '/'
       fullPath: '/artists/'
       preLoaderRoute: typeof AppArtistsIndexRouteImport
-      parentRoute: typeof AppArtistsRoute
+      parentRoute: typeof AppArtistsRouteRoute
     }
     '/_app/settings/security': {
       id: '/_app/settings/security'
@@ -423,28 +423,28 @@ declare module '@tanstack/react-router' {
       path: '/tracks'
       fullPath: '/library/tracks'
       preLoaderRoute: typeof AppLibraryTracksRouteImport
-      parentRoute: typeof AppLibraryRoute
+      parentRoute: typeof AppLibraryRouteRoute
     }
     '/_app/library/artists': {
       id: '/_app/library/artists'
       path: '/artists'
       fullPath: '/library/artists'
       preLoaderRoute: typeof AppLibraryArtistsRouteImport
-      parentRoute: typeof AppLibraryRoute
+      parentRoute: typeof AppLibraryRouteRoute
     }
     '/_app/library/albums': {
       id: '/_app/library/albums'
       path: '/albums'
       fullPath: '/library/albums'
       preLoaderRoute: typeof AppLibraryAlbumsRouteImport
-      parentRoute: typeof AppLibraryRoute
+      parentRoute: typeof AppLibraryRouteRoute
     }
     '/_app/artists/$artistId': {
       id: '/_app/artists/$artistId'
       path: '/$artistId'
       fullPath: '/artists/$artistId'
       preLoaderRoute: typeof AppArtistsArtistIdRouteImport
-      parentRoute: typeof AppArtistsRoute
+      parentRoute: typeof AppArtistsRouteRoute
     }
     '/_app/artists/$artistId/': {
       id: '/_app/artists/$artistId/'
@@ -515,36 +515,36 @@ const AppArtistsArtistIdRouteChildren: AppArtistsArtistIdRouteChildren = {
 const AppArtistsArtistIdRouteWithChildren =
   AppArtistsArtistIdRoute._addFileChildren(AppArtistsArtistIdRouteChildren)
 
-interface AppArtistsRouteChildren {
+interface AppArtistsRouteRouteChildren {
   AppArtistsArtistIdRoute: typeof AppArtistsArtistIdRouteWithChildren
   AppArtistsIndexRoute: typeof AppArtistsIndexRoute
 }
 
-const AppArtistsRouteChildren: AppArtistsRouteChildren = {
+const AppArtistsRouteRouteChildren: AppArtistsRouteRouteChildren = {
   AppArtistsArtistIdRoute: AppArtistsArtistIdRouteWithChildren,
   AppArtistsIndexRoute: AppArtistsIndexRoute,
 }
 
-const AppArtistsRouteWithChildren = AppArtistsRoute._addFileChildren(
-  AppArtistsRouteChildren,
+const AppArtistsRouteRouteWithChildren = AppArtistsRouteRoute._addFileChildren(
+  AppArtistsRouteRouteChildren,
 )
 
-interface AppLibraryRouteChildren {
+interface AppLibraryRouteRouteChildren {
   AppLibraryAlbumsRoute: typeof AppLibraryAlbumsRoute
   AppLibraryArtistsRoute: typeof AppLibraryArtistsRoute
   AppLibraryTracksRoute: typeof AppLibraryTracksRoute
   AppLibraryIndexRoute: typeof AppLibraryIndexRoute
 }
 
-const AppLibraryRouteChildren: AppLibraryRouteChildren = {
+const AppLibraryRouteRouteChildren: AppLibraryRouteRouteChildren = {
   AppLibraryAlbumsRoute: AppLibraryAlbumsRoute,
   AppLibraryArtistsRoute: AppLibraryArtistsRoute,
   AppLibraryTracksRoute: AppLibraryTracksRoute,
   AppLibraryIndexRoute: AppLibraryIndexRoute,
 }
 
-const AppLibraryRouteWithChildren = AppLibraryRoute._addFileChildren(
-  AppLibraryRouteChildren,
+const AppLibraryRouteRouteWithChildren = AppLibraryRouteRoute._addFileChildren(
+  AppLibraryRouteRouteChildren,
 )
 
 interface AppSettingsRouteChildren {
@@ -562,20 +562,20 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
-  AppArtistsRoute: typeof AppArtistsRouteWithChildren
+  AppArtistsRouteRoute: typeof AppArtistsRouteRouteWithChildren
+  AppLibraryRouteRoute: typeof AppLibraryRouteRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppDownloadsRoute: typeof AppDownloadsRoute
-  AppLibraryRoute: typeof AppLibraryRouteWithChildren
   AppSearchRoute: typeof AppSearchRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppWantedRoute: typeof AppWantedRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppArtistsRoute: AppArtistsRouteWithChildren,
+  AppArtistsRouteRoute: AppArtistsRouteRouteWithChildren,
+  AppLibraryRouteRoute: AppLibraryRouteRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
   AppDownloadsRoute: AppDownloadsRoute,
-  AppLibraryRoute: AppLibraryRouteWithChildren,
   AppSearchRoute: AppSearchRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
   AppWantedRoute: AppWantedRoute,

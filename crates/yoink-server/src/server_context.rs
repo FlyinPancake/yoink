@@ -656,33 +656,14 @@ async fn load_or_backfill_album_tracks(
         albums.iter().find(|album| album.id == album_id).cloned()
     };
 
-    let mut tracks = db::load_tracks_for_album(&state.db, album_id)
+    let tracks = db::load_tracks_for_album(&state.db, album_id)
         .await
         .map_err(|e| format!("Failed to load tracks: {e}"))?;
 
-    if let Some(album) = album.as_ref() {
-        let mut repaired = false;
-        for track in &mut tracks {
-            let next_monitored = track.monitored || album.monitored;
-            let next_acquired = track.acquired || (album.monitored && album.acquired);
-            if next_monitored != track.monitored || next_acquired != track.acquired {
-                db::update_track_flags(&state.db, track.id, next_monitored, next_acquired)
-                    .await
-                    .map_err(|e| format!("failed to repair track flags: {e}"))?;
-                track.monitored = next_monitored;
-                track.acquired = next_acquired;
-                repaired = true;
-            }
-        }
-
-        if repaired {
-            tracks.sort_by(|a, b| {
-                a.disc_number
-                    .cmp(&b.disc_number)
-                    .then_with(|| a.track_number.cmp(&b.track_number))
-            });
-        }
-    }
+    // Track monitored/acquired flags are now kept in sync when the
+    // album-level monitored state changes (see toggle_album_monitor /
+    // bulk_monitor), so the lazy one-way promotion that used to live
+    // here is no longer needed.
 
     let needs_artist_backfill =
         !tracks.is_empty() && tracks.iter().all(|track| track.track_artist.is_none());

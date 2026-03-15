@@ -32,6 +32,11 @@ pub(super) async fn toggle_album_monitor(
                 album.wanted,
             )
             .await?;
+
+            // Cascade the monitored state to all tracks on this album.
+            db::bulk_update_track_monitored_for_album(&state.db, album_id, monitored).await?;
+            services::recompute_partially_wanted(&state.db, album).await;
+
             if album.monitored && !album.acquired {
                 album_to_queue = Some(album.clone());
             }
@@ -66,6 +71,11 @@ pub(super) async fn bulk_monitor(
                 album.wanted,
             )
             .await?;
+
+            // Cascade the monitored state to all tracks on this album.
+            db::bulk_update_track_monitored_for_album(&state.db, album.id, monitored).await?;
+            services::recompute_partially_wanted(&state.db, album).await;
+
             if album.monitored && !album.acquired {
                 to_queue.push(album.clone());
             }
@@ -162,6 +172,8 @@ pub(super) async fn remove_album_files(
             existing.acquired = false;
             if unmonitor {
                 existing.monitored = false;
+                // Cascade unmonitor to all tracks on this album.
+                db::bulk_update_track_monitored_for_album(&state.db, album_id, false).await?;
             }
             services::update_wanted(existing);
             db::update_album_flags(
@@ -172,6 +184,7 @@ pub(super) async fn remove_album_files(
                 existing.wanted,
             )
             .await?;
+            services::recompute_partially_wanted(&state.db, existing).await;
             if existing.monitored {
                 to_queue = Some(existing.clone());
             }
@@ -433,6 +446,48 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn toggle_album_monitor_cascades_to_tracks() {
+        let (state, _tmp) = test_app_state().await;
+        let artist = seed_artist(&state.db, "Artist").await;
+        let album = seed_album(&state.db, artist.id, "Album").await;
+        seed_tracks(&state.db, album.id, 3).await;
+
+        state.monitored_artists.write().await.push(artist.clone());
+        state.monitored_albums.write().await.push(album.clone());
+
+        // Monitor the album — tracks should become monitored
+        super::toggle_album_monitor(&state, album.id, true)
+            .await
+            .unwrap();
+
+        let loaded = db::load_tracks_for_album(&state.db, album.id)
+            .await
+            .unwrap();
+        assert!(
+            loaded.iter().all(|t| t.monitored),
+            "all tracks should be monitored after monitoring album"
+        );
+
+        // Unmonitor the album — tracks should become unmonitored
+        super::toggle_album_monitor(&state, album.id, false)
+            .await
+            .unwrap();
+
+        let loaded = db::load_tracks_for_album(&state.db, album.id)
+            .await
+            .unwrap();
+        assert!(
+            loaded.iter().all(|t| !t.monitored),
+            "all tracks should be unmonitored after unmonitoring album"
+        );
+
+        // partially_wanted should be false since no tracks are monitored
+        let albums = state.monitored_albums.read().await;
+        let a = albums.iter().find(|a| a.id == album.id).unwrap();
+        assert!(!a.partially_wanted);
+    }
+
     // ── BulkMonitor ─────────────────────────────────────────────
 
     #[tokio::test]
@@ -453,6 +508,49 @@ mod tests {
 
         let albums = state.monitored_albums.read().await;
         assert!(albums.iter().all(|a| !a.monitored));
+    }
+
+    #[tokio::test]
+    async fn bulk_monitor_cascades_to_tracks() {
+        let (state, _tmp) = test_app_state().await;
+        let artist = seed_artist(&state.db, "Artist").await;
+        let a1 = seed_album(&state.db, artist.id, "Album 1").await;
+        let a2 = seed_album(&state.db, artist.id, "Album 2").await;
+        seed_tracks(&state.db, a1.id, 2).await;
+        seed_tracks(&state.db, a2.id, 3).await;
+
+        state.monitored_artists.write().await.push(artist.clone());
+        {
+            let mut albums = state.monitored_albums.write().await;
+            albums.push(a1.clone());
+            albums.push(a2.clone());
+        }
+
+        // Monitor all albums — tracks should cascade
+        super::bulk_monitor(&state, artist.id, true).await.unwrap();
+
+        for album_id in [a1.id, a2.id] {
+            let tracks = db::load_tracks_for_album(&state.db, album_id)
+                .await
+                .unwrap();
+            assert!(
+                tracks.iter().all(|t| t.monitored),
+                "all tracks should be monitored after bulk monitor"
+            );
+        }
+
+        // Unmonitor all albums — tracks should cascade
+        super::bulk_monitor(&state, artist.id, false).await.unwrap();
+
+        for album_id in [a1.id, a2.id] {
+            let tracks = db::load_tracks_for_album(&state.db, album_id)
+                .await
+                .unwrap();
+            assert!(
+                tracks.iter().all(|t| !t.monitored),
+                "all tracks should be unmonitored after bulk unmonitor"
+            );
+        }
     }
 
     #[tokio::test]

@@ -1,5 +1,6 @@
 [tools]
 "cargo:cargo-leptos" = "latest"
+"cargo:cargo-tarpaulin" = "latest"
 "cargo:sqlx-cli" = { version = "latest", features = "sqlite" }
 "github:tursodatabase/turso" = "latest"
 
@@ -8,10 +9,14 @@ run = "cargo clippy --package yoink-server -- -D warnings"
 
 [tasks.run-server]
 run = "cargo run -p yoink-server"
-sources = ["crates/**", "**/.env*"]
 
 [tasks.dev-server]
-run = "mise watch -r run-server"
+run = "mise watch -r -w crates -W Cargo.toml -W .env run-server"
+
+[tasks.gen-frontend-types]
+alias = "gt"
+dir = "frontend"
+run = "bun x openapi-typescript http://localhost:3000/docs/openapi.json --output src/lib/api/types.gen.ts"
 
 [tasks.lint]
 depends = ["lint-server"]

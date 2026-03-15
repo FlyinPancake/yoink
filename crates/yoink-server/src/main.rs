@@ -5,6 +5,7 @@ mod app_config;
 mod auth;
 mod config;
 mod db;
+mod embedded_assets;
 mod error;
 mod logging;
 mod models;
@@ -115,6 +116,7 @@ async fn main() {
             "/docs/openapi.json",
             get(move || async move { axum::Json(openapi_json) }),
         )
+        .fallback(embedded_assets::serve_frontend)
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::middleware::enforce_auth,

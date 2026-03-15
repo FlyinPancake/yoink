@@ -165,7 +165,7 @@ async fn update_credentials_reissues_session_on_success() {
 
     let req = Request::builder()
         .method("POST")
-        .uri("/auth/credentials")
+        .uri("/auth/update-credentials")
         .header("content-type", "application/x-www-form-urlencoded")
         .header("cookie", &original_cookie)
         .body(Body::from(
@@ -217,7 +217,7 @@ async fn update_credentials_rejects_wrong_current_password() {
 
     let req = Request::builder()
         .method("POST")
-        .uri("/auth/credentials")
+        .uri("/auth/update-credentials")
         .header("content-type", "application/x-www-form-urlencoded")
         .header("cookie", &cookie)
         .body(Body::from(
@@ -257,7 +257,7 @@ async fn update_credentials_rejects_password_confirmation_mismatch() {
 
     let req = Request::builder()
         .method("POST")
-        .uri("/auth/credentials")
+        .uri("/auth/update-credentials")
         .header("content-type", "application/x-www-form-urlencoded")
         .header("cookie", &cookie)
         .body(Body::from(

@@ -4,3 +4,8 @@ music/
 yoink.db*
 .env*
 .git/
+frontend/node_modules/
+frontend/.output/
+frontend/.nitro/
+frontend/.tanstack/
+frontend/.vinxi/

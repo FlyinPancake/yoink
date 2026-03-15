@@ -50,7 +50,9 @@ export const Route = createFileRoute("/_app/artists/$artistId/albums/$albumId")(
   {
     component: AlbumDetailPage,
     loader: async ({ context, params }) =>
-      context.queryClient.ensureQueryData(queryKeys.albums.detail(params.albumId)),
+      context.queryClient.ensureQueryData(
+        queryKeys.albums.detail(params.albumId),
+      ),
     staticData: {
       breadcrumb: (match) =>
         (match.loaderData as { album?: { title?: string } } | undefined)?.album
@@ -504,11 +506,30 @@ function AlbumDetailContent({
               disabled={removeAlbumFiles.isPending}
               onClick={() =>
                 removeAlbumFiles.mutate({
-                  params: { path: { album_id: album.id } },
+                  params: {
+                    path: { album_id: album.id },
+                    query: { unmonitor: false },
+                  },
                 })
               }
             >
-              {removeAlbumFiles.isPending ? "Removing..." : "Remove Files"}
+              {removeAlbumFiles.isPending ? "Removing..." : "Remove"}
+            </AlertDialogAction>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={removeAlbumFiles.isPending}
+              onClick={() =>
+                removeAlbumFiles.mutate({
+                  params: {
+                    path: { album_id: album.id },
+                    query: { unmonitor: true },
+                  },
+                })
+              }
+            >
+              {removeAlbumFiles.isPending
+                ? "Removing..."
+                : "Remove & Unmonitor"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

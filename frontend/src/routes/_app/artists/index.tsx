@@ -2,6 +2,9 @@ import { Navigate, createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_app/artists/")({
   component: ArtistsIndexRedirect,
+  staticData: {
+    breadcrumb: "Artists",
+  },
 });
 
 function ArtistsIndexRedirect() {

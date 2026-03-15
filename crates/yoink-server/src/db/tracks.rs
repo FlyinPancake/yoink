@@ -163,6 +163,24 @@ pub(crate) async fn update_track_quality_override(
     Ok(())
 }
 
+/// Set the `monitored` flag on all tracks belonging to an album.
+///
+/// This is used to cascade album-level monitor changes to all tracks.
+pub(crate) async fn bulk_update_track_monitored_for_album(
+    pool: &SqlitePool,
+    album_id: Uuid,
+    monitored: bool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE tracks SET monitored = $1 WHERE album_id = $2",
+        monitored,
+        album_id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// Check if an album has any individually monitored tracks that are not yet acquired.
 pub(crate) async fn has_wanted_tracks(
     pool: &SqlitePool,
@@ -531,5 +549,81 @@ mod tests {
             .await
             .unwrap();
         assert!(not_found.is_none());
+    }
+
+    #[tokio::test]
+    async fn bulk_update_track_monitored_sets_all_tracks() {
+        let pool = test_db().await;
+        let artist = seed_artist(&pool, "Artist").await;
+        let album = seed_album(&pool, artist.id, "Album").await;
+        let tracks = seed_tracks(&pool, album.id, 3).await;
+
+        // Initially all tracks are unmonitored
+        let loaded = super::load_tracks_for_album(&pool, album.id).await.unwrap();
+        assert!(loaded.iter().all(|t| !t.monitored));
+
+        // Bulk set monitored = true
+        super::bulk_update_track_monitored_for_album(&pool, album.id, true)
+            .await
+            .unwrap();
+        let loaded = super::load_tracks_for_album(&pool, album.id).await.unwrap();
+        assert!(loaded.iter().all(|t| t.monitored));
+
+        // Monitor one track's acquired flag to verify it is not affected
+        super::update_track_flags(&pool, tracks[0].id, true, true)
+            .await
+            .unwrap();
+
+        // Bulk set monitored = false
+        super::bulk_update_track_monitored_for_album(&pool, album.id, false)
+            .await
+            .unwrap();
+        let loaded = super::load_tracks_for_album(&pool, album.id).await.unwrap();
+        assert!(loaded.iter().all(|t| !t.monitored));
+        // acquired flag should be preserved
+        assert!(
+            loaded
+                .iter()
+                .find(|t| t.id == tracks[0].id)
+                .unwrap()
+                .acquired
+        );
+    }
+
+    #[tokio::test]
+    async fn bulk_update_track_monitored_only_affects_target_album() {
+        let pool = test_db().await;
+        let artist = seed_artist(&pool, "Artist").await;
+        let album1 = seed_album(&pool, artist.id, "Album 1").await;
+        let album2 = seed_album(&pool, artist.id, "Album 2").await;
+        seed_tracks(&pool, album1.id, 2).await;
+        let album2_tracks = seed_tracks(&pool, album2.id, 2).await;
+
+        // Monitor all tracks on album2
+        for t in &album2_tracks {
+            super::update_track_flags(&pool, t.id, true, false)
+                .await
+                .unwrap();
+        }
+
+        // Bulk update album1 should not touch album2
+        super::bulk_update_track_monitored_for_album(&pool, album1.id, true)
+            .await
+            .unwrap();
+
+        let loaded2 = super::load_tracks_for_album(&pool, album2.id)
+            .await
+            .unwrap();
+        assert!(loaded2.iter().all(|t| t.monitored));
+
+        super::bulk_update_track_monitored_for_album(&pool, album1.id, false)
+            .await
+            .unwrap();
+
+        // album2 tracks should still be monitored
+        let loaded2 = super::load_tracks_for_album(&pool, album2.id)
+            .await
+            .unwrap();
+        assert!(loaded2.iter().all(|t| t.monitored));
     }
 }
