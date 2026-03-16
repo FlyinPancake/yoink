@@ -13,11 +13,7 @@ import {
 } from "lucide-react";
 
 import { $api, getCollections, addedItemKey } from "@/lib/api";
-import {
-  useCreateArtist,
-  useCreateAlbum,
-  useCreateTrack,
-} from "@/lib/api/mutations";
+import { useCreateArtist, useCreateAlbum, useCreateTrack } from "@/lib/api/mutations";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { components } from "@/lib/api/types.gen";
@@ -80,10 +76,7 @@ function SearchPage() {
   };
 
   const hasResults =
-    data &&
-    (data.artists.length > 0 ||
-      data.albums.length > 0 ||
-      data.tracks.length > 0);
+    data && (data.artists.length > 0 || data.albums.length > 0 || data.tracks.length > 0);
 
   return (
     <div className="space-y-6">
@@ -95,13 +88,13 @@ function SearchPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="relative max-w-xl">
-        <SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <SearchIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search for artists, albums, tracks..."
-          className="w-full rounded-lg border bg-background py-2.5 pl-10 pr-4 text-sm outline-none ring-ring transition-shadow placeholder:text-muted-foreground focus:ring-2"
+          className="w-full rounded-lg border bg-background py-2.5 pr-4 pl-10 text-sm ring-ring transition-shadow outline-none placeholder:text-muted-foreground focus:ring-2"
         />
       </form>
 
@@ -140,7 +133,7 @@ function SearchPage() {
           {/* Artists */}
           {data.artists.length > 0 && (
             <section className="space-y-3">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wider text-muted-foreground uppercase">
                 <MicIcon className="size-4" />
                 Artists ({data.artists.length})
               </h2>
@@ -159,7 +152,7 @@ function SearchPage() {
           {/* Albums */}
           {data.albums.length > 0 && (
             <section className="space-y-3">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wider text-muted-foreground uppercase">
                 <DiscAlbumIcon className="size-4" />
                 Albums ({data.albums.length})
               </h2>
@@ -178,7 +171,7 @@ function SearchPage() {
           {/* Tracks */}
           {data.tracks.length > 0 && (
             <section className="space-y-3">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wider text-muted-foreground uppercase">
                 <MusicIcon className="size-4" />
                 Tracks ({data.tracks.length})
               </h2>
@@ -222,18 +215,13 @@ function ArtistResultCard({
   const createArtist = useCreateArtist();
 
   const isAdded =
-    artist.already_monitored ||
-    addedKeys.has(addedItemKey(artist.provider, artist.external_id));
+    artist.already_monitored || addedKeys.has(addedItemKey(artist.provider, artist.external_id));
 
   return (
     <div className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm">
       <div className="size-12 shrink-0 overflow-hidden rounded-full bg-muted">
         {artist.image_url ? (
-          <img
-            src={artist.image_url}
-            alt={artist.name}
-            className="size-full object-cover"
-          />
+          <img src={artist.image_url} alt={artist.name} className="size-full object-cover" />
         ) : (
           <div className="flex size-full items-center justify-center text-lg font-bold text-muted-foreground/30">
             {artist.name.charAt(0)}
@@ -246,9 +234,7 @@ function ArtistResultCard({
           <Badge variant="outline" className="text-[10px]">
             {artist.provider}
           </Badge>
-          {artist.disambiguation && (
-            <span className="truncate">{artist.disambiguation}</span>
-          )}
+          {artist.disambiguation && <span className="truncate">{artist.disambiguation}</span>}
         </div>
       </div>
       {isAdded ? (
@@ -291,18 +277,13 @@ function AlbumResultCard({
   const createAlbum = useCreateAlbum();
 
   const isAdded =
-    album.already_added ||
-    addedKeys.has(addedItemKey(album.provider, album.external_id));
+    album.already_added || addedKeys.has(addedItemKey(album.provider, album.external_id));
 
   return (
     <div className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm">
       <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-muted">
         {album.cover_url ? (
-          <img
-            src={album.cover_url}
-            alt={album.title}
-            className="size-full object-cover"
-          />
+          <img src={album.cover_url} alt={album.title} className="size-full object-cover" />
         ) : (
           <div className="flex size-full items-center justify-center text-lg font-bold text-muted-foreground/30">
             {album.title.charAt(0)}
@@ -360,8 +341,7 @@ function TrackResultRow({
   const createTrack = useCreateTrack();
 
   const isAdded =
-    track.already_added ||
-    addedKeys.has(addedItemKey(track.provider, track.external_id));
+    track.already_added || addedKeys.has(addedItemKey(track.provider, track.external_id));
 
   return (
     <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-2.5 shadow-sm">
@@ -369,7 +349,7 @@ function TrackResultRow({
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium">{track.title}</span>
           {track.explicit && (
-            <span className="inline-flex items-center justify-center rounded bg-muted px-1 text-[10px] font-bold uppercase text-muted-foreground">
+            <span className="inline-flex items-center justify-center rounded bg-muted px-1 text-[10px] font-bold text-muted-foreground uppercase">
               E
             </span>
           )}

@@ -22,5 +22,5 @@ run = "bun x openapi-typescript http://localhost:3000/docs/openapi.json --output
 depends = ["lint-server"]
 
 [tasks.dev]
-run = "cargo leptos watch"
+depends = ["dev-server"]
 alias = "d"

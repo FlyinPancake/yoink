@@ -46,20 +46,15 @@ type DownloadJob = components["schemas"]["DownloadJob"];
 type Quality = components["schemas"]["Quality"];
 type ResolvedArtistCredit = components["schemas"]["ResolvedArtistCredit"];
 
-export const Route = createFileRoute("/_app/artists/$artistId/albums/$albumId")(
-  {
-    component: AlbumDetailPage,
-    loader: async ({ context, params }) =>
-      context.queryClient.ensureQueryData(
-        queryKeys.albums.detail(params.albumId),
-      ),
-    staticData: {
-      breadcrumb: (match) =>
-        (match.loaderData as { album?: { title?: string } } | undefined)?.album
-          ?.title ?? "Album",
-    },
+export const Route = createFileRoute("/_app/artists/$artistId/albums/$albumId")({
+  component: AlbumDetailPage,
+  loader: async ({ context, params }) =>
+    context.queryClient.ensureQueryData(queryKeys.albums.detail(params.albumId)),
+  staticData: {
+    breadcrumb: (match) =>
+      (match.loaderData as { album?: { title?: string } } | undefined)?.album?.title ?? "Album",
   },
-);
+});
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -109,11 +104,9 @@ function formatDuration(totalSecs: number): string {
 
 function AlbumDetailPage() {
   const { artistId, albumId } = Route.useParams();
-  const { data, isLoading, isError } = $api.useQuery(
-    "get",
-    "/api/album/{album_id}",
-    { params: { path: { album_id: albumId } } },
-  );
+  const { data, isLoading, isError } = $api.useQuery("get", "/api/album/{album_id}", {
+    params: { path: { album_id: albumId } },
+  });
 
   if (isLoading) {
     return <AlbumDetailSkeleton />;
@@ -242,19 +235,14 @@ function AlbumDetailContent({
   // Find the latest job for this album
   const latestJob = jobs
     .filter((j) => j.album_id === album.id)
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0] as
-    | DownloadJob
-    | undefined;
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0] as DownloadJob | undefined;
 
   const hasActiveJob =
-    latestJob &&
-    ["queued", "resolving", "downloading"].includes(latestJob.status);
+    latestJob && ["queued", "resolving", "downloading"].includes(latestJob.status);
   const canDownload = album.wanted && !album.acquired && !hasActiveJob;
   const canRetry = latestJob?.status === "failed";
 
-  const pendingSuggestions = matchSuggestions.filter(
-    (m) => m.status === "pending",
-  );
+  const pendingSuggestions = matchSuggestions.filter((m) => m.status === "pending");
 
   return (
     <div className="p-6 max-md:p-4">
@@ -263,9 +251,7 @@ function AlbumDetailContent({
         {/* Status + action buttons header bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            {album.acquired && (
-              <Badge className="bg-green-500/10 text-green-600">Acquired</Badge>
-            )}
+            {album.acquired && <Badge className="bg-green-500/10 text-green-600">Acquired</Badge>}
             {!album.acquired && album.wanted && (
               <Badge className="bg-amber-500/10 text-amber-500">Wanted</Badge>
             )}
@@ -323,16 +309,10 @@ function AlbumDetailContent({
                   body: { quality },
                 })
               }
-              pending={
-                toggleAlbumMonitor.isPending || setAlbumQuality.isPending
-              }
+              pending={toggleAlbumMonitor.isPending || setAlbumQuality.isPending}
             />
             {album.acquired && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setShowRemoveFiles(true)}
-              >
+              <Button variant="destructive" size="sm" onClick={() => setShowRemoveFiles(true)}>
                 <Trash2Icon className="mr-1.5 size-3.5" />
                 Remove Files
               </Button>
@@ -353,11 +333,7 @@ function AlbumDetailContent({
             {/* Cover art */}
             <div className="size-28 shrink-0 overflow-hidden rounded-lg bg-muted md:size-40">
               {album.cover_url ? (
-                <img
-                  className="size-full object-cover"
-                  src={album.cover_url}
-                  alt=""
-                />
+                <img className="size-full object-cover" src={album.cover_url} alt="" />
               ) : (
                 <div className="flex size-full items-center justify-center text-3xl font-bold text-muted-foreground/30">
                   {fallbackInitial(album.title)}
@@ -369,7 +345,7 @@ function AlbumDetailContent({
             <div className="flex min-w-0 flex-1 flex-col justify-center">
               {/* Album type + explicit */}
               <div className="mb-1 flex items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
                   {at}
                 </span>
                 {album.explicit && (
@@ -380,7 +356,7 @@ function AlbumDetailContent({
               </div>
 
               {/* Title */}
-              <h1 className="m-0 mb-1.5 wrap-break-word text-xl font-bold leading-snug md:text-2xl">
+              <h1 className="m-0 mb-1.5 text-xl leading-snug font-bold wrap-break-word md:text-2xl">
                 {album.title}
               </h1>
 
@@ -410,9 +386,7 @@ function AlbumDetailContent({
                             {credit.name}
                           </Link>
                         ) : (
-                          <span className="italic text-muted-foreground/60">
-                            {credit.name}
-                          </span>
+                          <span className="text-muted-foreground/60 italic">{credit.name}</span>
                         )}
                       </span>
                     ))}
@@ -429,9 +403,7 @@ function AlbumDetailContent({
               {/* Provider links */}
               {providerLinks.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] text-muted-foreground/60">
-                    Available on
-                  </span>
+                  <span className="text-[11px] text-muted-foreground/60">Available on</span>
                   {providerLinks.map((link) => (
                     <span key={`${link.provider}-${link.external_id}`}>
                       {link.external_url ? (
@@ -447,9 +419,7 @@ function AlbumDetailContent({
                           </Badge>
                         </a>
                       ) : (
-                        <Badge variant="outline">
-                          {providerDisplayName(link.provider)}
-                        </Badge>
+                        <Badge variant="outline">{providerDisplayName(link.provider)}</Badge>
                       )}
                     </span>
                   ))}
@@ -527,9 +497,7 @@ function AlbumDetailContent({
                 })
               }
             >
-              {removeAlbumFiles.isPending
-                ? "Removing..."
-                : "Remove & Unmonitor"}
+              {removeAlbumFiles.isPending ? "Removing..." : "Remove & Unmonitor"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -583,10 +551,7 @@ function TrackList({
   const hasAnyPath = tracks.some((t) => t.file_path);
 
   // Build set of album-level artist names to suppress in track rows
-  const albumArtistNames = new Set([
-    artistName,
-    ...albumArtists.map((c) => c.name),
-  ]);
+  const albumArtistNames = new Set([artistName, ...albumArtists.map((c) => c.name)]);
 
   return (
     <div className="divide-y divide-border/50">
@@ -653,7 +618,7 @@ function TrackRow({
         setTrackQuality={setTrackQuality}
       />
 
-      <span className="w-8 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+      <span className="w-8 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
         {trackNumDisplay}
       </span>
 
@@ -661,12 +626,10 @@ function TrackRow({
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="truncate text-sm">{track.title}</span>
           {track.version && (
-            <span className="shrink-0 text-xs text-muted-foreground">
-              ({track.version})
-            </span>
+            <span className="shrink-0 text-xs text-muted-foreground">({track.version})</span>
           )}
           {track.explicit && (
-            <span className="inline-flex shrink-0 items-center justify-center rounded bg-muted px-1 py-px text-[9px] font-bold uppercase leading-none tracking-wide text-muted-foreground">
+            <span className="inline-flex shrink-0 items-center justify-center rounded bg-muted px-1 py-px text-[9px] leading-none font-bold tracking-wide text-muted-foreground uppercase">
               E
             </span>
           )}
@@ -696,7 +659,7 @@ function TrackRow({
         )}
       </div>
 
-      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
         {track.duration_display}
       </span>
     </div>
@@ -770,11 +733,7 @@ function TrackStatusIndicator({
 
 // ── Album match suggestions panel ──────────────────────────────
 
-function AlbumMatchSuggestionsPanel({
-  suggestions,
-}: {
-  suggestions: Array<MatchSuggestion>;
-}) {
+function AlbumMatchSuggestionsPanel({ suggestions }: { suggestions: Array<MatchSuggestion> }) {
   const acceptMatch = useAcceptMatchSuggestion();
   const dismissMatch = useDismissMatchSuggestion();
 

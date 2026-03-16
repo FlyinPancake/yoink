@@ -49,9 +49,7 @@ const ALBUM_TYPE_LABELS: Record<string, string> = {
 
 function albumTypeKey(albumType: string | null | undefined): string {
   const key = (albumType ?? "album").toLowerCase();
-  return ALBUM_TYPE_ORDER.includes(key as (typeof ALBUM_TYPE_ORDER)[number])
-    ? key
-    : "other";
+  return ALBUM_TYPE_ORDER.includes(key as (typeof ALBUM_TYPE_ORDER)[number]) ? key : "other";
 }
 
 function albumTypeRank(albumType: string | null | undefined): number {
@@ -67,45 +65,30 @@ function AlbumsPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("newest");
 
-  const {
-    data: albums,
-    isLoading,
-    isError,
-  } = $api.useQuery("get", "/api/album");
+  const { data: albums, isLoading, isError } = $api.useQuery("get", "/api/album");
 
   // Also load artists so we can resolve artist names
   const { data: artists } = $api.useQuery("get", "/api/artist");
 
-  const artistMap = useMemo(
-    () => new Map((artists ?? []).map((a) => [a.id, a.name])),
-    [artists],
-  );
+  const artistMap = useMemo(() => new Map((artists ?? []).map((a) => [a.id, a.name])), [artists]);
 
   /** Resolve the display name for an album's primary artist. */
   const artistName = (album: MonitoredAlbum): string =>
-    album.artist_credits?.[0]?.name ??
-    artistMap.get(album.artist_id) ??
-    "Unknown Artist";
+    album.artist_credits?.[0]?.name ?? artistMap.get(album.artist_id) ?? "Unknown Artist";
 
   /** Apply search filter then sort within each group. */
   const sortList = (list: MonitoredAlbum[]): MonitoredAlbum[] => {
     const sorted = [...list];
     switch (sort) {
       case "az":
-        sorted.sort((a, b) =>
-          a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
-        );
+        sorted.sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
         break;
       case "za":
-        sorted.sort((a, b) =>
-          b.title.toLowerCase().localeCompare(a.title.toLowerCase()),
-        );
+        sorted.sort((a, b) => b.title.toLowerCase().localeCompare(a.title.toLowerCase()));
         break;
       case "artist":
         sorted.sort((a, b) =>
-          artistName(a)
-            .toLowerCase()
-            .localeCompare(artistName(b).toLowerCase()),
+          artistName(a).toLowerCase().localeCompare(artistName(b).toLowerCase()),
         );
         break;
       case "newest":
@@ -123,10 +106,7 @@ function AlbumsPage() {
         );
         break;
       case "added":
-        sorted.sort(
-          (a, b) =>
-            new Date(b.added_at).getTime() - new Date(a.added_at).getTime(),
-        );
+        sorted.sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime());
         break;
     }
     return sorted;
@@ -139,9 +119,7 @@ function AlbumsPage() {
     const q = search.trim().toLowerCase();
     const list = q
       ? albums.filter(
-          (a) =>
-            a.title.toLowerCase().includes(q) ||
-            artistName(a).toLowerCase().includes(q),
+          (a) => a.title.toLowerCase().includes(q) || artistName(a).toLowerCase().includes(q),
         )
       : albums;
 
@@ -179,10 +157,7 @@ function AlbumsPage() {
         <Skeleton className="h-9 w-full max-w-sm" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="overflow-hidden rounded-xl border bg-card shadow-sm"
-            >
+            <div key={i} className="overflow-hidden rounded-xl border bg-card shadow-sm">
               <Skeleton className="aspect-square w-full" />
               <div className="p-4">
                 <Skeleton className="mb-2 h-4 w-28" />
@@ -229,7 +204,7 @@ function AlbumsPage() {
           {/* ── Search & sort toolbar ──────────────────────── */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative max-w-sm flex-1">
-              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -299,10 +274,7 @@ function AlbumGroup({
         <span className="text-sm text-muted-foreground">{albums.length}</span>
       </div>
 
-      <div
-        ref={gridRef}
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-      >
+      <div ref={gridRef} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {albums.map((album) => {
           const name = artistNameFn(album);
 
@@ -333,8 +305,7 @@ function AlbumGroup({
                 <div className="p-4">
                   <p className="truncate font-semibold">{album.title}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {name} &middot;{" "}
-                    {album.release_date?.slice(0, 4) ?? "Unknown"}
+                    {name} &middot; {album.release_date?.slice(0, 4) ?? "Unknown"}
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     {album.acquired && (

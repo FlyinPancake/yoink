@@ -38,11 +38,9 @@ function MergeAlbumsPage() {
   const { artistId } = Route.useParams();
 
   // Fetch artist detail (includes albums + match suggestions)
-  const { data, isLoading, isError } = $api.useQuery(
-    "get",
-    "/api/artist/{artist_id}",
-    { params: { path: { artist_id: artistId } } },
-  );
+  const { data, isLoading, isError } = $api.useQuery("get", "/api/artist/{artist_id}", {
+    params: { path: { artist_id: artistId } },
+  });
 
   if (isLoading) {
     return <MergeAlbumsSkeleton artistId={artistId} />;
@@ -149,8 +147,8 @@ function MergeAlbumsContent({
         <div className="rounded-xl border bg-card px-5 py-10 text-center">
           <GitMergeIcon className="mx-auto mb-3 size-8 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            No merge candidates found. Albums may already be fully linked, or no
-            duplicates were detected.
+            No merge candidates found. Albums may already be fully linked, or no duplicates were
+            detected.
           </p>
         </div>
       )}
@@ -179,9 +177,7 @@ function MergeCandidateCard({
   artistId: string;
 }) {
   const { suggestion, leftAlbum, rightAlbum } = candidate;
-  const [selectedTarget, setSelectedTarget] = useState<"left" | "right">(
-    "left",
-  );
+  const [selectedTarget, setSelectedTarget] = useState<"left" | "right">("left");
 
   const mergeAlbums = useMergeAlbums();
   const dismissMatch = useDismissMatchSuggestion();
@@ -210,9 +206,7 @@ function MergeCandidateCard({
             {suggestion.confidence}% confidence
           </span>
           {suggestion.explanation && (
-            <span className="text-xs text-muted-foreground">
-              {suggestion.explanation}
-            </span>
+            <span className="text-xs text-muted-foreground">{suggestion.explanation}</span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
@@ -280,8 +274,8 @@ function MergeCandidateCard({
       {/* Merge preview */}
       <div className="border-t bg-muted/30 px-5 py-3">
         <p className="text-xs text-muted-foreground">
-          Merge will keep <strong>{targetAlbum.title}</strong> and absorb tracks
-          from <strong>{sourceAlbum.title}</strong>.{" "}
+          Merge will keep <strong>{targetAlbum.title}</strong> and absorb tracks from{" "}
+          <strong>{sourceAlbum.title}</strong>.{" "}
           {targetAlbum.cover_url
             ? "Cover art from the target will be used."
             : "No cover art on target."}
@@ -317,21 +311,15 @@ function AlbumComparisonCard({
       onClick={onSelect}
     >
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
           {label}
         </span>
-        {isTarget && (
-          <Badge className="bg-blue-500/10 text-blue-500">Target</Badge>
-        )}
+        {isTarget && <Badge className="bg-blue-500/10 text-blue-500">Target</Badge>}
       </div>
       <div className="flex gap-3">
         <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
           {album.cover_url ? (
-            <img
-              src={album.cover_url}
-              alt={album.title}
-              className="size-full object-cover"
-            />
+            <img src={album.cover_url} alt={album.title} className="size-full object-cover" />
           ) : (
             <div className="flex size-full items-center justify-center text-lg font-bold text-muted-foreground/30">
               {fallbackInitial(album.title)}
@@ -348,23 +336,16 @@ function AlbumComparisonCard({
             {album.title}
           </Link>
           <p className="text-xs text-muted-foreground">
-            {album.release_date?.slice(0, 4) ?? "\u2014"} &middot;{" "}
-            {album.album_type ?? "Album"}
+            {album.release_date?.slice(0, 4) ?? "\u2014"} &middot; {album.album_type ?? "Album"}
           </p>
           <div className="mt-1 flex flex-wrap gap-1">
             {album.acquired && (
-              <Badge
-                className="bg-green-500/10 text-green-600"
-                variant="secondary"
-              >
+              <Badge className="bg-green-500/10 text-green-600" variant="secondary">
                 Acquired
               </Badge>
             )}
             {album.wanted && !album.acquired && (
-              <Badge
-                className="bg-amber-500/10 text-amber-500"
-                variant="secondary"
-              >
+              <Badge className="bg-amber-500/10 text-amber-500" variant="secondary">
                 Wanted
               </Badge>
             )}

@@ -125,9 +125,7 @@ const ALBUM_TYPE_GROUP_LABELS: Record<string, string> = {
 
 function albumTypeKey(albumType: string | null | undefined): string {
   const key = (albumType ?? "album").toLowerCase();
-  return ALBUM_TYPE_ORDER.includes(key as (typeof ALBUM_TYPE_ORDER)[number])
-    ? key
-    : "other";
+  return ALBUM_TYPE_ORDER.includes(key as (typeof ALBUM_TYPE_ORDER)[number]) ? key : "other";
 }
 
 function albumTypeRank(albumType: string | null | undefined): number {
@@ -145,11 +143,9 @@ function fallbackInitial(name: string): string {
 
 function ArtistDetailPage() {
   const { artistId } = Route.useParams();
-  const { data, isLoading, isError } = $api.useQuery(
-    "get",
-    "/api/artist/{artist_id}",
-    { params: { path: { artist_id: artistId } } },
-  );
+  const { data, isLoading, isError } = $api.useQuery("get", "/api/artist/{artist_id}", {
+    params: { path: { artist_id: artistId } },
+  });
 
   if (isLoading) {
     return <ArtistDetailSkeleton />;
@@ -216,10 +212,7 @@ function ArtistDetailSkeleton() {
         <div className="p-4">
           <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="animate-pulse overflow-hidden rounded-xl border"
-              >
+              <div key={i} className="animate-pulse overflow-hidden rounded-xl border">
                 <Skeleton className="aspect-square w-full" />
                 <div className="p-3">
                   <Skeleton className="mb-2 h-3.5 w-24" />
@@ -263,18 +256,14 @@ function ArtistDetailContent({
   const acquiredCount = albums.filter((a) => a.acquired).length;
   const wantedCount = albums.filter((a) => a.wanted).length;
 
-  const pendingSuggestions = matchSuggestions.filter(
-    (m) => m.status === "pending",
-  );
+  const pendingSuggestions = matchSuggestions.filter((m) => m.status === "pending");
 
   /** Sort a list of albums by the current sort mode. */
   const sortList = (list: MonitoredAlbum[]): MonitoredAlbum[] => {
     const sorted = [...list];
     switch (albumSort) {
       case "az":
-        sorted.sort((a, b) =>
-          a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
-        );
+        sorted.sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
         break;
       case "newest":
         sorted.sort(
@@ -336,21 +325,15 @@ function ArtistDetailContent({
             <div className="mb-1 text-[22px] font-bold">{artist.name}</div>
             <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
               <span>
-                {albumCount} albums &middot; {monitoredCount} monitored &middot;{" "}
-                {acquiredCount} acquired &middot; {wantedCount} wanted
+                {albumCount} albums &middot; {monitoredCount} monitored &middot; {acquiredCount}{" "}
+                acquired &middot; {wantedCount} wanted
               </span>
               {artist.monitored ? (
-                <Badge
-                  variant="outline"
-                  className="border-blue-500/30 text-blue-500"
-                >
+                <Badge variant="outline" className="border-blue-500/30 text-blue-500">
                   Monitored
                 </Badge>
               ) : (
-                <Badge
-                  variant="outline"
-                  className="border-amber-500/30 text-amber-500"
-                >
+                <Badge variant="outline" className="border-amber-500/30 text-amber-500">
                   Lightweight
                 </Badge>
               )}
@@ -358,8 +341,8 @@ function ArtistDetailContent({
 
             {!artist.monitored && (
               <div className="mb-2 text-[12px] text-amber-700 dark:text-amber-300">
-                This artist is lightweight. Promote to monitored to sync full
-                discography automatically.
+                This artist is lightweight. Promote to monitored to sync full discography
+                automatically.
               </div>
             )}
 
@@ -368,11 +351,7 @@ function ArtistDetailContent({
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowEditDialog(true)}
-              >
+              <Button variant="outline" size="sm" onClick={() => setShowEditDialog(true)}>
                 <PencilIcon className="mr-1.5 size-3.5" />
                 Edit
               </Button>
@@ -430,10 +409,7 @@ function ArtistDetailContent({
 
       {/* ── Match suggestions ──────────────────────────────── */}
       {pendingSuggestions.length > 0 && (
-        <MatchSuggestionsPanel
-          artistId={artist.id}
-          suggestions={pendingSuggestions}
-        />
+        <MatchSuggestionsPanel artistId={artist.id} suggestions={pendingSuggestions} />
       )}
 
       {/* ── Discography ────────────────────────────────────── */}
@@ -441,16 +417,11 @@ function ArtistDetailContent({
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-semibold">Discography</h2>
-            <span className="text-xs text-muted-foreground">
-              {albumCount} albums
-            </span>
+            <span className="text-xs text-muted-foreground">{albumCount} albums</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" asChild>
-              <Link
-                to="/artists/$artistId/merge-albums"
-                params={{ artistId: artist.id }}
-              >
+              <Link to="/artists/$artistId/merge-albums" params={{ artistId: artist.id }}>
                 <GitMergeIcon className="mr-1.5 size-3.5" />
                 Merge Albums
               </Link>
@@ -516,11 +487,7 @@ function ArtistDetailContent({
         isPending={deleteArtist.isPending}
       />
 
-      <EditArtistDialog
-        open={showEditDialog}
-        onOpenChange={setShowEditDialog}
-        artist={artist}
-      />
+      <EditArtistDialog open={showEditDialog} onOpenChange={setShowEditDialog} artist={artist} />
     </div>
   );
 }
@@ -541,7 +508,7 @@ function ProviderChips({
       {providerLinks.map((link) => (
         <div
           key={`${link.provider}-${link.external_id}`}
-          className="group inline-flex items-center gap-1.5 rounded-lg border bg-card py-1 pl-2 pr-1 text-xs transition-colors hover:border-foreground/20"
+          className="group inline-flex items-center gap-1.5 rounded-lg border bg-card py-1 pr-1 pl-2 text-xs transition-colors hover:border-foreground/20"
         >
           <span className="font-medium text-muted-foreground">
             {providerDisplayName(link.provider)}
@@ -558,7 +525,7 @@ function ProviderChips({
           )}
           <button
             type="button"
-            className="cursor-pointer border-none bg-transparent p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+            className="cursor-pointer border-none bg-transparent p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500"
             title="Unlink this provider"
             onClick={() =>
               unlinkProvider.mutate({
@@ -603,9 +570,7 @@ function MatchSuggestionsPanel({
   return (
     <div className="mb-5 overflow-hidden rounded-xl border bg-card">
       <div className="flex items-center justify-between border-b px-5 py-3">
-        <h2 className="text-sm font-semibold">
-          Potential Matches ({suggestions.length})
-        </h2>
+        <h2 className="text-sm font-semibold">Potential Matches ({suggestions.length})</h2>
         <Button
           variant="outline"
           size="sm"
@@ -630,9 +595,7 @@ function MatchSuggestionsPanel({
 
           const subtitle = [
             (m.disambiguation ??
-              [m.artist_type, m.country && `from ${m.country}`]
-                .filter(Boolean)
-                .join(" ")) ||
+              [m.artist_type, m.country && `from ${m.country}`].filter(Boolean).join(" ")) ||
               null,
             m.popularity != null ? `${String(m.popularity)}% popularity` : null,
           ]
@@ -647,10 +610,7 @@ function MatchSuggestionsPanel({
                 : "bg-red-500/10 text-red-600";
 
           return (
-            <div
-              key={m.id}
-              className="flex items-start gap-3 rounded-lg border p-2"
-            >
+            <div key={m.id} className="flex items-start gap-3 rounded-lg border p-2">
               {m.image_url ? (
                 <img
                   className="size-9 shrink-0 rounded-full border border-blue-500/20 bg-muted object-cover"
@@ -694,9 +654,7 @@ function MatchSuggestionsPanel({
                   </div>
                 )}
                 {m.explanation && (
-                  <div className="mt-1 text-[11px] text-muted-foreground">
-                    {m.explanation}
-                  </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">{m.explanation}</div>
                 )}
                 <div className="mt-0.5 text-[10px] text-muted-foreground/70">
                   ID: {m.right_external_id}
@@ -819,7 +777,7 @@ function AlbumCard({
           )}
           {statusBadge && (
             <span
-              className={`absolute right-2 top-2 z-10 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge.className}`}
+              className={`absolute top-2 right-2 z-10 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge.className}`}
             >
               {statusBadge.label}
             </span>
@@ -837,7 +795,7 @@ function AlbumCard({
           </p>
         </div>
       </Link>
-      <div className="absolute bottom-2 right-2">
+      <div className="absolute right-2 bottom-2">
         <MonitorButton
           monitored={album.monitored}
           onToggleMonitor={() =>
@@ -907,16 +865,12 @@ function RemoveArtistDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Remove Artist</AlertDialogTitle>
           <AlertDialogDescription>
-            This will remove <strong>{artistName}</strong> and all associated
-            data. This cannot be undone.
+            This will remove <strong>{artistName}</strong> and all associated data. This cannot be
+            undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="flex items-center gap-2">
-          <Switch
-            id="remove-files"
-            checked={removeFiles}
-            onCheckedChange={setRemoveFiles}
-          />
+          <Switch id="remove-files" checked={removeFiles} onCheckedChange={setRemoveFiles} />
           <Label htmlFor="remove-files" className="text-sm">
             Also remove downloaded files from disk
           </Label>
@@ -957,18 +911,12 @@ function EditArtistDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit Artist</DialogTitle>
-          <DialogDescription>
-            Update the artist name and image.
-          </DialogDescription>
+          <DialogDescription>Update the artist name and image.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-1.5">
             <Label htmlFor="artist-name">Name</Label>
-            <Input
-              id="artist-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <Input id="artist-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="artist-image">Image URL</Label>

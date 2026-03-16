@@ -11,17 +11,14 @@ import type { RefObject } from "react";
  *
  * Ported from the Leptos implementation in `crates/yoink-app/src/shell.rs`.
  */
-export function useSleeveGlow(
-  deps: ReadonlyArray<unknown> = [],
-): RefObject<HTMLDivElement | null> {
+export function useSleeveGlow(deps: ReadonlyArray<unknown> = []): RefObject<HTMLDivElement | null> {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const images =
-      container.querySelectorAll<HTMLImageElement>(".sleeve-cover");
+    const images = container.querySelectorAll<HTMLImageElement>(".sleeve-cover");
     for (const img of images) {
       processImg(img);
     }

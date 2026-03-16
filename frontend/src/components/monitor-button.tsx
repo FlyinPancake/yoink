@@ -58,7 +58,7 @@ export function MonitorButton({
         title={monitored ? "Monitored - click to unmonitor" : "Monitor"}
         className={cn(
           "inline-flex cursor-pointer items-center rounded-l-4xl border font-medium transition-colors",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+          "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:outline-none",
           "disabled:pointer-events-none disabled:opacity-50",
           compact ? "gap-1 px-2 py-1.5 text-xs" : "gap-1.5 px-3 py-1.5 text-sm",
           monitored
@@ -82,7 +82,7 @@ export function MonitorButton({
             title={`Download quality: ${qualityOverride ?? `Default (${defaultQuality})`}`}
             className={cn(
               "-ml-px inline-flex cursor-pointer items-center rounded-r-4xl border font-medium transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+              "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:outline-none",
               "disabled:pointer-events-none disabled:opacity-50",
               compact ? "px-1.5 py-1.5 text-[10px]" : "px-2 py-1.5 text-xs",
               monitored

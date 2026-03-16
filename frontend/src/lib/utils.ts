@@ -11,10 +11,7 @@ export function cn(...inputs: ClassValue[]) {
  * This is used for auth endpoints that respond with `Set-Cookie` + `303 redirect`,
  * so the browser handles the cookie and redirect natively.
  */
-export function submitForm(
-  action: string,
-  values: Record<string, string>,
-): void {
+export function submitForm(action: string, values: Record<string, string>): void {
   const form = document.createElement("form");
   form.method = "POST";
   form.action = action;

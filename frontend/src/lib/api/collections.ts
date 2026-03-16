@@ -18,10 +18,7 @@
  * via `getCollections(queryClient)`.
  */
 
-import {
-  createCollection,
-  localOnlyCollectionOptions,
-} from "@tanstack/react-db";
+import { createCollection, localOnlyCollectionOptions } from "@tanstack/react-db";
 import { queryCollectionOptions } from "@tanstack/query-db-collection";
 import { fetchClient } from "./client";
 import type { QueryClient } from "@tanstack/react-query";

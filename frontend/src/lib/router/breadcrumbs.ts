@@ -35,9 +35,7 @@ export function resolveBreadcrumbLabel(match: AnyRouteMatch): string | null {
   return normalizeBreadcrumbLabel(breadcrumb);
 }
 
-export function buildBreadcrumbs(
-  matches: ReadonlyArray<AnyRouteMatch>,
-): Array<ResolvedBreadcrumb> {
+export function buildBreadcrumbs(matches: ReadonlyArray<AnyRouteMatch>): Array<ResolvedBreadcrumb> {
   return matches.flatMap((match) => {
     const label = resolveBreadcrumbLabel(match);
 

@@ -33,7 +33,7 @@ export function ThemeSelector() {
             aria-label={label}
             className={cn(
               // Fixed-size button so layout never shifts on selection change
-              "flex items-center justify-center size-7 rounded-full",
+              "flex size-7 items-center justify-center rounded-full",
               "transition-all duration-300 ease-in-out",
               // Selected: always visible and highlighted
               isSelected && "bg-background text-foreground shadow-sm",
@@ -41,7 +41,7 @@ export function ThemeSelector() {
               !isSelected && [
                 "text-muted-foreground hover:text-foreground",
                 // Collapse: zero width + invisible, with grace period
-                "max-w-0 opacity-0 overflow-hidden delay-200",
+                "max-w-0 overflow-hidden opacity-0 delay-200",
                 // Expand on group hover (instant, no delay)
                 "group-hover/theme:max-w-7 group-hover/theme:opacity-100 group-hover/theme:delay-0",
               ],

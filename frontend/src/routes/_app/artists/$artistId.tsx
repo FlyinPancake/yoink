@@ -7,8 +7,7 @@ export const Route = createFileRoute("/_app/artists/$artistId")({
     context.queryClient.ensureQueryData(queryKeys.artists.detail(params.artistId)),
   staticData: {
     breadcrumb: (match) =>
-      (match.loaderData as { artist?: { name?: string } } | undefined)?.artist
-        ?.name ?? "Artist",
+      (match.loaderData as { artist?: { name?: string } } | undefined)?.artist?.name ?? "Artist",
   },
 });
 

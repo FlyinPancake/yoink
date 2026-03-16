@@ -69,12 +69,8 @@ function DownloadsPage() {
     );
   }
 
-  const active = jobs.filter((d) =>
-    ["queued", "resolving", "downloading"].includes(d.status),
-  );
-  const history = jobs.filter((d) =>
-    ["completed", "failed"].includes(d.status),
-  );
+  const active = jobs.filter((d) => ["queued", "resolving", "downloading"].includes(d.status));
+  const history = jobs.filter((d) => ["completed", "failed"].includes(d.status));
 
   return (
     <div className="space-y-8">
@@ -108,7 +104,7 @@ function DownloadsPage() {
         <>
           {active.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              <h2 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">
                 Active
               </h2>
               <div className="space-y-2">
@@ -130,7 +126,7 @@ function DownloadsPage() {
 
           {history.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              <h2 className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">
                 History
               </h2>
               <div className="space-y-2">
@@ -158,9 +154,7 @@ function DownloadRow({
   const cfg = statusConfig[dl.status];
   const Icon = cfg.icon;
   const progress =
-    dl.total_tracks > 0
-      ? Math.round((dl.completed_tracks / dl.total_tracks) * 100)
-      : 0;
+    dl.total_tracks > 0 ? Math.round((dl.completed_tracks / dl.total_tracks) * 100) : 0;
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
@@ -171,7 +165,7 @@ function DownloadRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="truncate font-semibold">{dl.album_title}</p>
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
               {dl.quality}
             </span>
           </div>

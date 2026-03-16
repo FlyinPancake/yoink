@@ -1,13 +1,8 @@
 import type { AnyRouteMatch } from "@tanstack/react-router";
 import { describe, expect, it } from "vitest";
-import {
-  buildBreadcrumbs,
-  resolveBreadcrumbLabel,
-} from "@/lib/router/breadcrumbs";
+import { buildBreadcrumbs, resolveBreadcrumbLabel } from "@/lib/router/breadcrumbs";
 
-function createMatch(
-  overrides: Partial<AnyRouteMatch> = {},
-): AnyRouteMatch {
+function createMatch(overrides: Partial<AnyRouteMatch> = {}): AnyRouteMatch {
   return {
     id: overrides.id ?? "match-id",
     pathname: overrides.pathname ?? "/example",
@@ -30,8 +25,7 @@ describe("resolveBreadcrumbLabel", () => {
       loaderData: { artist: { name: "Radiohead" } },
       staticData: {
         breadcrumb: (currentMatch) =>
-          (currentMatch.loaderData as { artist?: { name?: string } })?.artist
-            ?.name,
+          (currentMatch.loaderData as { artist?: { name?: string } })?.artist?.name,
       },
     });
 
@@ -88,8 +82,7 @@ describe("buildBreadcrumbs", () => {
         pathname: "/artists/artist-1",
         loaderData: { artist: { name: "Radiohead" } },
         staticData: {
-          breadcrumb: (match) =>
-            (match.loaderData as { artist?: { name?: string } })?.artist?.name,
+          breadcrumb: (match) => (match.loaderData as { artist?: { name?: string } })?.artist?.name,
         },
       }),
       createMatch({
@@ -102,8 +95,7 @@ describe("buildBreadcrumbs", () => {
         pathname: "/artists/artist-1/albums/album-1",
         loaderData: { album: { title: "OK Computer" } },
         staticData: {
-          breadcrumb: (match) =>
-            (match.loaderData as { album?: { title?: string } })?.album?.title,
+          breadcrumb: (match) => (match.loaderData as { album?: { title?: string } })?.album?.title,
         },
       }),
     ];

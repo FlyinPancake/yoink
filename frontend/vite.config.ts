@@ -15,7 +15,7 @@ const config = defineConfig({
       },
       devProxy: {
         "/api/**": "http://localhost:3000",
-        "/auth/**": "http://localhost:3000"
+        "/auth/**": "http://localhost:3000",
       },
     }),
     // this is the plugin that enables path aliases

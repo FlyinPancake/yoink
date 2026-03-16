@@ -1,13 +1,7 @@
 import { createFileRoute, redirect, useSearch } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
 import { AlertCircleIcon } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -70,9 +64,7 @@ function SetupPasswordPage() {
         if (value.new_password !== value.confirm_password) {
           errors.confirm_password = "Passwords do not match";
         }
-        return Object.keys(errors).length > 0
-          ? `${Object.values(errors).join(", ")}`
-          : undefined;
+        return Object.keys(errors).length > 0 ? `${Object.values(errors).join(", ")}` : undefined;
       },
     },
   });
@@ -155,9 +147,7 @@ function SetupPasswordPage() {
               <form.Field name="confirm_password">
                 {(field) => (
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="setup-confirm-password">
-                      Confirm Password
-                    </Label>
+                    <Label htmlFor="setup-confirm-password">Confirm Password</Label>
                     <Input
                       id="setup-confirm-password"
                       type="password"
@@ -189,11 +179,7 @@ function SetupPasswordPage() {
 
               <form.Subscribe selector={(state) => state.isSubmitting}>
                 {(isSubmitting) => (
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isSubmitting}
-                  >
+                  <Button type="submit" className="w-full" disabled={isSubmitting}>
                     {isSubmitting ? "Saving..." : "Set Credentials"}
                   </Button>
                 )}

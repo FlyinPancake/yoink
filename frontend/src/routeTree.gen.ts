@@ -19,9 +19,11 @@ import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppDownloadsRouteImport } from './routes/_app/downloads'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppLibraryRouteRouteImport } from './routes/_app/library/route'
+import { Route as AppImportRouteRouteImport } from './routes/_app/import/route'
 import { Route as AppArtistsRouteRouteImport } from './routes/_app/artists/route'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppLibraryIndexRouteImport } from './routes/_app/library/index'
+import { Route as AppImportIndexRouteImport } from './routes/_app/import/index'
 import { Route as AppArtistsIndexRouteImport } from './routes/_app/artists/index'
 import { Route as AppSettingsSecurityRouteImport } from './routes/_app/settings/security'
 import { Route as AppLibraryTracksRouteImport } from './routes/_app/library/tracks'
@@ -83,6 +85,11 @@ const AppLibraryRouteRoute = AppLibraryRouteRouteImport.update({
   path: '/library',
   getParentRoute: () => AppRoute,
 } as any)
+const AppImportRouteRoute = AppImportRouteRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppArtistsRouteRoute = AppArtistsRouteRouteImport.update({
   id: '/artists',
   path: '/artists',
@@ -97,6 +104,11 @@ const AppLibraryIndexRoute = AppLibraryIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppLibraryRouteRoute,
+} as any)
+const AppImportIndexRoute = AppImportIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppImportRouteRoute,
 } as any)
 const AppArtistsIndexRoute = AppArtistsIndexRouteImport.update({
   id: '/',
@@ -162,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/artists': typeof AppArtistsRouteRouteWithChildren
+  '/import': typeof AppImportRouteRouteWithChildren
   '/library': typeof AppLibraryRouteRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/downloads': typeof AppDownloadsRoute
@@ -175,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/library/tracks': typeof AppLibraryTracksRoute
   '/settings/security': typeof AppSettingsSecurityRoute
   '/artists/': typeof AppArtistsIndexRoute
+  '/import/': typeof AppImportIndexRoute
   '/library/': typeof AppLibraryIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/artists/$artistId/albums': typeof AppArtistsArtistIdAlbumsRouteWithChildren
@@ -196,6 +210,7 @@ export interface FileRoutesByTo {
   '/library/tracks': typeof AppLibraryTracksRoute
   '/settings/security': typeof AppSettingsSecurityRoute
   '/artists': typeof AppArtistsIndexRoute
+  '/import': typeof AppImportIndexRoute
   '/library': typeof AppLibraryIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/artists/$artistId/merge-albums': typeof AppArtistsArtistIdMergeAlbumsRoute
@@ -209,6 +224,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/artists': typeof AppArtistsRouteRouteWithChildren
+  '/_app/import': typeof AppImportRouteRouteWithChildren
   '/_app/library': typeof AppLibraryRouteRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/downloads': typeof AppDownloadsRoute
@@ -222,6 +238,7 @@ export interface FileRoutesById {
   '/_app/library/tracks': typeof AppLibraryTracksRoute
   '/_app/settings/security': typeof AppSettingsSecurityRoute
   '/_app/artists/': typeof AppArtistsIndexRoute
+  '/_app/import/': typeof AppImportIndexRoute
   '/_app/library/': typeof AppLibraryIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/artists/$artistId/albums': typeof AppArtistsArtistIdAlbumsRouteWithChildren
@@ -236,6 +253,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/artists'
+    | '/import'
     | '/library'
     | '/dashboard'
     | '/downloads'
@@ -249,6 +267,7 @@ export interface FileRouteTypes {
     | '/library/tracks'
     | '/settings/security'
     | '/artists/'
+    | '/import/'
     | '/library/'
     | '/settings/'
     | '/artists/$artistId/albums'
@@ -270,6 +289,7 @@ export interface FileRouteTypes {
     | '/library/tracks'
     | '/settings/security'
     | '/artists'
+    | '/import'
     | '/library'
     | '/settings'
     | '/artists/$artistId/merge-albums'
@@ -282,6 +302,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/artists'
+    | '/_app/import'
     | '/_app/library'
     | '/_app/dashboard'
     | '/_app/downloads'
@@ -295,6 +316,7 @@ export interface FileRouteTypes {
     | '/_app/library/tracks'
     | '/_app/settings/security'
     | '/_app/artists/'
+    | '/_app/import/'
     | '/_app/library/'
     | '/_app/settings/'
     | '/_app/artists/$artistId/albums'
@@ -383,6 +405,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLibraryRouteRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/import': {
+      id: '/_app/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof AppImportRouteRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/artists': {
       id: '/_app/artists'
       path: '/artists'
@@ -403,6 +432,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/library/'
       preLoaderRoute: typeof AppLibraryIndexRouteImport
       parentRoute: typeof AppLibraryRouteRoute
+    }
+    '/_app/import/': {
+      id: '/_app/import/'
+      path: '/'
+      fullPath: '/import/'
+      preLoaderRoute: typeof AppImportIndexRouteImport
+      parentRoute: typeof AppImportRouteRoute
     }
     '/_app/artists/': {
       id: '/_app/artists/'
@@ -529,6 +565,18 @@ const AppArtistsRouteRouteWithChildren = AppArtistsRouteRoute._addFileChildren(
   AppArtistsRouteRouteChildren,
 )
 
+interface AppImportRouteRouteChildren {
+  AppImportIndexRoute: typeof AppImportIndexRoute
+}
+
+const AppImportRouteRouteChildren: AppImportRouteRouteChildren = {
+  AppImportIndexRoute: AppImportIndexRoute,
+}
+
+const AppImportRouteRouteWithChildren = AppImportRouteRoute._addFileChildren(
+  AppImportRouteRouteChildren,
+)
+
 interface AppLibraryRouteRouteChildren {
   AppLibraryAlbumsRoute: typeof AppLibraryAlbumsRoute
   AppLibraryArtistsRoute: typeof AppLibraryArtistsRoute
@@ -563,6 +611,7 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppArtistsRouteRoute: typeof AppArtistsRouteRouteWithChildren
+  AppImportRouteRoute: typeof AppImportRouteRouteWithChildren
   AppLibraryRouteRoute: typeof AppLibraryRouteRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppDownloadsRoute: typeof AppDownloadsRoute
@@ -573,6 +622,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppArtistsRouteRoute: AppArtistsRouteRouteWithChildren,
+  AppImportRouteRoute: AppImportRouteRouteWithChildren,
   AppLibraryRouteRoute: AppLibraryRouteRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
   AppDownloadsRoute: AppDownloadsRoute,

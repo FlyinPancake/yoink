@@ -48,8 +48,7 @@ function WantedPage() {
 
   // Count total wanted tracks across all albums
   const totalWantedTracks = wantedAlbums.reduce(
-    (sum, wa) =>
-      sum + wa.tracks.filter((t) => t.monitored && !t.acquired).length,
+    (sum, wa) => sum + wa.tracks.filter((t) => t.monitored && !t.acquired).length,
     0,
   );
 
@@ -58,9 +57,8 @@ function WantedPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Wanted</h1>
         <p className="text-muted-foreground">
-          {wantedAlbums.length} album{wantedAlbums.length !== 1 ? "s" : ""} and{" "}
-          {totalWantedTracks} track{totalWantedTracks !== 1 ? "s" : ""} waiting
-          to be acquired.
+          {wantedAlbums.length} album{wantedAlbums.length !== 1 ? "s" : ""} and {totalWantedTracks}{" "}
+          track{totalWantedTracks !== 1 ? "s" : ""} waiting to be acquired.
         </p>
       </div>
 
@@ -73,20 +71,12 @@ function WantedPage() {
       ) : (
         <div className="space-y-4">
           {wantedAlbums.map(({ album, tracks }) => {
-            const wantedTracks = tracks.filter(
-              (t) => t.monitored && !t.acquired,
-            );
+            const wantedTracks = tracks.filter((t) => t.monitored && !t.acquired);
             const artist = artistMap.get(album.artist_id);
-            const artistName =
-              album.artist_credits?.[0]?.name ??
-              artist?.name ??
-              "Unknown Artist";
+            const artistName = album.artist_credits?.[0]?.name ?? artist?.name ?? "Unknown Artist";
 
             return (
-              <div
-                key={album.id}
-                className="overflow-hidden rounded-xl border bg-card shadow-sm"
-              >
+              <div key={album.id} className="overflow-hidden rounded-xl border bg-card shadow-sm">
                 <Link
                   to="/artists/$artistId/albums/$albumId"
                   params={{
@@ -114,8 +104,7 @@ function WantedPage() {
                       {artistName} &middot; {album.release_date?.slice(0, 4)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {tracks.length} track{tracks.length !== 1 ? "s" : ""}{" "}
-                      &middot;{" "}
+                      {tracks.length} track{tracks.length !== 1 ? "s" : ""} &middot;{" "}
                       {album.monitored
                         ? "Full album wanted"
                         : `${wantedTracks.length} track${wantedTracks.length !== 1 ? "s" : ""} wanted`}
@@ -130,11 +119,8 @@ function WantedPage() {
                   <div className="border-t">
                     <div className="divide-y">
                       {wantedTracks.map((track) => (
-                        <div
-                          key={track.id}
-                          className="flex items-center gap-3 px-4 py-2 text-sm"
-                        >
-                          <span className="w-6 text-right tabular-nums text-muted-foreground">
+                        <div key={track.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                          <span className="w-6 text-right text-muted-foreground tabular-nums">
                             {track.track_number}
                           </span>
                           <span className="flex-1 truncate">{track.title}</span>

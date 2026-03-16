@@ -5,14 +5,10 @@ import * as React from "react";
 import { NavMain } from "@/components/nav-main";
 import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-} from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/components/ui/sidebar";
 import {
   DownloadIcon,
+  FolderInputIcon,
   HeartIcon,
   LayoutDashboardIcon,
   LibraryIcon,
@@ -54,6 +50,11 @@ const navMain = [
     url: "/downloads",
     icon: <DownloadIcon />,
   },
+  {
+    title: "Import",
+    url: "/import",
+    icon: <FolderInputIcon />,
+  },
 ];
 
 const navSecondary = [
@@ -69,7 +70,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar variant="inset" {...props}>
-      <SidebarHeader className="flex flex-row items-center gap-2 justify-between">
+      <SidebarHeader className="flex flex-row items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
             <img src="/yoink.svg" alt="yoink icon" />

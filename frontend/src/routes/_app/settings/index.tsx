@@ -13,17 +13,11 @@ export const Route = createFileRoute("/_app/settings/")({
 });
 
 function SettingsIndexPage() {
-  const { data: providers, isLoading: providersLoading } = $api.useQuery(
-    "get",
-    "/api/provider",
-  );
-  const { data: authStatus, isLoading: authLoading } = $api.useQuery(
-    "get",
-    "/api/auth/status",
-  );
+  const { data: providers, isLoading: providersLoading } = $api.useQuery("get", "/api/provider");
+  const { data: authStatus, isLoading: authLoading } = $api.useQuery("get", "/api/auth/status");
 
   return (
-    <div className="grid gap-6 max-w-2xl">
+    <div className="grid max-w-2xl gap-6">
       {/* Providers */}
       <section className="rounded-xl border bg-card shadow-sm">
         <div className="border-b px-5 py-4">
@@ -65,9 +59,7 @@ function SettingsIndexPage() {
         <div className="flex items-center justify-between border-b px-5 py-4">
           <div>
             <h2 className="font-semibold">Security</h2>
-            <p className="text-xs text-muted-foreground">
-              Authentication and access control.
-            </p>
+            <p className="text-xs text-muted-foreground">Authentication and access control.</p>
           </div>
           {authStatus?.auth_enabled && (
             <Link to="/settings/security">
@@ -154,13 +146,9 @@ function SettingRow({
         <p className="text-sm font-medium">{label}</p>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {status === "ok" && (
-          <span className="size-2 rounded-full bg-green-500" />
-        )}
-        {status === "warn" && (
-          <span className="size-2 rounded-full bg-amber-500" />
-        )}
+      <div className="flex shrink-0 items-center gap-2">
+        {status === "ok" && <span className="size-2 rounded-full bg-green-500" />}
+        {status === "warn" && <span className="size-2 rounded-full bg-amber-500" />}
         <span className="text-sm text-muted-foreground">{value}</span>
       </div>
     </div>

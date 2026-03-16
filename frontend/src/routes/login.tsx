@@ -1,13 +1,7 @@
 import { createFileRoute, redirect, useSearch } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
 import { AlertCircleIcon } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -30,8 +24,7 @@ export const Route = createFileRoute("/login")({
     // If already authenticated, redirect away from login
     if (data?.authenticated && !data.must_change_password) {
       const next = (search as LoginSearch).next;
-      const safeDest =
-        next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      const safeDest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
       throw redirect({ to: safeDest });
     }
 
@@ -46,8 +39,7 @@ function LoginPage() {
   const { error, next } = useSearch({ from: "/login" });
 
   // Sanitize redirect: must start with / and not //
-  const safeNext =
-    next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
 
   const form = useForm({
     defaultValues: {
@@ -85,9 +77,7 @@ function LoginPage() {
               className="size-10 rounded-xl shadow-[0_8px_20px_rgba(59,130,246,.12)]"
             />
             <CardTitle>Sign in to yoink</CardTitle>
-            <CardDescription>
-              Enter your credentials to access your library
-            </CardDescription>
+            <CardDescription>Enter your credentials to access your library</CardDescription>
           </CardHeader>
           <CardContent>
             <form
@@ -162,11 +152,7 @@ function LoginPage() {
 
               <form.Subscribe selector={(state) => state.isSubmitting}>
                 {(isSubmitting) => (
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isSubmitting}
-                  >
+                  <Button type="submit" className="w-full" disabled={isSubmitting}>
                     {isSubmitting ? "Signing in..." : "Sign In"}
                   </Button>
                 )}

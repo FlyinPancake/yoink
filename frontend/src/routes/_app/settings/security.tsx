@@ -26,10 +26,7 @@ export const Route = createFileRoute("/_app/settings/security")({
 
 function SecurityPage() {
   const { success, error } = useSearch({ from: "/_app/settings/security" });
-  const { data: authStatus, isLoading } = $api.useQuery(
-    "get",
-    "/api/auth/status",
-  );
+  const { data: authStatus, isLoading } = $api.useQuery("get", "/api/auth/status");
 
   if (isLoading) {
     return (
@@ -44,21 +41,13 @@ function SecurityPage() {
     return (
       <div className="max-w-lg rounded-xl border bg-card px-5 py-8 text-center text-sm text-muted-foreground shadow-sm">
         Authentication is disabled. Enable it via the{" "}
-        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-          AUTH_DISABLED
-        </code>{" "}
-        environment variable to manage credentials.
+        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">AUTH_DISABLED</code> environment
+        variable to manage credentials.
       </div>
     );
   }
 
-  return (
-    <SecurityForm
-      username={authStatus.username ?? ""}
-      success={success}
-      error={error}
-    />
-  );
+  return <SecurityForm username={authStatus.username ?? ""} success={success} error={error} />;
 }
 
 function SecurityForm({
@@ -107,9 +96,7 @@ function SecurityForm({
       <section className="rounded-xl border bg-card shadow-sm">
         <div className="border-b px-5 py-4">
           <h2 className="font-semibold">Update Credentials</h2>
-          <p className="text-xs text-muted-foreground">
-            Change your username or password.
-          </p>
+          <p className="text-xs text-muted-foreground">Change your username or password.</p>
         </div>
         <div className="px-5 py-5">
           <form
@@ -205,9 +192,7 @@ function SecurityForm({
             <form.Field name="confirm_password">
               {(field) => (
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="sec-confirm-password">
-                    Confirm New Password
-                  </Label>
+                  <Label htmlFor="sec-confirm-password">Confirm New Password</Label>
                   <Input
                     id="sec-confirm-password"
                     type="password"
@@ -239,11 +224,7 @@ function SecurityForm({
 
             <form.Subscribe selector={(state) => state.isSubmitting}>
               {(isSubmitting) => (
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isSubmitting}
-                >
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? "Updating..." : "Update Credentials"}
                 </Button>
               )}

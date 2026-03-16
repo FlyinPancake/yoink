@@ -12,9 +12,7 @@ function SettingsLayout() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your yoink instance configuration.
-        </p>
+        <p className="text-muted-foreground">Manage your yoink instance configuration.</p>
       </div>
       <Outlet />
     </div>

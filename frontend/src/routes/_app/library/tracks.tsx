@@ -11,11 +11,7 @@ export const Route = createFileRoute("/_app/library/tracks")({
 });
 
 function TracksPage() {
-  const {
-    data: tracks,
-    isLoading,
-    isError,
-  } = $api.useQuery("get", "/api/track");
+  const { data: tracks, isLoading, isError } = $api.useQuery("get", "/api/track");
 
   if (isLoading) {
     return (
@@ -25,7 +21,7 @@ function TracksPage() {
           <Skeleton className="mt-1 h-4 w-48" />
         </div>
         <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          <div className="p-4 space-y-3">
+          <div className="space-y-3 p-4">
             {Array.from({ length: 10 }).map((_, i) => (
               <Skeleton key={i} className="h-8 w-full" />
             ))}
@@ -67,28 +63,25 @@ function TracksPage() {
         <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-muted/50 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 py-3 w-10">#</th>
+              <tr className="border-b bg-muted/50 text-left text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                <th className="w-10 px-4 py-3">#</th>
                 <th className="px-4 py-3">Title</th>
-                <th className="px-4 py-3 hidden md:table-cell">Album</th>
-                <th className="px-4 py-3 hidden lg:table-cell">Artist</th>
-                <th className="px-4 py-3 w-20 text-right">Duration</th>
-                <th className="px-4 py-3 w-20 text-center">Status</th>
+                <th className="hidden px-4 py-3 md:table-cell">Album</th>
+                <th className="hidden px-4 py-3 lg:table-cell">Artist</th>
+                <th className="w-20 px-4 py-3 text-right">Duration</th>
+                <th className="w-20 px-4 py-3 text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {tracks.map((lt) => (
-                <tr
-                  key={lt.track.id}
-                  className="transition-colors hover:bg-muted/30"
-                >
-                  <td className="px-4 py-2.5 tabular-nums text-muted-foreground">
+                <tr key={lt.track.id} className="transition-colors hover:bg-muted/30">
+                  <td className="px-4 py-2.5 text-muted-foreground tabular-nums">
                     {lt.track.track_number}
                   </td>
                   <td className="px-4 py-2.5">
                     <span className="font-medium">{lt.track.title}</span>
                     {lt.track.explicit && (
-                      <span className="ml-1.5 inline-flex items-center justify-center rounded bg-muted px-1 text-[10px] font-bold uppercase text-muted-foreground">
+                      <span className="ml-1.5 inline-flex items-center justify-center rounded bg-muted px-1 text-[10px] font-bold text-muted-foreground uppercase">
                         E
                       </span>
                     )}
@@ -114,7 +107,7 @@ function TracksPage() {
                       {lt.artist_name}
                     </Link>
                   </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                  <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums">
                     {lt.track.duration_display}
                   </td>
                   <td className="px-4 py-2.5 text-center">

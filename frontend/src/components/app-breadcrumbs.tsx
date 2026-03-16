@@ -28,9 +28,7 @@ export function Breadcrumbs() {
                   <BreadcrumbPage>{match.label}</BreadcrumbPage>
                 ) : (
                   <BreadcrumbLink asChild>
-                    <Link to={match.pathname}>
-                      {match.label}
-                    </Link>
+                    <Link to={match.pathname}>{match.label}</Link>
                   </BreadcrumbLink>
                 )}
               </BreadcrumbItem>

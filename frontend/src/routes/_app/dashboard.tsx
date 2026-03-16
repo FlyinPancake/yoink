@@ -1,11 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  DiscAlbumIcon,
-  DownloadIcon,
-  HeartIcon,
-  LibraryIcon,
-  MicIcon,
-} from "lucide-react";
+import { DiscAlbumIcon, DownloadIcon, HeartIcon, LibraryIcon, MicIcon } from "lucide-react";
 import { $api } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -28,9 +22,7 @@ function StatCard({
   return (
     <div className="rounded-xl border bg-card p-5 shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-muted-foreground">
-          {label}
-        </span>
+        <span className="text-sm font-medium text-muted-foreground">{label}</span>
         <Icon className="size-4 text-muted-foreground" />
       </div>
       <p className="mt-2 text-2xl font-bold">{value}</p>
@@ -58,9 +50,7 @@ function DashboardPage() {
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Overview of your music library.
-          </p>
+          <p className="text-muted-foreground">Overview of your music library.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -80,9 +70,7 @@ function DashboardPage() {
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Overview of your music library.
-          </p>
+          <p className="text-muted-foreground">Overview of your music library.</p>
         </div>
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-400">
           Failed to load dashboard data.
@@ -95,17 +83,13 @@ function DashboardPage() {
 
   const totalArtists = artists.length;
   const totalAlbums = albums.length;
-  const wantedAlbums = albums.filter(
-    (a) => a.wanted || a.partially_wanted,
-  ).length;
+  const wantedAlbums = albums.filter((a) => a.wanted || a.partially_wanted).length;
   const acquiredAlbums = albums.filter((a) => a.acquired).length;
   const activeDownloads = jobs.filter((j) =>
     ["queued", "resolving", "downloading"].includes(j.status),
   ).length;
   const recentDownloads = jobs.slice(0, 3);
-  const wantedAlbumsList = albums
-    .filter((a) => a.wanted || a.partially_wanted)
-    .slice(0, 5);
+  const wantedAlbumsList = albums.filter((a) => a.wanted || a.partially_wanted).slice(0, 5);
 
   return (
     <div className="space-y-8">
@@ -119,11 +103,7 @@ function DashboardPage() {
         <StatCard label="Albums" value={totalAlbums} icon={DiscAlbumIcon} />
         <StatCard label="Wanted" value={wantedAlbums} icon={HeartIcon} />
         <StatCard label="Acquired" value={acquiredAlbums} icon={LibraryIcon} />
-        <StatCard
-          label="Active Downloads"
-          value={activeDownloads}
-          icon={DownloadIcon}
-        />
+        <StatCard label="Active Downloads" value={activeDownloads} icon={DownloadIcon} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -139,14 +119,9 @@ function DashboardPage() {
           ) : (
             <div className="divide-y">
               {recentDownloads.map((dl) => (
-                <div
-                  key={dl.id}
-                  className="flex items-center justify-between px-5 py-3"
-                >
+                <div key={dl.id} className="flex items-center justify-between px-5 py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {dl.album_title}
-                    </p>
+                    <p className="truncate text-sm font-medium">{dl.album_title}</p>
                     <p className="truncate text-xs text-muted-foreground">
                       {dl.artist_name} &middot; {dl.source}
                     </p>
@@ -182,9 +157,7 @@ function DashboardPage() {
                     className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-muted/50"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {album.title}
-                      </p>
+                      <p className="truncate text-sm font-medium">{album.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {artist?.name ?? "Unknown Artist"} &middot;{" "}
                         {album.release_date?.slice(0, 4)}

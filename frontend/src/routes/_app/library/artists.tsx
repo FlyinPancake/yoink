@@ -28,45 +28,29 @@ function ArtistsPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("az");
 
-  const {
-    data: artists,
-    isLoading,
-    isError,
-  } = $api.useQuery("get", "/api/artist");
+  const { data: artists, isLoading, isError } = $api.useQuery("get", "/api/artist");
 
   const filtered = useMemo(() => {
     if (!artists) return [];
     const q = search.trim().toLowerCase();
     let list = q
       ? artists.filter(
-          (a) =>
-            a.name.toLowerCase().includes(q) ||
-            (a.bio && a.bio.toLowerCase().includes(q)),
+          (a) => a.name.toLowerCase().includes(q) || (a.bio && a.bio.toLowerCase().includes(q)),
         )
       : [...artists];
 
     switch (sort) {
       case "az":
-        list.sort((a, b) =>
-          a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
-        );
+        list.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
         break;
       case "za":
-        list.sort((a, b) =>
-          b.name.toLowerCase().localeCompare(a.name.toLowerCase()),
-        );
+        list.sort((a, b) => b.name.toLowerCase().localeCompare(a.name.toLowerCase()));
         break;
       case "newest":
-        list.sort(
-          (a, b) =>
-            new Date(b.added_at).getTime() - new Date(a.added_at).getTime(),
-        );
+        list.sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime());
         break;
       case "oldest":
-        list.sort(
-          (a, b) =>
-            new Date(a.added_at).getTime() - new Date(b.added_at).getTime(),
-        );
+        list.sort((a, b) => new Date(a.added_at).getTime() - new Date(b.added_at).getTime());
         break;
     }
     return list;
@@ -82,10 +66,7 @@ function ArtistsPage() {
         <Skeleton className="h-9 w-full max-w-sm" />
         <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="overflow-hidden rounded-xl border bg-card p-5"
-            >
+            <div key={i} className="overflow-hidden rounded-xl border bg-card p-5">
               <div className="flex animate-pulse items-center gap-5">
                 <Skeleton className="size-16 shrink-0 rounded-full" />
                 <div className="min-w-0 flex-1">
@@ -119,8 +100,7 @@ function ArtistsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Artists</h1>
         <p className="text-muted-foreground">
-          {artists.length} artist{artists.length !== 1 ? "s" : ""} in your
-          library.
+          {artists.length} artist{artists.length !== 1 ? "s" : ""} in your library.
         </p>
       </div>
 
@@ -135,7 +115,7 @@ function ArtistsPage() {
           {/* ── Search & sort toolbar ──────────────────────── */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative max-w-sm flex-1">
-              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -191,17 +171,11 @@ function ArtistsPage() {
                         {artist.name}
                       </span>
                       {artist.monitored ? (
-                        <Badge
-                          variant="outline"
-                          className="border-blue-500/30 text-blue-500"
-                        >
+                        <Badge variant="outline" className="border-blue-500/30 text-blue-500">
                           Monitored
                         </Badge>
                       ) : (
-                        <Badge
-                          variant="outline"
-                          className="border-amber-500/30 text-amber-500"
-                        >
+                        <Badge variant="outline" className="border-amber-500/30 text-amber-500">
                           Lightweight
                         </Badge>
                       )}
@@ -212,9 +186,7 @@ function ArtistsPage() {
                         {artist.bio}
                       </p>
                     ) : (
-                      <p className="text-[13px] text-muted-foreground/50">
-                        No bio available
-                      </p>
+                      <p className="text-[13px] text-muted-foreground/50">No bio available</p>
                     )}
 
                     <div className="mt-1.5 text-[12px] text-muted-foreground/60">

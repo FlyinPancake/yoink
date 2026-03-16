@@ -137,25 +137,21 @@ export function useUnlinkArtistProvider() {
 
 export function useRefreshArtistMatchSuggestions() {
   const qc = useQueryClient();
-  return $api.useMutation(
-    "post",
-    "/api/artist/{artist_id}/match-suggestion/refresh",
-    {
-      onSuccess: (_data, variables) => {
-        void qc.invalidateQueries({
-          queryKey: [
-            "get",
-            "/api/artist/{artist_id}",
-            {
-              params: {
-                path: { artist_id: variables.params.path.artist_id },
-              },
+  return $api.useMutation("post", "/api/artist/{artist_id}/match-suggestion/refresh", {
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({
+        queryKey: [
+          "get",
+          "/api/artist/{artist_id}",
+          {
+            params: {
+              path: { artist_id: variables.params.path.artist_id },
             },
-          ],
-        });
-      },
+          },
+        ],
+      });
     },
-  );
+  });
 }
 
 // ── Album mutations ────────────────────────────────────────────
@@ -257,49 +253,41 @@ export function useToggleAlbumTrackMonitor() {
 
 export function useToggleSingleTrackMonitor() {
   const qc = useQueryClient();
-  return $api.useMutation(
-    "patch",
-    "/api/album/{album_id}/track/{track_id}/monitor",
-    {
-      onSuccess: (_data, variables) => {
-        void qc.invalidateQueries({
-          queryKey: [
-            "get",
-            "/api/album/{album_id}",
-            {
-              params: {
-                path: { album_id: variables.params.path.album_id },
-              },
+  return $api.useMutation("patch", "/api/album/{album_id}/track/{track_id}/monitor", {
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({
+        queryKey: [
+          "get",
+          "/api/album/{album_id}",
+          {
+            params: {
+              path: { album_id: variables.params.path.album_id },
             },
-          ],
-        });
-        void qc.invalidateQueries({ queryKey: ["get", "/api/wanted"] });
-      },
+          },
+        ],
+      });
+      void qc.invalidateQueries({ queryKey: ["get", "/api/wanted"] });
     },
-  );
+  });
 }
 
 export function useSetTrackQuality() {
   const qc = useQueryClient();
-  return $api.useMutation(
-    "patch",
-    "/api/album/{album_id}/track/{track_id}/quality",
-    {
-      onSuccess: (_data, variables) => {
-        void qc.invalidateQueries({
-          queryKey: [
-            "get",
-            "/api/album/{album_id}",
-            {
-              params: {
-                path: { album_id: variables.params.path.album_id },
-              },
+  return $api.useMutation("patch", "/api/album/{album_id}/track/{track_id}/quality", {
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({
+        queryKey: [
+          "get",
+          "/api/album/{album_id}",
+          {
+            params: {
+              path: { album_id: variables.params.path.album_id },
             },
-          ],
-        });
-      },
+          },
+        ],
+      });
     },
-  );
+  });
 }
 
 export function useAddAlbumArtist() {
@@ -319,25 +307,21 @@ export function useAddAlbumArtist() {
 
 export function useRemoveAlbumArtist() {
   const qc = useQueryClient();
-  return $api.useMutation(
-    "delete",
-    "/api/album/{album_id}/artist/{artist_id}",
-    {
-      onSuccess: (_data, variables) => {
-        void qc.invalidateQueries({
-          queryKey: [
-            "get",
-            "/api/album/{album_id}",
-            {
-              params: {
-                path: { album_id: variables.params.path.album_id },
-              },
+  return $api.useMutation("delete", "/api/album/{album_id}/artist/{artist_id}", {
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({
+        queryKey: [
+          "get",
+          "/api/album/{album_id}",
+          {
+            params: {
+              path: { album_id: variables.params.path.album_id },
             },
-          ],
-        });
-      },
+          },
+        ],
+      });
     },
-  );
+  });
 }
 
 // ── Track mutations ────────────────────────────────────────────
@@ -390,30 +374,22 @@ export function useClearCompletedJobs() {
 
 export function useAcceptMatchSuggestion() {
   const qc = useQueryClient();
-  return $api.useMutation(
-    "post",
-    "/api/match-suggestion/{suggestion_id}/accept",
-    {
-      onSuccess: () => {
-        void qc.invalidateQueries({ queryKey: ["get", "/api/artist"] });
-        void qc.invalidateQueries({ queryKey: ["get", "/api/album"] });
-      },
+  return $api.useMutation("post", "/api/match-suggestion/{suggestion_id}/accept", {
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["get", "/api/artist"] });
+      void qc.invalidateQueries({ queryKey: ["get", "/api/album"] });
     },
-  );
+  });
 }
 
 export function useDismissMatchSuggestion() {
   const qc = useQueryClient();
-  return $api.useMutation(
-    "post",
-    "/api/match-suggestion/{suggestion_id}/dismiss",
-    {
-      onSuccess: () => {
-        void qc.invalidateQueries({ queryKey: ["get", "/api/artist"] });
-        void qc.invalidateQueries({ queryKey: ["get", "/api/album"] });
-      },
+  return $api.useMutation("post", "/api/match-suggestion/{suggestion_id}/dismiss", {
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["get", "/api/artist"] });
+      void qc.invalidateQueries({ queryKey: ["get", "/api/album"] });
     },
-  );
+  });
 }
 
 // ── Import mutations ───────────────────────────────────────────
