@@ -126,7 +126,8 @@ All configuration is done via environment variables. See [`.env.example`](.env.e
 
 ## Built With
 
-yoink is built with **Rust** end-to-end — [Leptos](https://leptos.dev/) for the full-stack web UI with WebAssembly hydration, [Axum](https://github.com/tokio-rs/axum) for the server, [SQLite](https://www.sqlite.org/) via [SQLx](https://github.com/launchbadge/sqlx) for storage, and [Tailwind CSS](https://tailwindcss.com/) for styling. No Node.js runtime just a single binary and a database file.
+yoink is built with **Rust and React**, [Axum](https://github.com/tokio-rs/axum) for the server and [SQLite](https://www.sqlite.org/) via [SQLx](https://github.com/launchbadge/sqlx) for storage.
+The frontend is built with [Tanstack Start](https://tanstack.com/start) and [shadcn/ui](https://ui.shadcn.com/) for components.
 
 ## Contributing
 
