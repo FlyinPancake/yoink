@@ -15,6 +15,7 @@ import {
 import type { components } from "@/lib/api/types.gen";
 import { $api } from "@/lib/api";
 import { useSleeveGlow } from "@/hooks/use-sleeve-glow";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import {
   useAcceptMatchSuggestion,
   useDeleteArtist,
@@ -243,7 +244,7 @@ function ArtistDetailContent({
   defaultQuality: Quality;
 }) {
   const navigate = useNavigate();
-  const [albumSort, setAlbumSort] = useState("newest");
+  const [albumSort, setAlbumSort] = useLocalStorage("artist-detail-albums-sort", "newest");
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
 

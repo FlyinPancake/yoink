@@ -4,6 +4,7 @@ import { SearchIcon } from "lucide-react";
 import { $api } from "@/lib/api";
 import type { components } from "@/lib/api/types.gen";
 import { useSleeveGlow } from "@/hooks/use-sleeve-glow";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -63,7 +64,7 @@ function albumTypeRank(albumType: string | null | undefined): number {
 
 function AlbumsPage() {
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("newest");
+  const [sort, setSort] = useLocalStorage("albums-sort", "newest");
 
   const { data: albums, isLoading, isError } = $api.useQuery("get", "/api/album");
 

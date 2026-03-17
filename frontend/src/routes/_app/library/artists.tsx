@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
 import { $api } from "@/lib/api";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -26,7 +27,7 @@ function fallbackInitial(name: string): string {
 
 function ArtistsPage() {
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("az");
+  const [sort, setSort] = useLocalStorage("artists-sort", "az");
 
   const { data: artists, isLoading, isError } = $api.useQuery("get", "/api/artist");
 
