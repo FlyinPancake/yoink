@@ -9,7 +9,7 @@ COPY frontend/ .
 RUN bun run build
 
 # ── Stage 2: Chef — compute Rust dependency recipe ──────────
-FROM rust:1.87 AS chef
+FROM rust:1.94 AS chef
 
 RUN curl -fsSL https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz \
     | tar -xz -C /usr/local/cargo/bin && \
