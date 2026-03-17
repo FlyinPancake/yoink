@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLiveQuery } from "@tanstack/react-db";
 import {
   CheckCircle2Icon,
+  ChevronDownIcon,
   DiscAlbumIcon,
   Loader2Icon,
   MicIcon,
@@ -14,8 +15,14 @@ import {
 
 import { $api, getCollections, addedItemKey } from "@/lib/api";
 import { useCreateArtist, useCreateAlbum, useCreateTrack } from "@/lib/api/mutations";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import type { components } from "@/lib/api/types.gen";
 
 type SearchArtistResult = components["schemas"]["SearchArtistResult"];
@@ -57,6 +64,9 @@ function useAddedItemKeys(): Set<string> {
 function SearchPage() {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
+  const [artistsOpen, setArtistsOpen] = useLocalStorage("search-artists-open", "true");
+  const [albumsOpen, setAlbumsOpen] = useLocalStorage("search-albums-open", "true");
+  const [tracksOpen, setTracksOpen] = useLocalStorage("search-tracks-open", "true");
 
   const { data, isLoading, isError } = $api.useQuery(
     "get",
@@ -132,59 +142,83 @@ function SearchPage() {
         <div className="space-y-8">
           {/* Artists */}
           {data.artists.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wider text-muted-foreground uppercase">
-                <MicIcon className="size-4" />
-                Artists ({data.artists.length})
-              </h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {data.artists.map((artist) => (
-                  <ArtistResultCard
-                    key={`${artist.provider}-${artist.external_id}`}
-                    artist={artist}
-                    addedKeys={addedKeys}
-                  />
-                ))}
-              </div>
-            </section>
+            <Collapsible
+              open={artistsOpen === "true"}
+              onOpenChange={(open) => setArtistsOpen(open ? "true" : "false")}
+            >
+              <section className="space-y-3">
+                <CollapsibleTrigger className="group flex w-full items-center gap-2 text-sm font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground">
+                  <MicIcon className="size-4" />
+                  Artists ({data.artists.length})
+                  <ChevronDownIcon className="ml-auto size-4 transition-transform group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {data.artists.map((artist) => (
+                      <ArtistResultCard
+                        key={`${artist.provider}-${artist.external_id}`}
+                        artist={artist}
+                        addedKeys={addedKeys}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </section>
+            </Collapsible>
           )}
 
           {/* Albums */}
           {data.albums.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wider text-muted-foreground uppercase">
-                <DiscAlbumIcon className="size-4" />
-                Albums ({data.albums.length})
-              </h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {data.albums.map((album) => (
-                  <AlbumResultCard
-                    key={`${album.provider}-${album.external_id}`}
-                    album={album}
-                    addedKeys={addedKeys}
-                  />
-                ))}
-              </div>
-            </section>
+            <Collapsible
+              open={albumsOpen === "true"}
+              onOpenChange={(open) => setAlbumsOpen(open ? "true" : "false")}
+            >
+              <section className="space-y-3">
+                <CollapsibleTrigger className="group flex w-full items-center gap-2 text-sm font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground">
+                  <DiscAlbumIcon className="size-4" />
+                  Albums ({data.albums.length})
+                  <ChevronDownIcon className="ml-auto size-4 transition-transform group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {data.albums.map((album) => (
+                      <AlbumResultCard
+                        key={`${album.provider}-${album.external_id}`}
+                        album={album}
+                        addedKeys={addedKeys}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </section>
+            </Collapsible>
           )}
 
           {/* Tracks */}
           {data.tracks.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wider text-muted-foreground uppercase">
-                <MusicIcon className="size-4" />
-                Tracks ({data.tracks.length})
-              </h2>
-              <div className="space-y-1">
-                {data.tracks.map((track) => (
-                  <TrackResultRow
-                    key={`${track.provider}-${track.external_id}`}
-                    track={track}
-                    addedKeys={addedKeys}
-                  />
-                ))}
-              </div>
-            </section>
+            <Collapsible
+              open={tracksOpen === "true"}
+              onOpenChange={(open) => setTracksOpen(open ? "true" : "false")}
+            >
+              <section className="space-y-3">
+                <CollapsibleTrigger className="group flex w-full items-center gap-2 text-sm font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground">
+                  <MusicIcon className="size-4" />
+                  Tracks ({data.tracks.length})
+                  <ChevronDownIcon className="ml-auto size-4 transition-transform group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="space-y-1">
+                    {data.tracks.map((track) => (
+                      <TrackResultRow
+                        key={`${track.provider}-${track.external_id}`}
+                        track={track}
+                        addedKeys={addedKeys}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </section>
+            </Collapsible>
           )}
         </div>
       )}
