@@ -58,14 +58,16 @@ See the [compose.yaml](compose.yaml) for all available environment variables and
 #### Prerequisites
 
 - [Rust](https://rustup.rs/) (stable toolchain)
-- [mise](https://mise.jdx.dev/) (manages cargo-leptos and sqlx-cli automatically)
+- [bun](https://bun.sh/) (installed through mise)
+- [mise](https://mise.jdx.dev/) (manages sqlx-cli automatically)
 
 #### Setup
 
 ```bash
 git clone https://github.com/FlyinPancake/yoink.git
 cd yoink
-mise install # this installs cargo-leptos and sqlx-cli, which are required for development and running the app from source
+mise install # this installs bun which is required for development and running the app from source
+cd frontend && bun install # installs frontend dependencies
 ```
 
 Copy the example environment file and configure your providers:
@@ -74,10 +76,19 @@ Copy the example environment file and configure your providers:
 cp .env.example .env
 ```
 
-Then start yoink:
+Then start yoink dev server:
 
 ```bash
 mise run dev
+```
+
+The web UI will be available at **[http://localhost:5173](http://localhost:5173)**.
+
+If you want to run the release version you need to build the frontend first
+
+```bash
+mise build-frontend
+mise run-server --release
 ```
 
 The web UI will be available at **[http://localhost:3000](http://localhost:3000)**.
