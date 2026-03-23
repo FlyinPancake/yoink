@@ -19,6 +19,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, Semaphore};
 use tracing::{debug, warn};
 
+use crate::db::{provider::Provider, quality::Quality};
+
 use self::{
     matching::{pick_best_candidate, pick_from_album_bundle},
     models::*,
@@ -26,7 +28,6 @@ use self::{
     util::{dedup_queries, normalize, percent_encode_path, sanitize_relative_path},
 };
 use super::{DownloadSource, DownloadTrackContext, PlaybackInfo, ProviderError};
-use yoink_shared::Quality;
 
 // ── Source ───────────────────────────────────────────────────────────
 
@@ -65,8 +66,8 @@ impl SoulSeekSource {
 
 #[async_trait]
 impl DownloadSource for SoulSeekSource {
-    fn id(&self) -> &str {
-        "soulseek"
+    fn id(&self) -> Provider {
+        Provider::Soulseek
     }
 
     fn requires_linked_provider(&self) -> bool {

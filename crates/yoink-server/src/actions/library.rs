@@ -1,10 +1,10 @@
 use tracing::{info, warn};
 
-use yoink_shared::{ImportConfirmation, ManualImportMode};
+use yoink_shared::ImportConfirmation;
 
 use crate::{error::AppResult, services, state::AppState};
 
-pub(super) async fn retag_library(state: &AppState) -> AppResult<()> {
+pub(crate) async fn retag_library(state: &AppState) -> AppResult<()> {
     let s = state.clone();
     tokio::spawn(async move {
         match services::retag_existing_files(&s).await {
@@ -24,16 +24,14 @@ pub(super) async fn retag_library(state: &AppState) -> AppResult<()> {
     Ok(())
 }
 
-pub(super) async fn scan_import_library(state: &AppState) -> AppResult<()> {
+pub(crate) async fn scan_import_library(state: &AppState) -> AppResult<()> {
     let s = state.clone();
     tokio::spawn(async move {
         match services::scan_and_import_library(&s).await {
             Ok(summary) => {
                 info!(
-                    discovered = summary.discovered_albums,
-                    imported = summary.imported_albums,
-                    artists_added = summary.artists_added,
-                    unmatched = summary.unmatched_albums,
+                    imported = summary.imported,
+                    failed = summary.failed,
                     "Completed scan/import pass"
                 );
             }
@@ -45,53 +43,30 @@ pub(super) async fn scan_import_library(state: &AppState) -> AppResult<()> {
     Ok(())
 }
 
-pub(super) async fn confirm_import(
+pub(crate) async fn confirm_import(
     state: &AppState,
-    items: Vec<yoink_shared::ImportConfirmation>,
+    items: Vec<ImportConfirmation>,
 ) -> AppResult<()> {
     let summary = services::confirm_import_library(state, items).await?;
     info!(
-        total = summary.total_selected,
         imported = summary.imported,
-        artists_added = summary.artists_added,
         failed = summary.failed,
         "Confirmed import completed"
     );
-    if !summary.errors.is_empty() {
-        warn!(
-            imported = summary.imported,
-            total = summary.total_selected,
-            errors = %summary.errors.join("; "),
-            "Confirmed import completed with partial failures"
-        );
-    }
     Ok(())
 }
 
-pub(super) async fn confirm_external_import(
+pub(crate) async fn confirm_external_import(
     state: &AppState,
     source_path: String,
-    mode: ManualImportMode,
+    _mode: String,
     items: Vec<ImportConfirmation>,
 ) -> AppResult<()> {
-    let summary = services::confirm_external_import(state, &source_path, mode, items).await?;
+    let summary = services::confirm_external_import(state, source_path, _mode, items).await?;
     info!(
-        total = summary.total_selected,
         imported = summary.imported,
-        artists_added = summary.artists_added,
         failed = summary.failed,
-        source = %source_path,
-        mode = ?mode,
         "External import completed"
     );
-    if !summary.errors.is_empty() {
-        warn!(
-            imported = summary.imported,
-            total = summary.total_selected,
-            source = %source_path,
-            errors = %summary.errors.join("; "),
-            "External import completed with partial failures"
-        );
-    }
     Ok(())
 }

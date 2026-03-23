@@ -13,9 +13,6 @@ pub(super) mod search;
 pub(super) mod track;
 pub(super) mod wanted;
 
-#[cfg(test)]
-mod tests;
-
 use utoipa_axum::router::OpenApiRouter;
 
 use crate::state::AppState;

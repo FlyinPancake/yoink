@@ -13,6 +13,8 @@ use musicbrainz_rs::{
 use serde_json::Value;
 use tracing::{debug, warn};
 
+use crate::db::provider::Provider;
+
 use super::{
     MetadataProvider, ProviderAlbum, ProviderArtist, ProviderError, ProviderSearchAlbum,
     ProviderTrack,
@@ -361,8 +363,8 @@ fn primary_type_str(pt: &ReleaseGroupPrimaryType) -> &'static str {
 
 #[async_trait]
 impl MetadataProvider for MusicBrainzProvider {
-    fn id(&self) -> &str {
-        "musicbrainz"
+    fn id(&self) -> Provider {
+        Provider::MusicBrainz
     }
 
     fn display_name(&self) -> &str {
@@ -523,9 +525,9 @@ impl MetadataProvider for MusicBrainzProvider {
                             external_id: track.id.clone(),
                             title: track.title.clone(),
                             version: None,
-                            track_number: track.position,
-                            disc_number: Some(disc_number),
-                            duration_secs,
+                            track_number: track.position.try_into().unwrap_or(0),
+                            disc_number: Some(disc_number.try_into().unwrap_or(0)),
+                            duration_secs: duration_secs.try_into().unwrap_or(0),
                             isrc,
                             artists,
                             explicit: false,

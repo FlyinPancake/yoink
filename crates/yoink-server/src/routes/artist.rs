@@ -3,35 +3,31 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
 };
+use sea_orm::{EntityLoaderTrait, EntityTrait};
 use serde::{Deserialize, Serialize};
+use url::Url;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
 use yoink_shared::{
-    ArtistImageOption, MatchSuggestion, MonitoredAlbum, MonitoredArtist, ProviderLink, Quality,
-    SearchArtistResult, ServerAction,
+    Album, ArtistImageOption, MatchSuggestion, MonitoredArtist, ProviderLink, SearchArtistResult,
 };
 
 use crate::{
-    actions::dispatch_action_impl, db, error::AppError, server_context::build_server_context,
+    db::{self, quality::Quality},
+    error::AppError,
+    services::{self, search::SearchQuery},
     state::AppState,
 };
 
-use super::helpers::{
-    ApiErrorResponse, app_error_response, enrich_artist_results, parse_uuid, yoink_error_response,
-};
+use super::helpers::{ApiErrorResponse, app_error_response};
 
 pub(crate) const TAG: &str = "Artist";
 pub(crate) const TAG_DESCRIPTION: &str = "Endpoints for artist search, lookup, and lifecycle";
 
 type ApiResult<T> = Result<Json<T>, ApiErrorResponse>;
 type ApiStatusResult = Result<StatusCode, ApiErrorResponse>;
-
-#[derive(Debug, Deserialize, ToSchema)]
-struct ArtistSearchQuery {
-    query: String,
-}
 
 #[derive(Debug, Deserialize, ToSchema)]
 struct DeleteArtistQuery {
@@ -45,9 +41,9 @@ struct CreateArtistRequest {
     provider: String,
     external_id: String,
     #[serde(default)]
-    image_url: Option<String>,
+    image_url: Option<Url>,
     #[serde(default)]
-    external_url: Option<String>,
+    external_url: Option<Url>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -55,7 +51,7 @@ struct UpdateArtistRequest {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
-    image_url: Option<String>,
+    image_url: Option<Url>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -84,7 +80,7 @@ struct UnlinkArtistProviderRequest {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 struct ArtistDetailResponse {
     artist: MonitoredArtist,
-    albums: Vec<MonitoredAlbum>,
+    albums: Vec<Album>,
     provider_links: Vec<ProviderLink>,
     match_suggestions: Vec<MatchSuggestion>,
     default_quality: Quality,
@@ -126,19 +122,12 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
 /// string and returns the aggregated results.
 async fn search_artists(
     State(state): State<AppState>,
-    Query(query): Query<ArtistSearchQuery>,
+    Query(query): Query<SearchQuery>,
 ) -> ApiResult<Vec<SearchArtistResult>> {
-    let trimmed = query.query.trim();
-    if trimmed.is_empty() {
-        return Ok(Json(Vec::new()));
-    }
-
-    let ctx = build_server_context(&state);
-    let mut results = (ctx.search_artists)(trimmed.to_string())
+    services::search::search_aritsts(&state.db, &state.registry, &query)
         .await
-        .map_err(yoink_error_response)?;
-    enrich_artist_results(&state.db, &mut results).await;
-    Ok(Json(results))
+        .map_err(app_error_response)
+        .map(Json)
 }
 
 #[utoipa::path(
@@ -154,9 +143,11 @@ async fn search_artists(
 ///
 /// Returns all locally monitored artists from the library database.
 async fn list_artists(State(state): State<AppState>) -> ApiResult<Vec<MonitoredArtist>> {
-    let artists = db::load_artists(&state.db)
+    let artists = db::artist::Entity::find()
+        .all(&state.db)
         .await
-        .map_err(|error| app_error_response(error.into()))?;
+        .map(|models| models.into_iter().map(Into::into).collect())
+        .map_err(|e| app_error_response(e.into()))?;
     Ok(Json(artists))
 }
 
@@ -179,15 +170,13 @@ async fn create_artist(
     State(state): State<AppState>,
     Json(request): Json<CreateArtistRequest>,
 ) -> ApiStatusResult {
-    dispatch_action_impl(
-        state,
-        ServerAction::AddArtist {
-            name: request.name,
-            provider: request.provider,
-            external_id: request.external_id,
-            image_url: request.image_url,
-            external_url: request.external_url,
-        },
+    services::artist::add_artist(
+        &state,
+        request.name,
+        request.provider,
+        request.external_id,
+        request.image_url,
+        request.external_url,
     )
     .await
     .map_err(app_error_response)?;
@@ -200,7 +189,7 @@ async fn create_artist(
     path = "/{artist_id}",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     responses(
         (status = 200, description = "Artist detail payload", body = ArtistDetailResponse),
@@ -214,27 +203,43 @@ async fn create_artist(
 /// suggestions for a single artist.
 async fn get_artist(
     State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    Path(artist_id): Path<Uuid>,
 ) -> ApiResult<ArtistDetailResponse> {
-    let artist_id = parse_artist_id(&artist_id)?;
-    let artist = require_artist(&state, artist_id).await?;
+    let loaded = db::artist::Entity::load()
+        .filter_by_id(artist_id)
+        .with(db::album::Entity)
+        .with(db::artist_provider_link::Entity)
+        .one(&state.db)
+        .await
+        .map_err(|e| app_error_response(e.into()))?
+        .ok_or_else(|| {
+            app_error_response(AppError::not_found("artist", Some(artist_id.to_string())))
+        })?;
 
-    let albums = {
-        let albums = state.monitored_albums.read().await;
-        albums
-            .iter()
-            .filter(|album| album.artist_id == artist_id || album.artist_ids.contains(&artist_id))
-            .cloned()
-            .collect()
+    let db::artist::ModelEx {
+        id,
+        name,
+        image_url,
+        bio,
+        monitored,
+        created_at,
+        modified_at: _,
+        albums: loaded_albums,
+        provider_links: loaded_links,
+    } = loaded;
+
+    let artist = MonitoredArtist {
+        id,
+        name,
+        image_url: image_url.map(Into::into),
+        bio,
+        monitored,
+        created_at,
     };
+    let albums: Vec<Album> = loaded_albums.into_iter().map(Into::into).collect();
+    let provider_links: Vec<ProviderLink> = loaded_links.into_iter().map(Into::into).collect();
 
-    let ctx = build_server_context(&state);
-    let provider_links = (ctx.fetch_artist_links)(artist_id)
-        .await
-        .map_err(yoink_error_response)?;
-    let match_suggestions = (ctx.fetch_artist_match_suggestions)(artist_id)
-        .await
-        .map_err(yoink_error_response)?;
+    let match_suggestions = vec![]; // FIXME fetch pending match suggestions for this artist
 
     Ok(Json(ArtistDetailResponse {
         artist,
@@ -250,7 +255,7 @@ async fn get_artist(
     path = "/{artist_id}",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     request_body = UpdateArtistRequest,
     responses(
@@ -264,22 +269,12 @@ async fn get_artist(
 /// Updates editable local artist fields such as name and image URL.
 async fn update_artist(
     State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    Path(artist_id): Path<Uuid>,
     Json(request): Json<UpdateArtistRequest>,
 ) -> ApiStatusResult {
-    let artist_id = parse_artist_id(&artist_id)?;
-    require_artist(&state, artist_id).await?;
-
-    dispatch_action_impl(
-        state,
-        ServerAction::UpdateArtist {
-            artist_id,
-            name: request.name,
-            image_url: request.image_url,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::artist::update_artist(&state, artist_id, request.name, request.image_url)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -289,7 +284,7 @@ async fn update_artist(
     path = "/{artist_id}",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID"),
+        ("artist_id" = Uuid, Path, description = "Artist UUID"),
         ("remove_files" = Option<bool>, Query, description = "Whether to remove downloaded files")
     ),
     responses(
@@ -304,21 +299,12 @@ async fn update_artist(
 /// files associated with that artist.
 async fn delete_artist(
     State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    Path(artist_id): Path<Uuid>,
     Query(query): Query<DeleteArtistQuery>,
 ) -> ApiStatusResult {
-    let artist_id = parse_artist_id(&artist_id)?;
-    require_artist(&state, artist_id).await?;
-
-    dispatch_action_impl(
-        state,
-        ServerAction::RemoveArtist {
-            artist_id,
-            remove_files: query.remove_files,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::artist::remove_artist(&state, artist_id, query.remove_files)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -328,7 +314,7 @@ async fn delete_artist(
     path = "/{artist_id}/monitor",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     request_body = ToggleArtistMonitorRequest,
     responses(
@@ -342,21 +328,12 @@ async fn delete_artist(
 /// Enables or disables full monitoring for an artist.
 async fn toggle_artist_monitor(
     State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    Path(artist_id): Path<Uuid>,
     Json(request): Json<ToggleArtistMonitorRequest>,
 ) -> ApiStatusResult {
-    let artist_id = parse_artist_id(&artist_id)?;
-    require_artist(&state, artist_id).await?;
-
-    dispatch_action_impl(
-        state,
-        ServerAction::ToggleArtistMonitor {
-            artist_id,
-            monitored: request.monitored,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::artist::toggle_artist_monitor(&state, artist_id, request.monitored)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -366,7 +343,7 @@ async fn toggle_artist_monitor(
     path = "/{artist_id}/sync",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     responses(
         (status = 204, description = "Artist albums synced"),
@@ -380,12 +357,9 @@ async fn toggle_artist_monitor(
 /// provider metadata.
 async fn sync_artist(
     State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    Path(artist_id): Path<Uuid>,
 ) -> ApiStatusResult {
-    let artist_id = parse_artist_id(&artist_id)?;
-    require_artist(&state, artist_id).await?;
-
-    dispatch_action_impl(state, ServerAction::SyncArtistAlbums { artist_id })
+    services::artist::sync_artist_albums(&state, artist_id)
         .await
         .map_err(app_error_response)?;
 
@@ -397,7 +371,7 @@ async fn sync_artist(
     path = "/{artist_id}/fetch-bio",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     responses(
         (status = 204, description = "Artist bio refresh triggered"),
@@ -410,12 +384,9 @@ async fn sync_artist(
 /// Starts a background refresh of the artist biography from linked providers.
 async fn fetch_artist_bio(
     State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    Path(artist_id): Path<Uuid>,
 ) -> ApiStatusResult {
-    let artist_id = parse_artist_id(&artist_id)?;
-    require_artist(&state, artist_id).await?;
-
-    dispatch_action_impl(state, ServerAction::FetchArtistBio { artist_id })
+    services::artist::fetch_artist_bio(&state, artist_id)
         .await
         .map_err(app_error_response)?;
 
@@ -427,7 +398,7 @@ async fn fetch_artist_bio(
     path = "/{artist_id}/provider",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     responses(
         (status = 200, description = "Provider links for the artist", body = Vec<ProviderLink>),
@@ -440,15 +411,15 @@ async fn fetch_artist_bio(
 /// Returns the provider links currently attached to a local artist.
 async fn list_artist_providers(
     State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    Path(artist_id): Path<Uuid>,
 ) -> ApiResult<Vec<ProviderLink>> {
-    let artist_id = parse_artist_id(&artist_id)?;
-    require_artist(&state, artist_id).await?;
-
-    let ctx = build_server_context(&state);
-    let links = (ctx.fetch_artist_links)(artist_id)
+    let links = db::artist_provider_link::Entity::find_by_artist(artist_id)
+        .all(&state.db)
         .await
-        .map_err(yoink_error_response)?;
+        .map_err(|e| app_error_response(e.into()))?
+        .into_iter()
+        .map(Into::into)
+        .collect();
 
     Ok(Json(links))
 }
@@ -458,7 +429,7 @@ async fn list_artist_providers(
     path = "/{artist_id}/provider",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     request_body = LinkArtistProviderRequest,
     responses(
@@ -472,22 +443,17 @@ async fn list_artist_providers(
 /// Attaches a provider identity to an existing local artist.
 async fn link_artist_provider(
     State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    Path(artist_id): Path<Uuid>,
     Json(request): Json<LinkArtistProviderRequest>,
 ) -> ApiStatusResult {
-    let artist_id = parse_artist_id(&artist_id)?;
-    require_artist(&state, artist_id).await?;
-
-    dispatch_action_impl(
-        state,
-        ServerAction::LinkArtistProvider {
-            artist_id,
-            provider: request.provider,
-            external_id: request.external_id,
-            external_url: request.external_url,
-            external_name: request.external_name,
-            image_ref: request.image_ref,
-        },
+    services::artist::link_artist_provider(
+        &state,
+        artist_id,
+        request.provider,
+        request.external_id,
+        request.external_url,
+        request.external_name,
+        request.image_ref,
     )
     .await
     .map_err(app_error_response)?;
@@ -500,7 +466,7 @@ async fn link_artist_provider(
     path = "/{artist_id}/provider",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     request_body = UnlinkArtistProviderRequest,
     responses(
@@ -514,19 +480,14 @@ async fn link_artist_provider(
 /// Removes a provider identity from an existing local artist.
 async fn unlink_artist_provider(
     State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    Path(artist_id): Path<Uuid>,
     Json(request): Json<UnlinkArtistProviderRequest>,
 ) -> ApiStatusResult {
-    let artist_id = parse_artist_id(&artist_id)?;
-    require_artist(&state, artist_id).await?;
-
-    dispatch_action_impl(
-        state,
-        ServerAction::UnlinkArtistProvider {
-            artist_id,
-            provider: request.provider,
-            external_id: request.external_id,
-        },
+    services::artist::unlink_artist_provider(
+        &state,
+        artist_id,
+        request.provider,
+        request.external_id,
     )
     .await
     .map_err(app_error_response)?;
@@ -539,7 +500,7 @@ async fn unlink_artist_provider(
     path = "/{artist_id}/image",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     responses(
         (status = 200, description = "Available artist images from linked providers", body = Vec<ArtistImageOption>),
@@ -552,18 +513,12 @@ async fn unlink_artist_provider(
 /// Returns candidate artist images collected from the artist's linked
 /// providers.
 async fn get_artist_images(
-    State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    State(_state): State<AppState>,
+    Path(_artist_id): Path<Uuid>,
 ) -> ApiResult<Vec<ArtistImageOption>> {
-    let artist_id = parse_artist_id(&artist_id)?;
-    require_artist(&state, artist_id).await?;
-
-    let ctx = build_server_context(&state);
-    let images = (ctx.fetch_artist_images)(artist_id)
-        .await
-        .map_err(yoink_error_response)?;
-
-    Ok(Json(images))
+    // FIXME this currently just returns nothing
+    // fetch all provider links for the artist, then for each provider fetch candidate images and return them all
+    Ok(Json(vec![]))
 }
 
 #[utoipa::path(
@@ -571,7 +526,7 @@ async fn get_artist_images(
     path = "/{artist_id}/match-suggestion/refresh",
     tag = TAG,
     params(
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     responses(
         (status = 204, description = "Artist match suggestions refreshed"),
@@ -584,32 +539,12 @@ async fn get_artist_images(
 /// Recomputes pending artist match suggestions for the specified artist.
 async fn refresh_match_suggestions(
     State(state): State<AppState>,
-    Path(artist_id): Path<String>,
+    Path(artist_id): Path<Uuid>,
 ) -> ApiStatusResult {
-    let artist_id = parse_artist_id(&artist_id)?;
-    require_artist(&state, artist_id).await?;
-
-    dispatch_action_impl(state, ServerAction::RefreshMatchSuggestions { artist_id })
+    services::recompute_artist_match_suggestions(&state, artist_id)
         .await
         .map_err(app_error_response)?;
+    state.notify_sse();
 
     Ok(StatusCode::NO_CONTENT)
-}
-
-fn parse_artist_id(raw: &str) -> Result<Uuid, ApiErrorResponse> {
-    parse_uuid(raw, "artist_id")
-}
-
-async fn require_artist(
-    state: &AppState,
-    artist_id: Uuid,
-) -> Result<MonitoredArtist, ApiErrorResponse> {
-    let artists = state.monitored_artists.read().await;
-    artists
-        .iter()
-        .find(|artist| artist.id == artist_id)
-        .cloned()
-        .ok_or_else(|| {
-            app_error_response(AppError::not_found("artist", Some(artist_id.to_string())))
-        })
 }

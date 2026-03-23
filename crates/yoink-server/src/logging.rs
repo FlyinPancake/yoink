@@ -2,7 +2,8 @@ use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
 pub(crate) fn init_logging(format: &str) {
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,sqlx=warn"));
     let format = format.to_ascii_lowercase();
     let mut fallback_from = None;
 

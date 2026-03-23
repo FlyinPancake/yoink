@@ -13,9 +13,11 @@ pub(crate) mod models;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
+use sea_orm::ActiveEnum;
 use tokio::sync::RwLock;
 use tracing::warn;
-use yoink_shared::Quality;
+
+use crate::db::{provider::Provider, quality::Quality};
 
 use self::{
     api::hifi_get_json,
@@ -74,8 +76,8 @@ impl TidalProvider {
 
 #[async_trait]
 impl MetadataProvider for TidalProvider {
-    fn id(&self) -> &str {
-        "tidal"
+    fn id(&self) -> Provider {
+        Provider::Tidal
     }
 
     fn display_name(&self) -> &str {
@@ -194,7 +196,7 @@ impl MetadataProvider for TidalProvider {
                     external_id: track.id.to_string(),
                     title: track.title,
                     version: track.version,
-                    track_number: track.track_number.unwrap_or((idx + 1) as u32),
+                    track_number: track.track_number.unwrap_or((idx + 1) as i32),
                     disc_number: None, // extracted later from extra
                     duration_secs: track.duration.unwrap_or(0),
                     isrc: None,
@@ -355,8 +357,8 @@ impl MetadataProvider for TidalProvider {
 
 #[async_trait]
 impl DownloadSource for TidalProvider {
-    fn id(&self) -> &str {
-        "tidal"
+    fn id(&self) -> Provider {
+        Provider::Tidal
     }
 
     async fn resolve_playback(

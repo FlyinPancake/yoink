@@ -6,6 +6,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use tracing::warn;
 
+use crate::db::provider::Provider;
+
 use super::{
     MetadataProvider, ProviderAlbum, ProviderArtist, ProviderError, ProviderSearchAlbum,
     ProviderSearchTrack, ProviderTrack,
@@ -82,11 +84,11 @@ struct DeezerTrack {
     #[serde(default)]
     isrc: Option<String>,
     /// Duration in seconds.
-    duration: u32,
+    duration: i32,
     #[serde(default)]
-    track_position: Option<u32>,
+    track_position: Option<i32>,
     #[serde(default)]
-    disk_number: Option<u32>,
+    disk_number: Option<i32>,
     #[serde(default)]
     explicit_lyrics: bool,
     #[serde(default)]
@@ -328,8 +330,8 @@ fn map_record_type(record_type: &str) -> &str {
 
 #[async_trait]
 impl MetadataProvider for DeezerProvider {
-    fn id(&self) -> &str {
-        "deezer"
+    fn id(&self) -> Provider {
+        Provider::Deezer
     }
 
     fn display_name(&self) -> &str {

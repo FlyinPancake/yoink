@@ -3,25 +3,22 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
 };
-use serde::{Deserialize, Serialize};
+use sea_orm::EntityTrait;
+use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
-use yoink_shared::{
-    DownloadJob, MatchSuggestion, MonitoredAlbum, MonitoredArtist, ProviderLink, Quality,
-    SearchAlbumResult, ServerAction, TrackInfo,
-};
+use yoink_shared::{Album, ProviderLink, SearchAlbumResult, TrackInfo};
 
 use crate::{
-    actions::dispatch_action_impl, db, error::AppError, server_context::build_server_context,
+    db::{self, provider::Provider, quality::Quality},
+    error::AppError,
+    services::{self, album::AlbumDetailResponse, search::SearchQuery},
     state::AppState,
 };
 
-use super::helpers::{
-    ApiErrorResponse, app_error_response, enrich_album_results, parse_uuid as parse_uuid_param,
-    yoink_error_response,
-};
+use super::helpers::{ApiErrorResponse, app_error_response};
 
 pub(crate) const TAG: &str = "Album";
 pub(crate) const TAG_DESCRIPTION: &str = "Endpoints for album search, lookup, and lifecycle";
@@ -30,13 +27,8 @@ type ApiResult<T> = Result<Json<T>, ApiErrorResponse>;
 type ApiStatusResult = Result<StatusCode, ApiErrorResponse>;
 
 #[derive(Debug, Deserialize, ToSchema)]
-struct AlbumSearchQuery {
-    query: String,
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
 struct CreateAlbumRequest {
-    provider: String,
+    provider: Provider,
     external_album_id: String,
     artist_external_id: String,
     artist_name: String,
@@ -86,26 +78,6 @@ struct MergeAlbumsRequest {
     result_cover_url: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
-struct ResolvedArtistCredit {
-    name: String,
-    artist_id: Option<Uuid>,
-    provider: Option<String>,
-    external_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-struct AlbumDetailResponse {
-    album: MonitoredAlbum,
-    artist: Option<MonitoredArtist>,
-    album_artists: Vec<ResolvedArtistCredit>,
-    tracks: Vec<TrackInfo>,
-    jobs: Vec<DownloadJob>,
-    provider_links: Vec<ProviderLink>,
-    match_suggestions: Vec<MatchSuggestion>,
-    default_quality: Quality,
-}
-
 pub(super) fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
         .routes(routes!(search_albums))
@@ -126,6 +98,43 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(remove_album_artist))
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────
+
+async fn require_album(state: &AppState, album_id: Uuid) -> Result<(), ApiErrorResponse> {
+    db::album::Entity::find_by_id(album_id)
+        .one(&state.db)
+        .await
+        .map_err(|e| app_error_response(e.into()))?
+        .ok_or_else(|| {
+            app_error_response(AppError::not_found("album", Some(album_id.to_string())))
+        })?;
+    Ok(())
+}
+
+async fn require_artist(state: &AppState, artist_id: Uuid) -> Result<(), ApiErrorResponse> {
+    db::artist::Entity::find_by_id(artist_id)
+        .one(&state.db)
+        .await
+        .map_err(|e| app_error_response(e.into()))?
+        .ok_or_else(|| {
+            app_error_response(AppError::not_found("artist", Some(artist_id.to_string())))
+        })?;
+    Ok(())
+}
+
+async fn require_track(state: &AppState, track_id: Uuid) -> Result<(), ApiErrorResponse> {
+    db::track::Entity::find_by_id(track_id)
+        .one(&state.db)
+        .await
+        .map_err(|e| app_error_response(e.into()))?
+        .ok_or_else(|| {
+            app_error_response(AppError::not_found("track", Some(track_id.to_string())))
+        })?;
+    Ok(())
+}
+
+// ── Routes ───────────────────────────────────────────────────────────
+
 /// Search Albums
 ///
 /// Searches all registered metadata providers for albums matching the query
@@ -144,19 +153,12 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
 )]
 async fn search_albums(
     State(state): State<AppState>,
-    Query(query): Query<AlbumSearchQuery>,
+    Query(query): Query<SearchQuery>,
 ) -> ApiResult<Vec<SearchAlbumResult>> {
-    let trimmed = query.query.trim();
-    if trimmed.is_empty() {
-        return Ok(Json(Vec::new()));
-    }
-
-    let ctx = build_server_context(&state);
-    let mut results = (ctx.search_albums)(trimmed.to_string())
+    services::search::search_albums(&state.db, &state.registry, &query)
         .await
-        .map_err(yoink_error_response)?;
-    enrich_album_results(&state.db, &mut results).await;
-    Ok(Json(results))
+        .map_err(app_error_response)
+        .map(Json)
 }
 
 /// List Albums
@@ -167,14 +169,16 @@ async fn search_albums(
     path = "/",
     tag = TAG,
     responses(
-        (status = 200, description = "All local albums", body = Vec<MonitoredAlbum>),
+        (status = 200, description = "All local albums", body = Vec<Album>),
         (status = 500, description = "Failed to load albums"),
     )
 )]
-async fn list_albums(State(state): State<AppState>) -> ApiResult<Vec<MonitoredAlbum>> {
-    let albums = db::load_albums(&state.db)
+async fn list_albums(State(state): State<AppState>) -> ApiResult<Vec<Album>> {
+    let albums: Vec<Album> = db::album::Entity::find()
+        .all(&state.db)
         .await
-        .map_err(|error| app_error_response(error.into()))?;
+        .map(|models| models.into_iter().map(Into::into).collect())
+        .map_err(|e| app_error_response(e.into()))?;
     Ok(Json(albums))
 }
 
@@ -197,15 +201,13 @@ async fn create_album(
     State(state): State<AppState>,
     Json(request): Json<CreateAlbumRequest>,
 ) -> ApiStatusResult {
-    dispatch_action_impl(
-        state,
-        ServerAction::AddAlbum {
-            provider: request.provider,
-            external_album_id: request.external_album_id,
-            artist_external_id: request.artist_external_id,
-            artist_name: request.artist_name,
-            monitor_all: request.monitor_all,
-        },
+    services::album::add_album(
+        &state,
+        request.provider,
+        request.external_album_id,
+        request.artist_external_id,
+        request.artist_name,
+        request.monitor_all,
     )
     .await
     .map_err(app_error_response)?;
@@ -235,14 +237,12 @@ async fn merge_albums(
     require_album(&state, request.target_album_id).await?;
     require_album(&state, request.source_album_id).await?;
 
-    dispatch_action_impl(
-        state,
-        ServerAction::MergeAlbums {
-            target_album_id: request.target_album_id,
-            source_album_id: request.source_album_id,
-            result_title: request.result_title,
-            result_cover_url: request.result_cover_url,
-        },
+    services::album::merge_albums(
+        &state,
+        request.target_album_id,
+        request.source_album_id,
+        request.result_title,
+        request.result_cover_url,
     )
     .await
     .map_err(app_error_response)?;
@@ -259,7 +259,7 @@ async fn merge_albums(
     path = "/{album_id}",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID")
     ),
     responses(
         (status = 200, description = "Album detail payload", body = AlbumDetailResponse),
@@ -269,78 +269,12 @@ async fn merge_albums(
 )]
 async fn get_album(
     State(state): State<AppState>,
-    Path(album_id): Path<String>,
+    Path(album_id): Path<Uuid>,
 ) -> ApiResult<AlbumDetailResponse> {
-    let album_id = parse_album_id(&album_id)?;
-    let album = require_album(&state, album_id).await?;
-
-    let (artist, album_artists) = {
-        let artists = state.monitored_artists.read().await;
-        let primary_artist = artists
-            .iter()
-            .find(|artist| artist.id == album.artist_id)
-            .cloned();
-
-        let album_artists = if !album.artist_credits.is_empty() {
-            album
-                .artist_credits
-                .iter()
-                .map(|credit| {
-                    let local_id = album
-                        .artist_ids
-                        .iter()
-                        .find(|&&artist_id| {
-                            artists
-                                .iter()
-                                .any(|artist| artist.id == artist_id && artist.name == credit.name)
-                        })
-                        .copied();
-                    ResolvedArtistCredit {
-                        name: credit.name.clone(),
-                        artist_id: local_id,
-                        provider: credit.provider.clone(),
-                        external_id: credit.external_id.clone(),
-                    }
-                })
-                .collect()
-        } else {
-            album
-                .artist_ids
-                .iter()
-                .filter_map(|artist_id| {
-                    artists
-                        .iter()
-                        .find(|artist| artist.id == *artist_id)
-                        .map(|artist| ResolvedArtistCredit {
-                            name: artist.name.clone(),
-                            artist_id: Some(artist.id),
-                            provider: None,
-                            external_id: None,
-                        })
-                })
-                .collect()
-        };
-
-        (primary_artist, album_artists)
-    };
-
-    let ctx = build_server_context(&state);
-    let tracks_fut = (ctx.fetch_tracks)(album_id);
-    let links_fut = (ctx.fetch_album_links)(album_id);
-    let suggestions_fut = (ctx.fetch_album_match_suggestions)(album_id);
-    let (tracks, provider_links, match_suggestions) =
-        tokio::join!(tracks_fut, links_fut, suggestions_fut);
-
-    Ok(Json(AlbumDetailResponse {
-        album,
-        artist,
-        album_artists,
-        tracks: tracks.map_err(yoink_error_response)?,
-        jobs: state.download_jobs.read().await.clone(),
-        provider_links: provider_links.map_err(yoink_error_response)?,
-        match_suggestions: match_suggestions.map_err(yoink_error_response)?,
-        default_quality: state.default_quality,
-    }))
+    let res = services::album::get_album_details(&state, album_id)
+        .await
+        .map_err(app_error_response)?;
+    Ok(Json(res))
 }
 
 /// Toggle Album Monitor
@@ -351,7 +285,7 @@ async fn get_album(
     path = "/{album_id}/monitor",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID")
     ),
     request_body = ToggleAlbumMonitorRequest,
     responses(
@@ -362,21 +296,14 @@ async fn get_album(
 )]
 async fn toggle_album_monitor(
     State(state): State<AppState>,
-    Path(album_id): Path<String>,
+    Path(album_id): Path<Uuid>,
     Json(request): Json<ToggleAlbumMonitorRequest>,
 ) -> ApiStatusResult {
-    let album_id = parse_album_id(&album_id)?;
     require_album(&state, album_id).await?;
 
-    dispatch_action_impl(
-        state,
-        ServerAction::ToggleAlbumMonitor {
-            album_id,
-            monitored: request.monitored,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::album::toggle_album_monitor(&state, album_id, request.monitored)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -389,7 +316,7 @@ async fn toggle_album_monitor(
     path = "/{album_id}/quality",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID")
     ),
     request_body = SetAlbumQualityRequest,
     responses(
@@ -400,21 +327,14 @@ async fn toggle_album_monitor(
 )]
 async fn set_album_quality(
     State(state): State<AppState>,
-    Path(album_id): Path<String>,
+    Path(album_id): Path<Uuid>,
     Json(request): Json<SetAlbumQualityRequest>,
 ) -> ApiStatusResult {
-    let album_id = parse_album_id(&album_id)?;
     require_album(&state, album_id).await?;
 
-    dispatch_action_impl(
-        state,
-        ServerAction::SetAlbumQuality {
-            album_id,
-            quality: request.quality,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::album::set_album_quality(&state, album_id, request.quality)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -428,7 +348,7 @@ async fn set_album_quality(
     path = "/{album_id}/file",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID"),
+        ("album_id" = Uuid, Path, description = "Album UUID"),
         ("unmonitor" = Option<bool>, Query, description = "Whether to unmonitor the album after file removal")
     ),
     responses(
@@ -439,21 +359,14 @@ async fn set_album_quality(
 )]
 async fn remove_album_files(
     State(state): State<AppState>,
-    Path(album_id): Path<String>,
+    Path(album_id): Path<Uuid>,
     Query(query): Query<RemoveAlbumFilesQuery>,
 ) -> ApiStatusResult {
-    let album_id = parse_album_id(&album_id)?;
     require_album(&state, album_id).await?;
 
-    dispatch_action_impl(
-        state,
-        ServerAction::RemoveAlbumFiles {
-            album_id,
-            unmonitor: query.unmonitor,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::album::remove_album_files(&state, album_id, query.unmonitor)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -467,7 +380,7 @@ async fn remove_album_files(
     path = "/{album_id}/download/retry",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID")
     ),
     responses(
         (status = 204, description = "Album download queued"),
@@ -477,12 +390,11 @@ async fn remove_album_files(
 )]
 async fn retry_download(
     State(state): State<AppState>,
-    Path(album_id): Path<String>,
+    Path(album_id): Path<Uuid>,
 ) -> ApiStatusResult {
-    let album_id = parse_album_id(&album_id)?;
     require_album(&state, album_id).await?;
 
-    dispatch_action_impl(state, ServerAction::RetryDownload { album_id })
+    crate::actions::download::retry_download(&state, album_id)
         .await
         .map_err(app_error_response)?;
 
@@ -497,7 +409,7 @@ async fn retry_download(
     path = "/{album_id}/provider",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID")
     ),
     responses(
         (status = 200, description = "Provider links for the album", body = Vec<ProviderLink>),
@@ -507,16 +419,13 @@ async fn retry_download(
 )]
 async fn list_album_providers(
     State(state): State<AppState>,
-    Path(album_id): Path<String>,
+    Path(album_id): Path<Uuid>,
 ) -> ApiResult<Vec<ProviderLink>> {
-    let album_id = parse_album_id(&album_id)?;
     require_album(&state, album_id).await?;
 
-    let ctx = build_server_context(&state);
-    let links = (ctx.fetch_album_links)(album_id)
-        .await
-        .map_err(yoink_error_response)?;
-    Ok(Json(links))
+    // FIXME: load via SeaORM once album_provider_link entity is defined
+
+    Ok(Json(vec![]))
 }
 
 /// List Album Tracks
@@ -527,7 +436,7 @@ async fn list_album_providers(
     path = "/{album_id}/track",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID")
     ),
     responses(
         (status = 200, description = "Tracks for the album", body = Vec<TrackInfo>),
@@ -537,16 +446,12 @@ async fn list_album_providers(
 )]
 async fn list_album_tracks(
     State(state): State<AppState>,
-    Path(album_id): Path<String>,
+    Path(album_id): Path<Uuid>,
 ) -> ApiResult<Vec<TrackInfo>> {
-    let album_id = parse_album_id(&album_id)?;
-    require_album(&state, album_id).await?;
-
-    let ctx = build_server_context(&state);
-    let tracks = (ctx.fetch_tracks)(album_id)
+    services::album::get_album_tracks(&state.db, album_id)
         .await
-        .map_err(yoink_error_response)?;
-    Ok(Json(tracks))
+        .map_err(app_error_response)
+        .map(Json)
 }
 
 /// Bulk Toggle Track Monitor
@@ -557,7 +462,7 @@ async fn list_album_tracks(
     path = "/{album_id}/track/monitor",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID")
     ),
     request_body = ToggleTrackMonitorRequest,
     responses(
@@ -568,21 +473,14 @@ async fn list_album_tracks(
 )]
 async fn bulk_toggle_track_monitor(
     State(state): State<AppState>,
-    Path(album_id): Path<String>,
+    Path(album_id): Path<Uuid>,
     Json(request): Json<ToggleTrackMonitorRequest>,
 ) -> ApiStatusResult {
-    let album_id = parse_album_id(&album_id)?;
     require_album(&state, album_id).await?;
 
-    dispatch_action_impl(
-        state,
-        ServerAction::BulkToggleTrackMonitor {
-            album_id,
-            monitored: request.monitored,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::track::bulk_toggle_track_monitor(&state, album_id, request.monitored)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -596,8 +494,8 @@ async fn bulk_toggle_track_monitor(
     path = "/{album_id}/track/{track_id}/monitor",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID"),
-        ("track_id" = String, Path, description = "Track UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID"),
+        ("track_id" = Uuid, Path, description = "Track UUID")
     ),
     request_body = ToggleTrackMonitorRequest,
     responses(
@@ -608,24 +506,15 @@ async fn bulk_toggle_track_monitor(
 )]
 async fn toggle_track_monitor(
     State(state): State<AppState>,
-    Path((album_id, track_id)): Path<(String, String)>,
+    Path((album_id, track_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<ToggleTrackMonitorRequest>,
 ) -> ApiStatusResult {
-    let album_id = parse_album_id(&album_id)?;
-    let track_id = parse_track_id(&track_id)?;
     require_album(&state, album_id).await?;
-    require_track(&state, album_id, track_id).await?;
+    require_track(&state, track_id).await?;
 
-    dispatch_action_impl(
-        state,
-        ServerAction::ToggleTrackMonitor {
-            track_id,
-            album_id,
-            monitored: request.monitored,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::track::toggle_track_monitor(&state, track_id, album_id, request.monitored)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -638,8 +527,8 @@ async fn toggle_track_monitor(
     path = "/{album_id}/track/{track_id}/quality",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID"),
-        ("track_id" = String, Path, description = "Track UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID"),
+        ("track_id" = Uuid, Path, description = "Track UUID")
     ),
     request_body = SetTrackQualityRequest,
     responses(
@@ -650,24 +539,15 @@ async fn toggle_track_monitor(
 )]
 async fn set_track_quality(
     State(state): State<AppState>,
-    Path((album_id, track_id)): Path<(String, String)>,
+    Path((album_id, track_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<SetTrackQualityRequest>,
 ) -> ApiStatusResult {
-    let album_id = parse_album_id(&album_id)?;
-    let track_id = parse_track_id(&track_id)?;
     require_album(&state, album_id).await?;
-    require_track(&state, album_id, track_id).await?;
+    require_track(&state, track_id).await?;
 
-    dispatch_action_impl(
-        state,
-        ServerAction::SetTrackQuality {
-            album_id,
-            track_id,
-            quality: request.quality,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::track::set_track_quality(&state, album_id, track_id, request.quality)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -680,7 +560,7 @@ async fn set_track_quality(
     path = "/{album_id}/artist",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID")
     ),
     request_body = AlbumArtistRequest,
     responses(
@@ -691,22 +571,15 @@ async fn set_track_quality(
 )]
 async fn add_album_artist(
     State(state): State<AppState>,
-    Path(album_id): Path<String>,
+    Path(album_id): Path<Uuid>,
     Json(request): Json<AlbumArtistRequest>,
 ) -> ApiStatusResult {
-    let album_id = parse_album_id(&album_id)?;
     require_album(&state, album_id).await?;
     require_artist(&state, request.artist_id).await?;
 
-    dispatch_action_impl(
-        state,
-        ServerAction::AddAlbumArtist {
-            album_id,
-            artist_id: request.artist_id,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::album::add_album_artist(&state, album_id, request.artist_id)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -719,8 +592,8 @@ async fn add_album_artist(
     path = "/{album_id}/artist/{artist_id}",
     tag = TAG,
     params(
-        ("album_id" = String, Path, description = "Album UUID"),
-        ("artist_id" = String, Path, description = "Artist UUID")
+        ("album_id" = Uuid, Path, description = "Album UUID"),
+        ("artist_id" = Uuid, Path, description = "Artist UUID")
     ),
     responses(
         (status = 204, description = "Artist removed from album"),
@@ -731,79 +604,14 @@ async fn add_album_artist(
 )]
 async fn remove_album_artist(
     State(state): State<AppState>,
-    Path((album_id, artist_id)): Path<(String, String)>,
+    Path((album_id, artist_id)): Path<(Uuid, Uuid)>,
 ) -> ApiStatusResult {
-    let album_id = parse_album_id(&album_id)?;
-    let artist_id = parse_artist_id(&artist_id)?;
     require_album(&state, album_id).await?;
     require_artist(&state, artist_id).await?;
 
-    dispatch_action_impl(
-        state,
-        ServerAction::RemoveAlbumArtist {
-            album_id,
-            artist_id,
-        },
-    )
-    .await
-    .map_err(app_error_response)?;
+    services::album::remove_album_artist(&state, album_id, artist_id)
+        .await
+        .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
-}
-
-fn parse_album_id(raw: &str) -> Result<Uuid, ApiErrorResponse> {
-    parse_uuid(raw, "album_id")
-}
-
-fn parse_artist_id(raw: &str) -> Result<Uuid, ApiErrorResponse> {
-    parse_uuid(raw, "artist_id")
-}
-
-fn parse_track_id(raw: &str) -> Result<Uuid, ApiErrorResponse> {
-    parse_uuid(raw, "track_id")
-}
-
-fn parse_uuid(raw: &str, field: &'static str) -> Result<Uuid, ApiErrorResponse> {
-    parse_uuid_param(raw, field)
-}
-
-async fn require_album(
-    state: &AppState,
-    album_id: Uuid,
-) -> Result<MonitoredAlbum, ApiErrorResponse> {
-    let albums = state.monitored_albums.read().await;
-    albums
-        .iter()
-        .find(|album| album.id == album_id)
-        .cloned()
-        .ok_or_else(|| app_error_response(AppError::not_found("album", Some(album_id.to_string()))))
-}
-
-async fn require_artist(
-    state: &AppState,
-    artist_id: Uuid,
-) -> Result<MonitoredArtist, ApiErrorResponse> {
-    let artists = state.monitored_artists.read().await;
-    artists
-        .iter()
-        .find(|artist| artist.id == artist_id)
-        .cloned()
-        .ok_or_else(|| {
-            app_error_response(AppError::not_found("artist", Some(artist_id.to_string())))
-        })
-}
-
-async fn require_track(
-    state: &AppState,
-    album_id: Uuid,
-    track_id: Uuid,
-) -> Result<TrackInfo, ApiErrorResponse> {
-    let ctx = build_server_context(state);
-    let tracks = (ctx.fetch_tracks)(album_id)
-        .await
-        .map_err(yoink_error_response)?;
-    tracks
-        .into_iter()
-        .find(|track| track.id == track_id)
-        .ok_or_else(|| app_error_response(AppError::not_found("track", Some(track_id.to_string()))))
 }

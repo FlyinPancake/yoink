@@ -86,8 +86,8 @@ pub(crate) struct HifiTrack {
     pub title: String,
     pub version: Option<String>,
     #[serde(rename = "trackNumber")]
-    pub track_number: Option<u32>,
-    pub duration: Option<u32>,
+    pub track_number: Option<i32>,
+    pub duration: Option<i32>,
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
 }

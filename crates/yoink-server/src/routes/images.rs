@@ -8,7 +8,7 @@ use axum::{
 use tracing::{debug, warn};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::state::AppState;
+use crate::{db::provider::Provider, state::AppState};
 
 pub(crate) const TAG: &str = "Images";
 pub(crate) const TAG_DESCRIPTION: &str = "Image proxying for registered providers";
@@ -32,11 +32,12 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
         (status = 502, description = "Upstream error")
     )
 )]
+#[axum::debug_handler]
 async fn proxy_tidal_image(
     State(state): State<AppState>,
     Path((image_id, size)): Path<(String, u16)>,
 ) -> impl IntoResponse {
-    proxy_image_impl(&state, "tidal", &image_id, size).await
+    proxy_image_impl(&state, Provider::Tidal, &image_id, size).await
 }
 
 /// Proxy provider image
@@ -54,32 +55,43 @@ async fn proxy_tidal_image(
 )]
 async fn proxy_provider_image(
     State(state): State<AppState>,
-    Path((provider, image_id, size)): Path<(String, String, u16)>,
+    Path((provider, image_id, size)): Path<(Provider, String, u16)>,
 ) -> impl IntoResponse {
-    proxy_image_impl(&state, &provider, &image_id, size).await
+    proxy_image_impl(&state, provider, &image_id, size).await
 }
 
-async fn proxy_image_impl(state: &AppState, provider: &str, image_id: &str, size: u16) -> Response {
+async fn proxy_image_impl(
+    state: &AppState,
+    provider: Provider,
+    image_id: &str,
+    size: u16,
+) -> Response {
     if ![160, 320, 640, 750, 1080].contains(&size) {
         debug!(
-            provider,
+            ?provider,
             image_id, size, "Image proxy rejected: invalid size"
         );
         return (StatusCode::BAD_REQUEST, "invalid size").into_response();
     }
 
     let Some(metadata_provider) = state.registry.metadata_provider(provider) else {
-        debug!(provider, image_id, "Image proxy rejected: unknown provider");
+        debug!(
+            ?provider,
+            image_id, "Image proxy rejected: unknown provider"
+        );
         return (StatusCode::BAD_REQUEST, "unknown provider").into_response();
     };
 
     if !metadata_provider.validate_image_id(image_id) {
-        debug!(provider, image_id, "Image proxy rejected: invalid image id");
+        debug!(
+            ?provider,
+            image_id, "Image proxy rejected: invalid image id"
+        );
         return (StatusCode::BAD_REQUEST, "invalid image id").into_response();
     }
 
     let upstream_url = metadata_provider.image_url(image_id, size);
-    debug!(provider, image_id, size, %upstream_url, "Image proxy fetching upstream");
+    debug!(?provider, image_id, size, %upstream_url, "Image proxy fetching upstream");
 
     let response = state
         .http
@@ -99,7 +111,7 @@ async fn proxy_image_impl(state: &AppState, provider: &str, image_id: &str, size
             match upstream.bytes().await {
                 Ok(bytes) => {
                     debug!(
-                        provider,
+                        ?provider,
                         image_id,
                         size,
                         bytes = bytes.len(),
@@ -119,18 +131,18 @@ async fn proxy_image_impl(state: &AppState, provider: &str, image_id: &str, size
                         .into_response()
                 }
                 Err(err) => {
-                    warn!(provider, image_id, %upstream_url, error = %err, "Image proxy: failed to read upstream body");
+                    warn!(?provider, image_id, %upstream_url, error = %err, "Image proxy: failed to read upstream body");
                     (StatusCode::BAD_GATEWAY, "upstream read error").into_response()
                 }
             }
         }
         Ok(upstream) => {
             let status = upstream.status();
-            warn!(provider, image_id, size, %upstream_url, %status, "Image proxy: upstream returned non-success");
+            warn!(?provider, image_id, size, %upstream_url, %status, "Image proxy: upstream returned non-success");
             (StatusCode::NOT_FOUND, "image not found").into_response()
         }
         Err(err) => {
-            warn!(provider, image_id, %upstream_url, error = %err, "Image proxy: upstream unreachable");
+            warn!(?provider, image_id, %upstream_url, error = %err, "Image proxy: upstream unreachable");
             (StatusCode::BAD_GATEWAY, "upstream unreachable").into_response()
         }
     }

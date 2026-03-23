@@ -8,19 +8,12 @@ mod db;
 mod embedded_assets;
 mod error;
 mod logging;
-mod models;
 mod providers;
 mod redirects;
 mod routes;
-mod server_context;
 mod services;
 mod state;
 mod util;
-
-#[cfg(test)]
-mod fk_regressions;
-#[cfg(test)]
-mod test_helpers;
 
 use std::{sync::Arc, time::Duration};
 
@@ -35,6 +28,7 @@ use utoipa_scalar::{Scalar, Servable};
 use crate::{
     app_config::AppConfig,
     config::QUALITY_WARNING,
+    db::quality::Quality,
     logging::init_logging,
     providers::{
         deezer::DeezerProvider, musicbrainz::MusicBrainzProvider, registry::ProviderRegistry,
@@ -44,8 +38,6 @@ use crate::{
     services::{download_worker_loop, reconcile_library_files},
     state::AppState,
 };
-
-use yoink_shared::Quality;
 
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -160,7 +152,7 @@ async fn main() {
         bind = "0.0.0.0:3000",
         database = %db_url,
         music_root = %music_root.display(),
-        default_quality = %default_quality,
+        default_quality = ?default_quality,
         download_lyrics = app_config.download_lyrics,
         warning = %quality_warning,
         "yoink server started"

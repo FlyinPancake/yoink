@@ -258,7 +258,7 @@ fn parse_featured_artists(title: &str) -> Vec<String> {
 pub(crate) fn extract_disc_number(
     track_extra: &HashMap<String, Value>,
     track_info_extra: Option<&HashMap<String, Value>>,
-) -> Option<u32> {
+) -> Option<i32> {
     for key in ["volumeNumber", "discNumber", "volume_number", "disc_number"] {
         if let Some(val) = track_info_extra
             .and_then(|m| m.get(key))
@@ -266,12 +266,12 @@ pub(crate) fn extract_disc_number(
         {
             match val {
                 Value::Number(n) => {
-                    if let Some(v) = n.as_u64().and_then(|v| u32::try_from(v).ok()) {
+                    if let Some(v) = n.as_i64().and_then(|v| i32::try_from(v).ok()) {
                         return Some(v);
                     }
                 }
                 Value::String(s) => {
-                    if let Ok(v) = s.trim().parse::<u32>() {
+                    if let Ok(v) = s.trim().parse::<i32>() {
                         return Some(v);
                     }
                 }

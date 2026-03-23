@@ -6,11 +6,11 @@ use axum::{
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
-use yoink_shared::{DownloadJob, ServerAction};
+use yoink_shared::DownloadJob;
 
-use crate::{actions::dispatch_action_impl, state::AppState};
+use crate::state::AppState;
 
-use super::helpers::{ApiErrorResponse, app_error_response, parse_uuid};
+use super::helpers::{ApiErrorResponse, app_error_response};
 
 pub(crate) const TAG: &str = "Job";
 pub(crate) const TAG_DESCRIPTION: &str = "Endpoints for download job inspection and control";
@@ -25,9 +25,6 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(clear_completed_jobs))
 }
 
-/// List Jobs
-///
-/// Returns the current in-memory download job list in its UI-facing sort order.
 #[utoipa::path(
     get,
     path = "/",
@@ -36,37 +33,32 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
         (status = 200, description = "All download jobs", body = Vec<DownloadJob>),
     )
 )]
-async fn list_jobs(State(state): State<AppState>) -> ApiResult<Vec<DownloadJob>> {
-    Ok(Json(state.download_jobs.read().await.clone()))
+/// List Jobs
+async fn list_jobs(State(_state): State<AppState>) -> ApiResult<Vec<DownloadJob>> {
+    // TODO: load from SeaORM
+    Ok(Json(vec![]))
 }
 
-/// Cancel Job
-///
-/// Marks a queued download job as cancelled and failed.
 #[utoipa::path(
     post,
     path = "/{job_id}/cancel",
     tag = TAG,
     params(
-        ("job_id" = String, Path, description = "Download job UUID")
+        ("job_id" = Uuid, Path, description = "Download job UUID")
     ),
     responses(
         (status = 204, description = "Job cancelled"),
-        (status = 400, description = "Invalid job id"),
         (status = 500, description = "Failed to cancel job"),
     )
 )]
-async fn cancel_job(State(state): State<AppState>, Path(job_id): Path<String>) -> ApiStatusResult {
-    let job_id = parse_job_id(&job_id)?;
-    dispatch_action_impl(state, ServerAction::CancelDownload { job_id })
+/// Cancel Job
+async fn cancel_job(State(state): State<AppState>, Path(job_id): Path<Uuid>) -> ApiStatusResult {
+    crate::actions::download::cancel_download(&state, job_id)
         .await
         .map_err(app_error_response)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Clear Completed Jobs
-///
-/// Deletes completed download job rows and removes them from the in-memory job list.
 #[utoipa::path(
     delete,
     path = "/completed",
@@ -76,13 +68,10 @@ async fn cancel_job(State(state): State<AppState>, Path(job_id): Path<String>) -
         (status = 500, description = "Failed to clear completed jobs"),
     )
 )]
+/// Clear Completed Jobs
 async fn clear_completed_jobs(State(state): State<AppState>) -> ApiStatusResult {
-    dispatch_action_impl(state, ServerAction::ClearCompleted)
+    crate::actions::download::clear_completed(&state)
         .await
         .map_err(app_error_response)?;
     Ok(StatusCode::NO_CONTENT)
-}
-
-fn parse_job_id(raw: &str) -> Result<Uuid, ApiErrorResponse> {
-    parse_uuid(raw, "job_id")
 }

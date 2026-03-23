@@ -116,7 +116,32 @@ pub(crate) async fn has_flac_stream_marker(path: &Path) -> AppResult<bool> {
     Ok(read == 4 && header == *b"fLaC")
 }
 
-pub(crate) async fn sniff_media_container(path: &Path) -> AppResult<String> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MediaContainer {
+    Flac,
+    Mp4,
+    Ogg,
+    Wav,
+    Mp3,
+    Aac,
+    Unknown,
+}
+
+impl MediaContainer {
+    pub fn ext(&self) -> Option<&'static str> {
+        match self {
+            MediaContainer::Flac => Some("flac"),
+            MediaContainer::Mp4 => Some("m4a"),
+            MediaContainer::Ogg => Some("ogg"),
+            MediaContainer::Wav => Some("wav"),
+            MediaContainer::Mp3 => Some("mp3"),
+            MediaContainer::Aac => Some("aac"),
+            MediaContainer::Unknown => None,
+        }
+    }
+}
+
+pub(crate) async fn sniff_media_container(path: &Path) -> AppResult<MediaContainer> {
     let mut file = fs::File::open(path)
         .await
         .map_err(|err| AppError::filesystem("open file", path.display().to_string(), err))?;
@@ -126,27 +151,27 @@ pub(crate) async fn sniff_media_container(path: &Path) -> AppResult<String> {
         .await
         .map_err(|err| AppError::filesystem("read header", path.display().to_string(), err))?;
     if read >= 4 && header[..4] == *b"fLaC" {
-        return Ok("flac".to_string());
+        return Ok(MediaContainer::Flac);
     }
     if read >= 8 && header[4..8] == *b"ftyp" {
-        return Ok("mp4".to_string());
+        return Ok(MediaContainer::Mp4);
     }
     if read >= 4 && header[..4] == *b"OggS" {
-        return Ok("ogg".to_string());
+        return Ok(MediaContainer::Ogg);
     }
     if read >= 12 && header[..4] == *b"RIFF" && header[8..12] == *b"WAVE" {
-        return Ok("wav".to_string());
+        return Ok(MediaContainer::Wav);
     }
     if read >= 3 && header[..3] == *b"ID3" {
-        return Ok("mp3".to_string());
+        return Ok(MediaContainer::Mp3);
     }
     if read >= 2 && header[0] == 0xFF && (header[1] & 0xE0) == 0xE0 {
         if read >= 3 && (header[1] & 0x16) == 0x10 {
-            return Ok("aac".to_string());
+            return Ok(MediaContainer::Aac);
         }
-        return Ok("mp3".to_string());
+        return Ok(MediaContainer::Mp3);
     }
-    Ok("unknown".to_string())
+    Ok(MediaContainer::Unknown)
 }
 
 pub(crate) fn sanitize_path_component(input: &str) -> String {
@@ -331,7 +356,10 @@ mod tests {
         fs::write(file.path(), b"ID3\x04\x00\x00\x00\x00\x00\x21")
             .await
             .unwrap();
-        assert_eq!(sniff_media_container(file.path()).await.unwrap(), "mp3");
+        assert_eq!(
+            sniff_media_container(file.path()).await.unwrap().ext(),
+            Some("mp3")
+        );
     }
 
     #[tokio::test]
@@ -340,6 +368,9 @@ mod tests {
         fs::write(file.path(), b"RIFF\x24\x80\0\0WAVEfmt ")
             .await
             .unwrap();
-        assert_eq!(sniff_media_container(file.path()).await.unwrap(), "wav");
+        assert_eq!(
+            sniff_media_container(file.path()).await.unwrap().ext(),
+            Some("wav")
+        );
     }
 }

@@ -8,7 +8,7 @@ pub(crate) type AppResult<T> = Result<T, AppError>;
 #[derive(Debug, Error)]
 pub(crate) enum AppError {
     #[error(transparent)]
-    Db(#[from] sqlx::Error),
+    SeaOrm(#[from] sea_orm::DbErr),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -127,8 +127,8 @@ impl From<AppError> for YoinkError {
             AppError::Unavailable { service, reason } => {
                 YoinkError::Unavailable { service, reason }
             }
-            AppError::Db(err) => YoinkError::Internal {
-                message: format!("database error: {err}"),
+            AppError::SeaOrm(err) => YoinkError::Internal {
+                message: format!("sea-orm error: {err}"),
             },
             AppError::Io(err) => YoinkError::Internal {
                 message: format!("io error: {err}"),

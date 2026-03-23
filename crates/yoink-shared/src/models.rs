@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use url::Url;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -82,8 +83,8 @@ pub struct DownloadJob {
     pub artist_name: String,
     pub status: DownloadStatus,
     pub quality: Quality,
-    pub total_tracks: usize,
-    pub completed_tracks: usize,
+    pub total_tracks: i32,
+    pub completed_tracks: i32,
     pub error: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -93,54 +94,42 @@ pub struct DownloadJob {
 pub struct MonitoredArtist {
     pub id: Uuid,
     pub name: String,
-    pub image_url: Option<String>,
+    pub image_url: Option<Url>,
     pub bio: Option<String>,
     /// Whether this artist is fully monitored (discography synced from providers).
     /// `false` = lightweight artist (only explicitly-added albums, no auto-sync).
     pub monitored: bool,
-    pub added_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
 }
 
-/// A raw artist credit from a provider, stored on the album.
-/// Used to display all album artists even when some aren't monitored locally.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub struct ArtistCredit {
-    pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub external_id: Option<String>,
+/// Album status indicating what the download system should do with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WantedStatus {
+    /// Not wanted — either not monitored or explicitly skipped.
+    Unwanted,
+    /// Wanted — monitored and awaiting download.
+    Wanted,
+    /// Download is in progress.
+    InProgress,
+    /// Fully acquired — all monitored tracks are on disk.
+    Acquired,
 }
 
+/// Core album data as stored in the database.
+/// Relation data (artists, tracks, provider links) is returned separately
+/// in API responses — not embedded here.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
-pub struct MonitoredAlbum {
+pub struct Album {
     pub id: Uuid,
-    /// Primary (first) artist — kept for backward compatibility and as a
-    /// convenient shorthand for the common single-artist case.
-    pub artist_id: Uuid,
-    /// All artists associated with this album, ordered by display priority.
-    /// The first entry always equals `artist_id`.
-    #[serde(default)]
-    pub artist_ids: Vec<Uuid>,
-    /// Raw artist credits from providers. Includes artists that may not be
-    /// monitored locally. Used for display on the album detail page.
-    #[serde(default)]
-    pub artist_credits: Vec<ArtistCredit>,
     pub title: String,
     pub album_type: Option<String>,
     pub release_date: Option<String>,
     pub cover_url: Option<String>,
     pub explicit: bool,
-    #[serde(default)]
-    pub quality_override: Option<Quality>,
     pub monitored: bool,
-    pub acquired: bool,
-    pub wanted: bool,
-    /// True when the album is not fully monitored but has individually monitored
-    /// tracks that are not yet acquired.
-    #[serde(default)]
-    pub partially_wanted: bool,
-    pub added_at: DateTime<Utc>,
+    pub wanted_status: WantedStatus,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -148,10 +137,9 @@ pub struct TrackInfo {
     pub id: Uuid,
     pub title: String,
     pub version: Option<String>,
-    pub disc_number: u32,
-    pub track_number: u32,
-    pub duration_secs: u32,
-    pub duration_display: String,
+    pub disc_number: i32,
+    pub track_number: i32,
+    pub duration_secs: i32,
     pub isrc: Option<String>,
     pub explicit: bool,
     #[serde(default)]
@@ -273,7 +261,6 @@ pub struct SearchTrackResult {
     pub title: String,
     pub version: Option<String>,
     pub duration_secs: u32,
-    pub duration_display: String,
     pub isrc: Option<String>,
     pub explicit: bool,
     /// Display-ready track artist string.
@@ -390,63 +377,6 @@ mod tests {
             serde_json::to_string(&DownloadStatus::Downloading).unwrap(),
             "\"downloading\""
         );
-    }
-
-    // ── ArtistCredit serde ──────────────────────────────────────
-
-    #[test]
-    fn artist_credit_skips_none_fields() {
-        let credit = ArtistCredit {
-            name: "Artist".to_string(),
-            provider: None,
-            external_id: None,
-        };
-        let json = serde_json::to_string(&credit).unwrap();
-        assert!(!json.contains("provider"));
-        assert!(!json.contains("external_id"));
-    }
-
-    #[test]
-    fn artist_credit_includes_some_fields() {
-        let credit = ArtistCredit {
-            name: "Artist".to_string(),
-            provider: Some("tidal".to_string()),
-            external_id: Some("123".to_string()),
-        };
-        let json = serde_json::to_string(&credit).unwrap();
-        assert!(json.contains("\"provider\":\"tidal\""));
-        assert!(json.contains("\"external_id\":\"123\""));
-    }
-
-    #[test]
-    fn artist_credit_deserializes_missing_optional_fields() {
-        let json = r#"{"name":"Artist"}"#;
-        let credit: ArtistCredit = serde_json::from_str(json).unwrap();
-        assert_eq!(credit.name, "Artist");
-        assert_eq!(credit.provider, None);
-        assert_eq!(credit.external_id, None);
-    }
-
-    // ── MonitoredAlbum serde ────────────────────────────────────
-
-    #[test]
-    fn monitored_album_partially_wanted_defaults_to_false() {
-        // Simulate JSON from an older version that doesn't have partially_wanted
-        let json = serde_json::json!({
-            "id": "01933e10-b4a4-7000-8000-000000000001",
-            "artist_id": "01933e10-b4a4-7000-8000-000000000002",
-            "title": "Test",
-            "explicit": false,
-            "monitored": false,
-            "acquired": false,
-            "wanted": false,
-            "added_at": "2024-01-01T00:00:00Z"
-        });
-        let album: MonitoredAlbum = serde_json::from_value(json).unwrap();
-        assert!(!album.partially_wanted);
-        assert!(album.artist_ids.is_empty());
-        assert!(album.artist_credits.is_empty());
-        assert_eq!(album.quality_override, None);
     }
 
     #[test]

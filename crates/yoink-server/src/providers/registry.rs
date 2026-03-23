@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::db::provider::Provider;
+
 use super::{
     DownloadSource, MetadataProvider, ProviderArtist, ProviderError, ProviderSearchAlbum,
     ProviderSearchTrack,
@@ -108,12 +110,12 @@ impl ProviderRegistry {
     }
 
     /// Get a specific metadata provider by ID.
-    pub fn metadata_provider(&self, id: &str) -> Option<Arc<dyn MetadataProvider>> {
+    pub fn metadata_provider(&self, id: Provider) -> Option<Arc<dyn MetadataProvider>> {
         self.metadata.iter().find(|p| p.id() == id).cloned()
     }
 
     /// Get a specific download source by ID.
-    pub fn download_source(&self, id: &str) -> Option<Arc<dyn DownloadSource>> {
+    pub fn download_source(&self, id: Provider) -> Option<Arc<dyn DownloadSource>> {
         self.download.iter().find(|s| s.id() == id).cloned()
     }
 
@@ -131,7 +133,7 @@ impl ProviderRegistry {
     /// Search artists using a specific metadata provider.
     pub async fn search_artists(
         &self,
-        provider_id: &str,
+        provider_id: Provider,
         query: &str,
     ) -> Result<Vec<ProviderArtist>, ProviderError> {
         let provider = self.metadata_provider(provider_id).ok_or_else(|| {

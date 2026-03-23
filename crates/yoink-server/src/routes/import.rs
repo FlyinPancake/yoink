@@ -4,13 +4,12 @@ use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use yoink_shared::{
-    BrowseEntry, ExternalImportConfirmation, ImportConfirmation, ImportPreviewItem,
-    ImportResultSummary,
+    BrowseEntry, ImportConfirmation, ImportPreviewItem, ImportResultSummary,
 };
 
-use crate::{actions::dispatch_action_impl, server_context::build_server_context, state::AppState};
+use crate::{services, state::AppState};
 
-use super::helpers::{ApiErrorResponse, app_error_response, yoink_error_response};
+use super::helpers::{ApiErrorResponse, app_error_response};
 
 pub(crate) const TAG: &str = "Import";
 pub(crate) const TAG_DESCRIPTION: &str = "Endpoints for local and external library import flows";
@@ -38,10 +37,6 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(confirm_external_import))
 }
 
-/// Preview Import
-///
-/// Scans the configured music library for import candidates and returns the
-/// current preview set.
 #[utoipa::path(
     get,
     path = "/preview",
@@ -51,15 +46,14 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
         (status = 500, description = "Failed to preview import"),
     )
 )]
+/// Preview Import
 async fn preview_import(State(state): State<AppState>) -> ApiResult<Vec<ImportPreviewItem>> {
-    let ctx = build_server_context(&state);
-    let items = (ctx.preview_import)().await.map_err(yoink_error_response)?;
+    let items = services::preview_import_library(&state)
+        .await
+        .map_err(app_error_response)?;
     Ok(Json(items))
 }
 
-/// Scan Import
-///
-/// Triggers a scan-and-import run using the existing server-side import action.
 #[utoipa::path(
     post,
     path = "/scan",
@@ -69,16 +63,14 @@ async fn preview_import(State(state): State<AppState>) -> ApiResult<Vec<ImportPr
         (status = 500, description = "Failed to start import scan"),
     )
 )]
+/// Scan Import
 async fn scan_import(State(state): State<AppState>) -> ApiStatusResult {
-    dispatch_action_impl(state, yoink_shared::ServerAction::ScanImportLibrary)
+    crate::actions::library::scan_import_library(&state)
         .await
         .map_err(app_error_response)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Confirm Import
-///
-/// Confirms a library-scan import selection and imports the chosen albums.
 #[utoipa::path(
     post,
     path = "/confirm",
@@ -89,20 +81,17 @@ async fn scan_import(State(state): State<AppState>) -> ApiStatusResult {
         (status = 500, description = "Failed to confirm import"),
     )
 )]
+/// Confirm Import
 async fn confirm_import(
     State(state): State<AppState>,
     Json(items): Json<Vec<ImportConfirmation>>,
 ) -> ApiResult<ImportResultSummary> {
-    let ctx = build_server_context(&state);
-    let summary = (ctx.confirm_import)(items)
+    let summary = services::confirm_import_library(&state, items)
         .await
-        .map_err(yoink_error_response)?;
+        .map_err(app_error_response)?;
     Ok(Json(summary))
 }
 
-/// Browse Path
-///
-/// Lists directories and recognised audio files for a server-side filesystem path.
 #[utoipa::path(
     post,
     path = "/browse",
@@ -110,24 +99,20 @@ async fn confirm_import(
     request_body = BrowsePathRequest,
     responses(
         (status = 200, description = "Filesystem browse entries", body = Vec<BrowseEntry>),
-        (status = 400, description = "Invalid path"),
         (status = 500, description = "Failed to browse path"),
     )
 )]
+/// Browse Path
 async fn browse_path(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(request): Json<BrowsePathRequest>,
 ) -> ApiResult<Vec<BrowseEntry>> {
-    let ctx = build_server_context(&state);
-    let entries = (ctx.browse_path)(request.path)
+    let entries = services::browse_path(&request.path)
         .await
-        .map_err(yoink_error_response)?;
+        .map_err(app_error_response)?;
     Ok(Json(entries))
 }
 
-/// Preview External Import
-///
-/// Scans an arbitrary server-side source path and returns external import candidates.
 #[utoipa::path(
     post,
     path = "/external/preview",
@@ -135,42 +120,38 @@ async fn browse_path(
     request_body = PreviewExternalImportRequest,
     responses(
         (status = 200, description = "External import preview items", body = Vec<ImportPreviewItem>),
-        (status = 400, description = "Invalid source path"),
         (status = 500, description = "Failed to preview external import"),
     )
 )]
+/// Preview External Import
 async fn preview_external_import(
     State(state): State<AppState>,
     Json(request): Json<PreviewExternalImportRequest>,
 ) -> ApiResult<Vec<ImportPreviewItem>> {
-    let ctx = build_server_context(&state);
-    let items = (ctx.preview_external_import)(request.source_path)
+    let items = services::preview_external_import(&state, request.source_path)
         .await
-        .map_err(yoink_error_response)?;
+        .map_err(app_error_response)?;
     Ok(Json(items))
 }
 
-/// Confirm External Import
-///
-/// Confirms an external import selection and imports the chosen files via copy
-/// or hardlink.
 #[utoipa::path(
     post,
     path = "/external/confirm",
     tag = TAG,
-    request_body = ExternalImportConfirmation,
+    request_body = Vec<ImportConfirmation>,
     responses(
         (status = 200, description = "External import result summary", body = ImportResultSummary),
         (status = 500, description = "Failed to confirm external import"),
     )
 )]
+/// Confirm External Import
 async fn confirm_external_import(
     State(state): State<AppState>,
-    Json(confirmation): Json<ExternalImportConfirmation>,
+    Json(items): Json<Vec<ImportConfirmation>>,
 ) -> ApiResult<ImportResultSummary> {
-    let ctx = build_server_context(&state);
-    let summary = (ctx.confirm_external_import)(confirmation)
+    // TODO: needs source_path and mode from request
+    let summary = services::confirm_external_import(&state, String::new(), String::new(), items)
         .await
-        .map_err(yoink_error_response)?;
+        .map_err(app_error_response)?;
     Ok(Json(summary))
 }

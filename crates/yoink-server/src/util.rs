@@ -2,6 +2,8 @@
 
 // ── Text normalisation ──────────────────────────────────────────────
 
+use crate::db::provider::Provider;
+
 /// Normalize text for fuzzy comparison: lowercase (Unicode-aware), strip
 /// non-ASCII-alphanumeric characters, and collapse whitespace.
 pub(crate) fn normalize(input: &str) -> String {
@@ -18,11 +20,11 @@ pub(crate) fn normalize(input: &str) -> String {
 // ── Provider ranking ────────────────────────────────────────────────
 
 /// Higher value = preferred as display-metadata source.
-pub(crate) fn provider_priority(provider_id: &str) -> u8 {
+pub(crate) fn provider_priority(provider_id: Provider) -> u8 {
     match provider_id {
-        "tidal" => 10,
-        "deezer" => 9,
-        "musicbrainz" => 1,
+        Provider::Tidal => 10,
+        Provider::Deezer => 9,
+        Provider::MusicBrainz => 1,
         _ => 5,
     }
 }
@@ -66,21 +68,6 @@ mod tests {
     #[test]
     fn normalize_complex() {
         assert_eq!(normalize("The Black Keys (Live)"), "the black keys live");
-    }
-
-    // ── provider_priority ───────────────────────────────────────
-
-    #[test]
-    fn provider_priority_known() {
-        assert_eq!(provider_priority("tidal"), 10);
-        assert_eq!(provider_priority("deezer"), 9);
-        assert_eq!(provider_priority("musicbrainz"), 1);
-    }
-
-    #[test]
-    fn provider_priority_unknown() {
-        assert_eq!(provider_priority("spotify"), 5);
-        assert_eq!(provider_priority("bandcamp"), 5);
     }
 
     // ── is_audio_extension ──────────────────────────────────────

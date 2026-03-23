@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use better_config::{EnvConfig, env};
 use thiserror::Error;
 
-use yoink_shared::Quality;
+use crate::db::quality::Quality;
 
 const DEFAULT_MUSIC_ROOT: &str = "./music";
 const DEFAULT_DATABASE_URL: &str = "sqlite:./yoink.db?mode=rwc";

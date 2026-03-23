@@ -4,9 +4,6 @@ mod merge;
 mod reconcile;
 mod sync;
 
-use crate::models::MonitoredAlbum;
-use crate::util::{is_audio_extension, normalize as normalize_text};
-
 pub(crate) use browse::browse_path;
 pub(crate) use import::{
     confirm_external_import, confirm_import_library, preview_external_import,
@@ -16,28 +13,7 @@ pub(crate) use merge::merge_albums;
 pub(crate) use reconcile::reconcile_library_files;
 pub(crate) use sync::sync_artist_albums;
 
-/// Recompute the derived `wanted` flag for an album.
-///
-/// An album is fully wanted when it is album-level monitored and not yet acquired.
-/// `partially_wanted` is not updated here — it depends on track-level state and
-/// is computed via a DB subquery in `load_albums` or explicitly via
-/// `recompute_partially_wanted`.
-pub(crate) fn update_wanted(album: &mut MonitoredAlbum) {
-    album.wanted = album.monitored && !album.acquired;
-}
-
-/// Recompute the `partially_wanted` flag for an album by checking its tracks.
-/// Call this after toggling individual track monitoring.
-pub(crate) async fn recompute_partially_wanted(db: &sqlx::SqlitePool, album: &mut MonitoredAlbum) {
-    if album.monitored {
-        // Fully monitored albums are never "partially" wanted
-        album.partially_wanted = false;
-    } else {
-        album.partially_wanted = crate::db::has_wanted_tracks(db, album.id)
-            .await
-            .unwrap_or(false);
-    }
-}
+use crate::util::{is_audio_extension, normalize as normalize_text};
 
 fn parse_release_year(release_date: &str) -> Option<String> {
     let year = release_date.chars().take(4).collect::<String>();
@@ -75,60 +51,7 @@ async fn album_dir_has_downloaded_audio(path: &std::path::Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
-    use uuid::Uuid;
-
     use super::*;
-
-    fn make_album(monitored: bool, acquired: bool) -> MonitoredAlbum {
-        MonitoredAlbum {
-            id: Uuid::now_v7(),
-            artist_id: Uuid::now_v7(),
-            artist_ids: Vec::new(),
-            artist_credits: Vec::new(),
-            title: "Test Album".to_string(),
-            album_type: None,
-            release_date: None,
-            cover_url: None,
-            explicit: false,
-            quality_override: None,
-            monitored,
-            acquired,
-            wanted: false,
-            partially_wanted: false,
-            added_at: Utc::now(),
-        }
-    }
-
-    // ── update_wanted ───────────────────────────────────────────
-
-    #[test]
-    fn update_wanted_monitored_not_acquired() {
-        let mut album = make_album(true, false);
-        update_wanted(&mut album);
-        assert!(album.wanted);
-    }
-
-    #[test]
-    fn update_wanted_monitored_and_acquired() {
-        let mut album = make_album(true, true);
-        update_wanted(&mut album);
-        assert!(!album.wanted);
-    }
-
-    #[test]
-    fn update_wanted_not_monitored() {
-        let mut album = make_album(false, false);
-        update_wanted(&mut album);
-        assert!(!album.wanted);
-    }
-
-    #[test]
-    fn update_wanted_not_monitored_acquired() {
-        let mut album = make_album(false, true);
-        update_wanted(&mut album);
-        assert!(!album.wanted);
-    }
 
     // ── normalize_text ──────────────────────────────────────────
 
@@ -149,8 +72,6 @@ mod tests {
 
     #[test]
     fn normalize_text_unicode_lowercase() {
-        // German eszett: lowercase of "SS" depends on locale, but
-        // individual chars should be lowercased.
         assert_eq!(normalize_text("ABC"), "abc");
     }
 

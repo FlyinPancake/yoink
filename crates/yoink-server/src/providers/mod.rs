@@ -10,7 +10,8 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use serde_json::Value;
 use thiserror::Error;
-use yoink_shared::Quality;
+
+use crate::db::{provider::Provider, quality::Quality};
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -184,9 +185,9 @@ pub(crate) struct ProviderTrack {
     pub external_id: String,
     pub title: String,
     pub version: Option<String>,
-    pub track_number: u32,
-    pub disc_number: Option<u32>,
-    pub duration_secs: u32,
+    pub track_number: i32,
+    pub disc_number: Option<i32>,
+    pub duration_secs: i32,
     pub isrc: Option<String>,
     /// Display-ready track artist string (e.g. "Artist A feat. Artist B").
     pub artists: Option<String>,
@@ -208,9 +209,9 @@ pub(crate) struct LocalTrackOverrides {
     pub acquired: bool,
     /// Override disc number (e.g. from file metadata). `None` uses the
     /// provider value.
-    pub disc_number: Option<u32>,
+    pub disc_number: Option<i32>,
     /// Override track number. `None` uses the provider value.
-    pub track_number: Option<u32>,
+    pub track_number: Option<i32>,
     /// Override explicit flag. `None` uses the provider value.
     pub explicit: Option<bool>,
     /// Override duration display. `None` uses `format_duration(secs)`.
@@ -246,9 +247,6 @@ impl ProviderTrack {
             disc_number: overrides.disc_number.or(self.disc_number).unwrap_or(1),
             track_number: overrides.track_number.unwrap_or(self.track_number),
             duration_secs: secs,
-            duration_display: overrides
-                .duration_display
-                .unwrap_or_else(|| yoink_shared::format_duration(secs)),
             isrc: self.isrc,
             explicit: overrides.explicit.unwrap_or(self.explicit),
             quality_override: overrides.quality_override,
@@ -270,9 +268,6 @@ impl ProviderTrack {
             disc_number: overrides.disc_number.or(self.disc_number).unwrap_or(1),
             track_number: overrides.track_number.unwrap_or(self.track_number),
             duration_secs: secs,
-            duration_display: overrides
-                .duration_display
-                .unwrap_or_else(|| yoink_shared::format_duration(secs)),
             isrc: self.isrc.clone(),
             explicit: overrides.explicit.unwrap_or(self.explicit),
             quality_override: overrides.quality_override,
@@ -345,7 +340,7 @@ pub(crate) struct DownloadTrackContext {
 #[async_trait]
 pub(crate) trait MetadataProvider: Send + Sync {
     /// Unique provider identifier (e.g. "tidal", "musicbrainz", "deezer").
-    fn id(&self) -> &str;
+    fn id(&self) -> Provider;
 
     /// Human-readable display name.
     #[allow(dead_code)]
@@ -419,8 +414,8 @@ pub(crate) trait MetadataProvider: Send + Sync {
 /// Provides track download (playback resolution).
 #[async_trait]
 pub(crate) trait DownloadSource: Send + Sync {
-    /// Unique source identifier (e.g. "tidal").
-    fn id(&self) -> &str;
+    /// Source identifier.
+    fn id(&self) -> Provider;
 
     /// Whether this source requires provider-linked external IDs.
     fn requires_linked_provider(&self) -> bool {
@@ -579,7 +574,6 @@ mod tests {
         assert_eq!(info.disc_number, 2);
         assert_eq!(info.track_number, 3);
         assert_eq!(info.duration_secs, 210);
-        assert_eq!(info.duration_display, "3:30");
         assert_eq!(info.isrc.as_deref(), Some("USRC12345678"));
         assert!(info.explicit);
         // Provider artists used as fallback when override is None
@@ -610,7 +604,6 @@ mod tests {
         assert_eq!(info.track_number, 99);
         assert!(!info.explicit);
         assert_eq!(info.track_artist.as_deref(), Some("Override Artist"));
-        assert_eq!(info.duration_display, "custom");
         assert_eq!(info.file_path.as_deref(), Some("/music/file.flac"));
         assert!(info.monitored);
         assert!(info.acquired);
@@ -668,7 +661,6 @@ mod tests {
         assert_eq!(via_borrow.version, via_move.version);
         assert_eq!(via_borrow.disc_number, via_move.disc_number);
         assert_eq!(via_borrow.track_number, via_move.track_number);
-        assert_eq!(via_borrow.duration_display, via_move.duration_display);
         assert_eq!(via_borrow.isrc, via_move.isrc);
         assert_eq!(via_borrow.explicit, via_move.explicit);
         assert_eq!(via_borrow.track_artist, via_move.track_artist);

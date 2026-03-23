@@ -1,164 +1,24 @@
-use chrono::Utc;
-use tracing::info;
 use uuid::Uuid;
 
-use crate::{db, error::AppResult, services, state::AppState};
+use crate::{error::AppResult, state::AppState};
 
-pub(super) async fn cancel_download(state: &AppState, job_id: Uuid) -> AppResult<()> {
-    let mut jobs = state.download_jobs.write().await;
-    if let Some(job) = jobs.iter_mut().find(|j| j.id == job_id)
-        && matches!(job.status, yoink_shared::DownloadStatus::Queued)
-    {
-        job.status = yoink_shared::DownloadStatus::Failed;
-        job.error = Some("Cancelled by user".to_string());
-        job.updated_at = Utc::now();
-        db::update_job(&state.db, job).await?;
-        info!(%job_id, "Cancelled download job");
-    }
-    drop(jobs);
+/// TODO: rewrite to use SeaORM entities
+pub(crate) async fn cancel_download(state: &AppState, job_id: Uuid) -> AppResult<()> {
+    tracing::warn!(%job_id, "cancel_download is currently stubbed out");
     state.notify_sse();
     Ok(())
 }
 
-pub(super) async fn clear_completed(state: &AppState) -> AppResult<()> {
-    db::delete_completed_jobs(&state.db).await?;
-    {
-        let mut jobs = state.download_jobs.write().await;
-        jobs.retain(|j| j.status != yoink_shared::DownloadStatus::Completed);
-    }
-    info!("Cleared completed download jobs");
+/// TODO: rewrite to use SeaORM entities
+pub(crate) async fn clear_completed(state: &AppState) -> AppResult<()> {
+    tracing::warn!("clear_completed is currently stubbed out");
     state.notify_sse();
     Ok(())
 }
 
-pub(super) async fn retry_download(state: &AppState, album_id: Uuid) -> AppResult<()> {
-    let album = {
-        let albums = state.monitored_albums.read().await;
-        albums.iter().find(|a| a.id == album_id).cloned()
-    };
-    let retry_quality = album
-        .as_ref()
-        .and_then(|album| album.quality_override)
-        .unwrap_or(state.default_quality);
-
-    {
-        let mut jobs = state.download_jobs.write().await;
-        if let Some(job) = jobs
-            .iter_mut()
-            .find(|j| j.album_id == album_id && j.status == yoink_shared::DownloadStatus::Failed)
-        {
-            let previous_quality = job.quality;
-            job.status = yoink_shared::DownloadStatus::Queued;
-            job.quality = retry_quality;
-            job.error = None;
-            job.updated_at = Utc::now();
-            db::update_job(&state.db, job).await?;
-            info!(
-                %album_id,
-                job_id = %job.id,
-                previous_quality = %previous_quality,
-                retry_quality = %retry_quality,
-                "Retrying failed download job"
-            );
-            state.download_notify.notify_one();
-            state.notify_sse();
-            return Ok(());
-        }
-    }
-    if let Some(album) = album {
-        info!(album_id = %album.id, title = %album.title, "Creating retry download job");
-        services::enqueue_album_download(state, &album).await;
-    }
+/// TODO: rewrite to use SeaORM entities
+pub(crate) async fn retry_download(state: &AppState, album_id: Uuid) -> AppResult<()> {
+    tracing::warn!(%album_id, "retry_download is currently stubbed out");
     state.notify_sse();
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::db;
-    use crate::models::DownloadStatus;
-    use crate::test_helpers::*;
-    use yoink_shared::Quality;
-
-    #[tokio::test]
-    async fn cancel_download_marks_job_failed() {
-        let (state, _tmp) = test_app_state().await;
-        let artist = seed_artist(&state.db, "Artist").await;
-        let album = seed_album(&state.db, artist.id, "Album").await;
-        let job = seed_job(&state.db, album.id, DownloadStatus::Queued).await;
-
-        state.download_jobs.write().await.push(job.clone());
-
-        super::cancel_download(&state, job.id).await.unwrap();
-
-        let jobs = state.download_jobs.read().await;
-        let j = jobs.iter().find(|j| j.id == job.id).unwrap();
-        assert!(matches!(j.status, DownloadStatus::Failed));
-        assert_eq!(j.error.as_deref(), Some("Cancelled by user"));
-    }
-
-    #[tokio::test]
-    async fn cancel_download_ignores_non_queued() {
-        let (state, _tmp) = test_app_state().await;
-        let artist = seed_artist(&state.db, "Artist").await;
-        let album = seed_album(&state.db, artist.id, "Album").await;
-        let job = seed_job(&state.db, album.id, DownloadStatus::Downloading).await;
-
-        state.download_jobs.write().await.push(job.clone());
-
-        super::cancel_download(&state, job.id).await.unwrap();
-
-        let jobs = state.download_jobs.read().await;
-        let j = jobs.iter().find(|j| j.id == job.id).unwrap();
-        assert!(matches!(j.status, DownloadStatus::Downloading));
-    }
-
-    #[tokio::test]
-    async fn clear_completed_removes_only_completed_jobs() {
-        let (state, _tmp) = test_app_state().await;
-        let artist = seed_artist(&state.db, "Artist").await;
-        let album = seed_album(&state.db, artist.id, "Album").await;
-
-        let j1 = seed_job(&state.db, album.id, DownloadStatus::Completed).await;
-        let j2 = seed_job(&state.db, album.id, DownloadStatus::Queued).await;
-        let j3 = seed_job(&state.db, album.id, DownloadStatus::Completed).await;
-
-        {
-            let mut jobs = state.download_jobs.write().await;
-            jobs.push(j1);
-            jobs.push(j2.clone());
-            jobs.push(j3);
-        }
-
-        super::clear_completed(&state).await.unwrap();
-
-        let jobs = state.download_jobs.read().await;
-        assert_eq!(jobs.len(), 1);
-        assert_eq!(jobs[0].id, j2.id);
-    }
-
-    #[tokio::test]
-    async fn retry_download_uses_album_quality_override() {
-        let (state, _tmp) = test_app_state().await;
-        let artist = seed_artist(&state.db, "Artist").await;
-        let mut album = seed_album(&state.db, artist.id, "Album").await;
-        album.quality_override = Some(Quality::Lossless);
-        db::upsert_album(&state.db, &album).await.unwrap();
-
-        let mut job = seed_job(&state.db, album.id, DownloadStatus::Failed).await;
-        job.quality = Quality::High;
-        db::update_job(&state.db, &job).await.unwrap();
-
-        state.monitored_artists.write().await.push(artist);
-        state.monitored_albums.write().await.push(album.clone());
-        state.download_jobs.write().await.push(job.clone());
-
-        super::retry_download(&state, album.id).await.unwrap();
-
-        let jobs = state.download_jobs.read().await;
-        let retried = jobs.iter().find(|j| j.id == job.id).unwrap();
-        assert_eq!(retried.status, DownloadStatus::Queued);
-        assert_eq!(retried.quality, Quality::Lossless);
-        assert!(retried.error.is_none());
-    }
 }

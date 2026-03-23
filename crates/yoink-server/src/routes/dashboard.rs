@@ -1,11 +1,12 @@
 use axum::{Json, extract::State};
+use sea_orm::EntityTrait;
 use serde::Serialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use yoink_shared::{DownloadJob, MonitoredAlbum, MonitoredArtist};
+use yoink_shared::{Album, DownloadJob, MonitoredArtist};
 
-use crate::state::AppState;
+use crate::{db, routes::helpers::app_error_response, state::AppState};
 
 use super::helpers::ApiErrorResponse;
 
@@ -17,7 +18,7 @@ type ApiResult<T> = Result<Json<T>, ApiErrorResponse>;
 #[derive(Debug, Clone, Serialize, ToSchema)]
 struct DashboardData {
     artists: Vec<MonitoredArtist>,
-    albums: Vec<MonitoredAlbum>,
+    albums: Vec<Album>,
     jobs: Vec<DownloadJob>,
 }
 
@@ -37,9 +38,25 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
     )
 )]
 async fn get_dashboard(State(state): State<AppState>) -> ApiResult<DashboardData> {
+    let artists = db::artist::Entity::find()
+        .all(&state.db)
+        .await
+        .map_err(|e| app_error_response(e.into()))?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+
+    let albums = db::album::Entity::find()
+        .all(&state.db)
+        .await
+        .map_err(|e| app_error_response(e.into()))?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+
     Ok(Json(DashboardData {
-        artists: state.monitored_artists.read().await.clone(),
-        albums: state.monitored_albums.read().await.clone(),
-        jobs: state.download_jobs.read().await.clone(),
+        artists,
+        albums,
+        jobs: vec![], // FIXME: implement download jobs and include here
     }))
 }

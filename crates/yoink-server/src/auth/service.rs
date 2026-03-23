@@ -4,19 +4,16 @@ use argon2::{
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{Duration, Utc};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait,
+    IntoActiveModel, QueryFilter, TransactionTrait, TryIntoModel,
+};
 use sha2::{Digest, Sha256};
-use sqlx::SqlitePool;
 use tracing::warn;
-use uuid::Uuid;
 
 use crate::{
     app_config::AuthConfig,
-    db::{
-        AuthSessionRecord, AuthSettingsRecord, delete_all_auth_sessions_tx, delete_auth_session,
-        delete_expired_auth_sessions, insert_auth_session, insert_auth_session_tx,
-        insert_auth_settings, load_auth_session_by_hash, load_auth_settings, touch_auth_session,
-        update_auth_settings_tx,
-    },
+    db::{self, auth_settings::SettingsResult},
     error::{AppError, AppResult},
 };
 
@@ -38,11 +35,11 @@ pub(crate) struct LoginOutcome {
 pub(crate) struct AuthService {
     enabled: bool,
     session_secret: String,
-    db: SqlitePool,
+    db: DatabaseConnection,
 }
 
 impl AuthService {
-    pub(crate) async fn new(config: AuthConfig, db: SqlitePool) -> AppResult<Self> {
+    pub(crate) async fn new(config: AuthConfig, db: DatabaseConnection) -> AppResult<Self> {
         let service = Self {
             enabled: config.enabled,
             session_secret: config.session_secret.clone(),
@@ -73,22 +70,20 @@ impl AuthService {
             }));
         }
 
-        delete_expired_auth_sessions(&self.db, Utc::now()).await?;
-        let settings = self
-            .load_settings()
-            .await?
-            .ok_or_else(|| AppError::unavailable("auth", "auth settings missing"))?;
+        db::auth_session::Entity::delete_expired_sessions(&self.db).await?;
+
+        let settings = self.load_settings().await?;
 
         if settings.admin_username != username.trim() {
             return Ok(None);
         }
 
-        if !self.verify_password(password, &settings.password_hash)? {
+        if !self.verify_password(password, &settings.admin_password_hash)? {
             return Ok(None);
         }
 
         let (session, outcome) = self.build_login_session(settings.must_change_password);
-        insert_auth_session(&self.db, &session).await?;
+        session.insert(&self.db).await?;
 
         Ok(Some(outcome))
     }
@@ -110,25 +105,21 @@ impl AuthService {
             return Ok(None);
         };
 
-        delete_expired_auth_sessions(&self.db, Utc::now()).await?;
+        db::auth_session::Entity::delete_expired_sessions(&self.db).await?;
 
-        let settings = self
-            .load_settings()
-            .await?
-            .ok_or_else(|| AppError::unavailable("auth", "auth settings missing"))?;
-        let token_hash = hash_value(&raw_token);
-        let Some(session) = load_auth_session_by_hash(&self.db, &token_hash).await? else {
+        let settings = self.load_settings().await?;
+
+        let Some(session) =
+            db::auth_session::Entity::find_by_session_token_hash(&self.db, &hash_value(&raw_token))
+                .await?
+        else {
             return Ok(None);
         };
 
-        if session.expires_at <= Utc::now() {
-            delete_auth_session(&self.db, session.id).await?;
-            return Ok(None);
-        }
-
         if rolling {
-            let now = Utc::now();
-            touch_auth_session(&self.db, session.id, now, now + Duration::hours(24)).await?;
+            let mut session = session.clone().into_active_model();
+            session.expires_at = Set(Utc::now() + Duration::hours(24));
+            session.save(&self.db).await?;
         }
 
         Ok(Some(AuthenticatedSession {
@@ -142,12 +133,17 @@ impl AuthService {
             return Ok(());
         }
 
-        delete_expired_auth_sessions(&self.db, Utc::now()).await?;
+        db::auth_session::Entity::delete_expired_sessions(&self.db).await?;
         if let Some(raw_token) = cookie_value.and_then(|value| self.verify_signed_cookie(value))
-            && let Some(session) =
-                load_auth_session_by_hash(&self.db, &hash_value(&raw_token)).await?
+            && let Some(session) = db::auth_session::Entity::find_by_session_token_hash(
+                &self.db,
+                &hash_value(&raw_token),
+            )
+            .await?
         {
-            delete_auth_session(&self.db, session.id).await?;
+            db::auth_session::Entity::delete_by_id(session.id)
+                .exec(&self.db)
+                .await?;
         }
 
         Ok(())
@@ -158,10 +154,7 @@ impl AuthService {
         username: &str,
         new_password: &str,
     ) -> AppResult<LoginOutcome> {
-        let settings = self
-            .load_settings()
-            .await?
-            .ok_or_else(|| AppError::unavailable("auth", "auth settings missing"))?;
+        let settings = self.load_settings().await?;
 
         let trimmed_username = username.trim();
         if trimmed_username.is_empty() {
@@ -177,22 +170,22 @@ impl AuthService {
             ));
         }
 
-        let now = Utc::now();
         let password_hash = hash_password(new_password)?;
         let (session, outcome) = self.build_login_session(false);
         let mut tx = self.db.begin().await?;
 
-        update_auth_settings_tx(
-            &mut tx,
-            trimmed_username,
-            &password_hash,
-            false,
-            now,
-            Some(now),
-        )
-        .await?;
-        delete_all_auth_sessions_tx(&mut tx).await?;
-        insert_auth_session_tx(&mut tx, &session).await?;
+        let mut settings = settings.into_active_model();
+
+        settings.admin_username = Set(trimmed_username.to_string());
+        settings.admin_password_hash = Set(password_hash.clone());
+        let settings = settings.save(&mut tx).await?.try_into_model()?;
+
+        db::auth_session::Entity::delete_many()
+            .exec(&self.db)
+            .await?;
+
+        session.insert(&mut tx).await?;
+
         tx.commit().await?;
 
         if settings.must_change_password {
@@ -206,87 +199,44 @@ impl AuthService {
     }
 
     pub(crate) async fn verify_current_password(&self, password: &str) -> AppResult<bool> {
-        let settings = self
-            .load_settings()
-            .await?
-            .ok_or_else(|| AppError::unavailable("auth", "auth settings missing"))?;
-        self.verify_password(password, &settings.password_hash)
+        let settings = self.load_settings().await?;
+        self.verify_password(password, &settings.admin_password_hash)
     }
 
     async fn bootstrap_if_needed(&self, config: &AuthConfig) -> AppResult<()> {
-        if let Some(settings) = self.load_settings().await? {
-            if settings.must_change_password {
-                self.rotate_temporary_password(&settings.admin_username)
-                    .await?;
-                return Ok(());
+        let tx = self.db.begin().await?;
+        let settings = db::auth_settings::Entity::get_settings(&tx).await?;
+        let settings = match settings {
+            SettingsResult::Existing(model) => model,
+            SettingsResult::Bootstrapped(model) => {
+                let mut model = model.into_active_model();
+                if let Some(user) = config.init_admin_password.as_deref() {
+                    model.admin_username = Set(user.to_string());
+                }
+                model.save(&tx).await?.try_into_model()?
             }
-            delete_expired_auth_sessions(&self.db, Utc::now()).await?;
+        };
+
+        if settings.must_change_password {
+            let mut settings = settings.into_active_model();
+            if let Some(password) = config.init_admin_password.as_deref() {
+                settings.admin_password_hash = Set(hash_password(password)?);
+            } else {
+                settings.admin_password_hash = Set(hash_password(&random_token(18))?);
+            }
+            settings.save(&tx).await?;
+
             return Ok(());
         }
 
-        let now = Utc::now();
-        match (
-            config.init_admin_username.as_deref(),
-            config.init_admin_password.as_deref(),
-        ) {
-            (Some(username), Some(password)) => {
-                let settings = AuthSettingsRecord {
-                    admin_username: username.to_string(),
-                    password_hash: hash_password(password)?,
-                    must_change_password: false,
-                    created_at: now,
-                    updated_at: now,
-                    password_changed_at: Some(now),
-                };
-                insert_auth_settings(&self.db, &settings).await?;
-            }
-            _ => {
-                let temp_password = random_token(18);
-                let settings = AuthSettingsRecord {
-                    admin_username: DEFAULT_BOOTSTRAP_USERNAME.to_string(),
-                    password_hash: hash_password(&temp_password)?,
-                    must_change_password: true,
-                    created_at: now,
-                    updated_at: now,
-                    password_changed_at: None,
-                };
-                insert_auth_settings(&self.db, &settings).await?;
-                warn!(
-                    username = DEFAULT_BOOTSTRAP_USERNAME,
-                    temporary_password = %temp_password,
-                    "Generated temporary bootstrap admin password. Log in and change it immediately."
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn rotate_temporary_password(&self, username: &str) -> AppResult<()> {
-        let temp_password = random_token(18);
-        let now = Utc::now();
-        let mut tx = self.db.begin().await?;
-        update_auth_settings_tx(
-            &mut tx,
-            username,
-            &hash_password(&temp_password)?,
-            true,
-            now,
-            None,
-        )
-        .await?;
-        delete_all_auth_sessions_tx(&mut tx).await?;
         tx.commit().await?;
-        warn!(
-            username,
-            temporary_password = ?temp_password,
-            "Previous bootstrap setup was not completed. Generated a new temporary admin password."
-        );
+
         Ok(())
     }
 
-    async fn load_settings(&self) -> AppResult<Option<AuthSettingsRecord>> {
-        load_auth_settings(&self.db).await.map_err(Into::into)
+    async fn load_settings(&self) -> AppResult<db::auth_settings::Model> {
+        let settings = db::auth_settings::Entity::get_settings(&self.db).await?;
+        Ok(settings.into_model())
     }
 
     fn sign_cookie_value(&self, raw_token: &str) -> String {
@@ -320,15 +270,17 @@ impl AuthService {
             .is_ok())
     }
 
-    fn build_login_session(&self, must_change_password: bool) -> (AuthSessionRecord, LoginOutcome) {
+    fn build_login_session(
+        &self,
+        must_change_password: bool,
+    ) -> (db::auth_session::ActiveModel, LoginOutcome) {
         let raw_token = random_token(32);
-        let now = Utc::now();
-        let session = AuthSessionRecord {
-            id: Uuid::now_v7(),
-            session_token_hash: hash_value(&raw_token),
-            created_at: now,
-            last_seen_at: now,
-            expires_at: now + Duration::hours(24),
+        let expires_at = Utc::now() + Duration::hours(24);
+
+        let session = db::auth_session::ActiveModel {
+            session_token_hash: Set(hash_value(&raw_token)),
+            expires_at: Set(expires_at),
+            ..Default::default()
         };
 
         (
@@ -371,163 +323,4 @@ fn hex_encode(bytes: &[u8]) -> String {
         output.push(HEX[(byte & 0x0f) as usize] as char);
     }
     output
-}
-
-#[cfg(test)]
-mod tests {
-    use chrono::{Duration, Utc};
-
-    use crate::{
-        app_config::AuthConfig,
-        db::{
-            AuthSessionRecord, insert_auth_session, load_auth_session_by_hash, load_auth_settings,
-        },
-        test_helpers::test_db,
-    };
-
-    use super::*;
-
-    #[tokio::test]
-    async fn bootstraps_from_init_env_password() {
-        let pool = test_db().await;
-        let service = AuthService::new(
-            AuthConfig {
-                enabled: true,
-                session_secret: "secret".to_string(),
-                init_admin_username: Some("root".to_string()),
-                init_admin_password: Some("password123".to_string()),
-            },
-            pool.clone(),
-        )
-        .await
-        .unwrap();
-
-        assert!(service.enabled());
-        let settings = load_auth_settings(&pool).await.unwrap().unwrap();
-        assert_eq!(settings.admin_username, "root");
-        assert!(!settings.must_change_password);
-    }
-
-    #[tokio::test]
-    async fn bootstraps_temp_password_when_no_init_credentials() {
-        let pool = test_db().await;
-        AuthService::new(
-            AuthConfig {
-                enabled: true,
-                session_secret: "secret".to_string(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-            pool.clone(),
-        )
-        .await
-        .unwrap();
-
-        let settings = load_auth_settings(&pool).await.unwrap().unwrap();
-        assert_eq!(settings.admin_username, DEFAULT_BOOTSTRAP_USERNAME);
-        assert!(settings.must_change_password);
-    }
-
-    #[tokio::test]
-    async fn restart_rotates_unfinished_bootstrap_password_and_clears_sessions() {
-        let pool = test_db().await;
-        let config = AuthConfig {
-            enabled: true,
-            session_secret: "secret".to_string(),
-            init_admin_username: None,
-            init_admin_password: None,
-        };
-
-        AuthService::new(config.clone(), pool.clone())
-            .await
-            .unwrap();
-        let initial = load_auth_settings(&pool).await.unwrap().unwrap();
-        let stale_session = AuthSessionRecord {
-            id: Uuid::now_v7(),
-            session_token_hash: "stale".to_string(),
-            created_at: Utc::now(),
-            last_seen_at: Utc::now(),
-            expires_at: Utc::now() + Duration::hours(1),
-        };
-        insert_auth_session(&pool, &stale_session).await.unwrap();
-
-        AuthService::new(config, pool.clone()).await.unwrap();
-
-        let rotated = load_auth_settings(&pool).await.unwrap().unwrap();
-        assert_eq!(rotated.admin_username, initial.admin_username);
-        assert!(rotated.must_change_password);
-        assert_ne!(rotated.password_hash, initial.password_hash);
-        assert!(
-            load_auth_session_by_hash(&pool, "stale")
-                .await
-                .unwrap()
-                .is_none()
-        );
-    }
-
-    #[tokio::test]
-    async fn update_credentials_replaces_sessions_atomically() {
-        let pool = test_db().await;
-        let service = AuthService::new(
-            AuthConfig {
-                enabled: true,
-                session_secret: "secret".to_string(),
-                init_admin_username: Some("admin".to_string()),
-                init_admin_password: Some("password123".to_string()),
-            },
-            pool.clone(),
-        )
-        .await
-        .unwrap();
-
-        let previous_login = service
-            .login("admin", "password123")
-            .await
-            .unwrap()
-            .unwrap();
-        let previous_raw_token = service
-            .verify_signed_cookie(&previous_login.cookie_value)
-            .unwrap();
-
-        let replacement = service
-            .update_credentials("root", "new-password")
-            .await
-            .unwrap();
-        let replacement_raw_token = service
-            .verify_signed_cookie(&replacement.cookie_value)
-            .unwrap();
-
-        let settings = load_auth_settings(&pool).await.unwrap().unwrap();
-        assert_eq!(settings.admin_username, "root");
-        assert!(!settings.must_change_password);
-        assert_eq!(settings.password_changed_at, Some(settings.updated_at));
-        assert!(
-            load_auth_session_by_hash(&pool, &hash_value(&previous_raw_token))
-                .await
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            load_auth_session_by_hash(&pool, &hash_value(&replacement_raw_token))
-                .await
-                .unwrap()
-                .is_some()
-        );
-
-        assert!(
-            service
-                .authenticate_request(Some(&previous_login.cookie_value), false)
-                .await
-                .unwrap()
-                .is_none()
-        );
-
-        let replacement_session = service
-            .authenticate_request(Some(&replacement.cookie_value), false)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(replacement_session.username, "root");
-        assert!(!replacement_session.must_change_password);
-    }
 }

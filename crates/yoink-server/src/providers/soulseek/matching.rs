@@ -2,10 +2,11 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::models::{SearchFile, SearchResponse};
-use super::util::{detect_audio_extension, normalize, normalized_parent_dir, parse_track_number};
-use crate::providers::DownloadTrackContext;
-use yoink_shared::Quality;
+use super::{
+    models::{SearchFile, SearchResponse},
+    util::{detect_audio_extension, normalize, normalized_parent_dir, parse_track_number},
+};
+use crate::{db::quality::Quality, providers::DownloadTrackContext};
 
 // ── Types ───────────────────────────────────────────────────────────
 

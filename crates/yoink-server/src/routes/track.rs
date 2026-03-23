@@ -7,13 +7,11 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use yoink_shared::{LibraryTrack, SearchTrackResult, ServerAction};
+use yoink_shared::{LibraryTrack, SearchTrackResult};
 
-use crate::{actions::dispatch_action_impl, server_context::build_server_context, state::AppState};
+use crate::{db::provider::Provider, services, state::AppState};
 
-use super::helpers::{
-    ApiErrorResponse, app_error_response, enrich_track_results, yoink_error_response,
-};
+use super::helpers::{ApiErrorResponse, app_error_response};
 
 pub(crate) const TAG: &str = "Track";
 pub(crate) const TAG_DESCRIPTION: &str = "Endpoints for track search and library track access";
@@ -28,7 +26,7 @@ struct TrackSearchQuery {
 
 #[derive(Debug, Deserialize, ToSchema)]
 struct CreateTrackRequest {
-    provider: String,
+    provider: Provider,
     external_track_id: String,
     external_album_id: String,
     artist_external_id: String,
@@ -42,10 +40,6 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(create_track))
 }
 
-/// Search Tracks
-///
-/// Searches all registered metadata providers for tracks matching the query
-/// string and returns the aggregated results.
 #[utoipa::path(
     get,
     path = "/search",
@@ -58,8 +52,9 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
         (status = 503, description = "Provider search unavailable"),
     )
 )]
+/// Search Tracks
 async fn search_tracks(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(query): Query<TrackSearchQuery>,
 ) -> ApiResult<Vec<SearchTrackResult>> {
     let trimmed = query.query.trim();
@@ -67,18 +62,10 @@ async fn search_tracks(
         return Ok(Json(Vec::new()));
     }
 
-    let ctx = build_server_context(&state);
-    let mut results = (ctx.search_tracks)(trimmed.to_string())
-        .await
-        .map_err(yoink_error_response)?;
-    enrich_track_results(&state.db, &mut results).await;
-    Ok(Json(results))
+    // TODO: implement search across providers
+    Ok(Json(vec![]))
 }
 
-/// List Tracks
-///
-/// Returns the library-wide track view, including parent album and artist
-/// context for each local track row.
 #[utoipa::path(
     get,
     path = "/",
@@ -88,18 +75,13 @@ async fn search_tracks(
         (status = 500, description = "Failed to load tracks"),
     )
 )]
+/// List Tracks
 async fn list_tracks(State(state): State<AppState>) -> ApiResult<Vec<LibraryTrack>> {
-    let ctx = build_server_context(&state);
-    let tracks = (ctx.fetch_library_tracks)()
-        .await
-        .map_err(yoink_error_response)?;
-    Ok(Json(tracks))
+    // TODO: implement once track entity has From<Model> for LibraryTrack
+    let _ = &state.db;
+    Ok(Json(vec![]))
 }
 
-/// Create Track
-///
-/// Adds a single provider track to the local library, creating the parent
-/// lightweight artist and album as needed and marking only that track wanted.
 #[utoipa::path(
     post,
     path = "/",
@@ -111,19 +93,18 @@ async fn list_tracks(State(state): State<AppState>) -> ApiResult<Vec<LibraryTrac
         (status = 500, description = "Failed to create track"),
     )
 )]
+/// Create Track
 async fn create_track(
     State(state): State<AppState>,
     Json(request): Json<CreateTrackRequest>,
 ) -> ApiStatusResult {
-    dispatch_action_impl(
-        state,
-        ServerAction::AddTrack {
-            provider: request.provider,
-            external_track_id: request.external_track_id,
-            external_album_id: request.external_album_id,
-            artist_external_id: request.artist_external_id,
-            artist_name: request.artist_name,
-        },
+    services::track::add_track(
+        &state,
+        request.provider,
+        request.external_track_id,
+        request.external_album_id,
+        request.artist_external_id,
+        request.artist_name,
     )
     .await
     .map_err(app_error_response)?;
