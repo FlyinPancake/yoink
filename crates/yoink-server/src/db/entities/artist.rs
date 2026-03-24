@@ -2,8 +2,6 @@ use async_trait::async_trait;
 use sea_orm::{ActiveValue::Set, entity::prelude::*};
 use uuid::Uuid;
 
-use super::url::DbUrl;
-
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "artists")]
@@ -11,8 +9,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub name: String,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub image_url: Option<DbUrl>,
+    pub image_url: Option<String>,
     pub bio: Option<String>,
     pub monitored: bool,
     #[sea_orm(has_many, via = "album_artist")]
@@ -51,7 +48,7 @@ impl From<Model> for yoink_shared::MonitoredArtist {
         Self {
             id: value.id,
             name: value.name,
-            image_url: value.image_url.map(Into::into),
+            image_url: value.image_url,
             bio: value.bio,
             monitored: value.monitored,
             created_at: value.created_at,

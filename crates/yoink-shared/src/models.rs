@@ -94,7 +94,7 @@ pub struct DownloadJob {
 pub struct MonitoredArtist {
     pub id: Uuid,
     pub name: String,
-    pub image_url: Option<Url>,
+    pub image_url: Option<String>,
     pub bio: Option<String>,
     /// Whether this artist is fully monitored (discography synced from providers).
     /// `false` = lightweight artist (only explicitly-added albums, no auto-sync).

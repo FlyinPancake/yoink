@@ -33,14 +33,14 @@ impl ProviderRegistry {
 
     /// Fan-out search to all metadata providers concurrently.
     /// Returns a list of (provider_id, results).
-    pub async fn search_artists_all(&self, query: &str) -> Vec<(String, Vec<ProviderArtist>)> {
+    pub async fn search_artists_all(&self, query: &str) -> Vec<(Provider, Vec<ProviderArtist>)> {
         let mut handles = Vec::new();
 
         for provider in &self.metadata {
             let p = Arc::clone(provider);
             let q = query.to_string();
             handles.push(tokio::spawn(async move {
-                let id = p.id().to_string();
+                let id = p.id();
                 match p.search_artists(&q).await {
                     Ok(artists) => (id, artists),
                     Err(_) => (id, Vec::new()),
@@ -58,15 +58,15 @@ impl ProviderRegistry {
     }
 
     /// Fan-out album search to all metadata providers concurrently.
-    /// Returns a list of (provider_id, results).
-    pub async fn search_albums_all(&self, query: &str) -> Vec<(String, Vec<ProviderSearchAlbum>)> {
+    /// Returns a list of (provider, results).
+    pub async fn search_albums_all(&self, query: &str) -> Vec<(Provider, Vec<ProviderSearchAlbum>)> {
         let mut handles = Vec::new();
 
         for provider in &self.metadata {
             let p = Arc::clone(provider);
             let q = query.to_string();
             handles.push(tokio::spawn(async move {
-                let id = p.id().to_string();
+                let id = p.id();
                 match p.search_albums(&q).await {
                     Ok(albums) => (id, albums),
                     Err(_) => (id, Vec::new()),
@@ -84,15 +84,15 @@ impl ProviderRegistry {
     }
 
     /// Fan-out track search to all metadata providers concurrently.
-    /// Returns a list of (provider_id, results).
-    pub async fn search_tracks_all(&self, query: &str) -> Vec<(String, Vec<ProviderSearchTrack>)> {
+    /// Returns a list of (provider, results).
+    pub async fn search_tracks_all(&self, query: &str) -> Vec<(Provider, Vec<ProviderSearchTrack>)> {
         let mut handles = Vec::new();
 
         for provider in &self.metadata {
             let p = Arc::clone(provider);
             let q = query.to_string();
             handles.push(tokio::spawn(async move {
-                let id = p.id().to_string();
+                let id = p.id();
                 match p.search_tracks(&q).await {
                     Ok(tracks) => (id, tracks),
                     Err(_) => (id, Vec::new()),

@@ -41,7 +41,7 @@ struct CreateArtistRequest {
     provider: String,
     external_id: String,
     #[serde(default)]
-    image_url: Option<Url>,
+    image_url: Option<String>,
     #[serde(default)]
     external_url: Option<Url>,
 }
@@ -51,7 +51,7 @@ struct UpdateArtistRequest {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
-    image_url: Option<Url>,
+    image_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -231,7 +231,7 @@ async fn get_artist(
     let artist = MonitoredArtist {
         id,
         name,
-        image_url: image_url.map(Into::into),
+        image_url,
         bio,
         monitored,
         created_at,

@@ -50,7 +50,7 @@ pub(crate) async fn get_album_details(
         .ok_or_else(|| AppError::not_found("album", Some(album_id.to_string())))?;
 
     let album_artists: Vec<_> = db::album_artist::Entity::find_by_album_ordered(album_id)
-        .select_also(db::artist::Entity)
+        .find_also_related(db::artist::Entity)
         .all(&state.db)
         .await?
         .into_iter()
@@ -404,8 +404,8 @@ pub(crate) async fn add_album(
         let album_type = prov_album
             .album_type
             .as_deref()
-            .and_then(|t| AlbumType::try_from_value(&t.to_string()).ok())
-            .unwrap_or(AlbumType::Album);
+            .map(AlbumType::parse)
+            .unwrap_or(AlbumType::Unknown);
 
         let release_date = prov_album.release_date;
 

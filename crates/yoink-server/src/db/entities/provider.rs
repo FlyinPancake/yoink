@@ -21,6 +21,7 @@ use utoipa::ToSchema;
     enum_name = "provider",
     rename_all = "snake_case"
 )]
+#[serde(rename_all = "snake_case")]
 pub enum Provider {
     Tidal,
     Deezer,

@@ -31,9 +31,7 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
     get,
     path = "/",
     tag = TAG,
-    params(
-        ("query" = SearchQuery, Query, description = "Search query")
-    ),
+    params(SearchQuery),
     responses(
         (status = 200, description = "Aggregated search results", body = SearchAllResult),
         (status = 503, description = "One or more provider searches failed"),

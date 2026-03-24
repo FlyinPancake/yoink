@@ -1,12 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use sea_orm::{
-    ColumnTrait, EntityLoaderTrait, EntityTrait, IntoActiveModel, ModelTrait, QueryFilter,
+    ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityLoaderTrait,
+    EntityTrait, IntoActiveModel, ModelTrait, QueryFilter, TransactionTrait,
 };
 use uuid::Uuid;
 
 use crate::{
-    db::{self, album_type::AlbumType, provider::Provider},
+    db::{self, album_type::AlbumType, provider::Provider, wanted_status::WantedStatus},
     error::{AppError, AppResult},
     providers::{ProviderAlbum, provider_image_url},
     state::AppState,
@@ -15,6 +16,7 @@ use crate::{
 
 /// Sync albums for an artist from all linked metadata providers.
 pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> AppResult<()> {
+    tracing::info!(%artist_id, "starting album sync");
     let artist = db::artist::Entity::load()
         .filter_by_id(artist_id)
         .with(db::artist_provider_link::Entity)
@@ -33,11 +35,13 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
 
     for link in artist.clone().provider_links {
         let Some(provider) = state.registry.metadata_provider(link.provider) else {
+            tracing::warn!(%artist_id, provider = ?link.provider, "no metadata provider registered, skipping");
             continue;
         };
 
         match provider.fetch_albums(&link.external_id).await {
             Ok(albums) => {
+                tracing::debug!(%artist_id, provider = ?link.provider, count = albums.len(), "fetched albums");
                 all_incoming.extend(albums.into_iter().map(|album| (link.provider, album)))
             }
             Err(e) => {
@@ -52,8 +56,11 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
     }
 
     if all_incoming.is_empty() {
+        tracing::info!(%artist_id, "no albums returned from any provider, nothing to sync");
         return Ok(());
     }
+
+    tracing::info!(%artist_id, total = all_incoming.len(), "collected albums from all providers");
 
     let mut groups: HashMap<String, Vec<(Provider, ProviderAlbum)>> = HashMap::new();
 
@@ -85,6 +92,8 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
         }
     }
 
+    tracing::debug!(%artist_id, groups = groups.len(), "deduplication complete");
+
     let incoming_keys = groups.keys().cloned().collect::<HashSet<_>>();
 
     for entries in groups.values() {
@@ -100,28 +109,26 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
             })
             .clone();
 
-        let local_album_id = {
-            loop {
-                let Some((prov, album)) = entries.iter().next() else {
-                    break None;
-                };
-                let link = db::album_provider_link::Entity::find()
-                    .filter(
-                        db::album_provider_link::Column::ProviderAlbumId
-                            .eq(album.external_id.clone()),
-                    )
-                    .filter(db::album_provider_link::Column::Provider.eq(*prov))
-                    .one(&state.db)
-                    .await?;
+        let mut local_album_id = None;
+        for (prov, album) in entries {
+            let link = db::album_provider_link::Entity::find()
+                .filter(
+                    db::album_provider_link::Column::ProviderAlbumId
+                        .eq(album.external_id.clone()),
+                )
+                .filter(db::album_provider_link::Column::Provider.eq(*prov))
+                .one(&state.db)
+                .await?;
 
-                if let Some(link) = link {
-                    break Some(link.album_id);
-                }
+            if let Some(link) = link {
+                local_album_id = Some(link.album_id);
+                break;
             }
-        };
+        }
 
         let _album = match local_album_id {
             Some(album_id) => {
+                tracing::debug!(%artist_id, %album_id, title = %best_album.title, provider = ?best_provider, "updating existing album");
                 let Some(album) = db::album::Entity::find_by_id(album_id)
                     .one(&state.db)
                     .await?
@@ -135,8 +142,9 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
                         .set_album_type(
                             best_album
                                 .album_type
-                                .map(|ty| serde_json::from_str::<AlbumType>(&ty).unwrap())
-                                .unwrap_or(AlbumType::Album),
+                                .as_deref()
+                                .map(AlbumType::parse)
+                                .unwrap_or(AlbumType::Unknown),
                         )
                         .set_release_date(best_album.release_date)
                         .set_cover_url(
@@ -150,7 +158,56 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
                         .await?,
                 )
             }
-            None => None,
+            None => {
+                tracing::debug!(%artist_id, title = %best_album.title, provider = ?best_provider, "inserting new album");
+
+                let album_type = best_album
+                    .album_type
+                    .as_deref()
+                    .map(AlbumType::parse)
+                    .unwrap_or(AlbumType::Unknown);
+
+                let cover_url = best_album
+                    .cover_ref
+                    .as_deref()
+                    .map(|c| provider_image_url(best_provider, c, 640));
+
+                let tx = state.db.begin().await?;
+
+                let model = db::album::ActiveModel {
+                    title: Set(best_album.title),
+                    album_type: Set(album_type),
+                    release_date: Set(best_album.release_date),
+                    cover_url: Set(cover_url),
+                    explicit: Set(best_album.explicit),
+                    wanted_status: Set(WantedStatus::Unmonitored),
+                    ..db::album::ActiveModel::new()
+                };
+                let new_album = model.insert(&tx).await?;
+                let new_id = new_album.id;
+
+                for (prov, album) in entries {
+                    let link = db::album_provider_link::ActiveModel {
+                        album_id: Set(new_id),
+                        provider: Set(*prov),
+                        provider_album_id: Set(album.external_id.clone()),
+                        ..db::album_provider_link::ActiveModel::new()
+                    };
+                    link.insert(&tx).await?;
+                }
+
+                let junction = db::album_artist::ActiveModel {
+                    album_id: Set(new_id),
+                    artist_id: Set(artist_id),
+                    priority: Set(0),
+                };
+                junction.insert(&tx).await?;
+
+                tx.commit().await?;
+
+                tracing::info!(%artist_id, %new_id, title = %new_album.title, "created new album");
+                Some(new_album.into_ex())
+            }
         };
 
         // TODO insert additional artists
@@ -173,6 +230,7 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
         }
 
         if !ids_to_remove.is_empty() {
+            tracing::info!(%artist_id, count = ids_to_remove.len(), "removing stale albums");
             db::album::Entity::delete_many()
                 .filter(db::album::Column::Id.is_in(ids_to_remove))
                 .exec(&state.db)
@@ -180,6 +238,7 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
         }
     }
 
+    tracing::info!(%artist_id, "album sync complete");
     state.notify_sse();
     Ok(())
 }

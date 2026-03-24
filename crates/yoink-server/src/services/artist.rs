@@ -4,7 +4,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    db::{self, album_artist, artist, artist_provider_link, provider::Provider, url::DbUrl},
+    db::{self, album_artist, artist, artist_provider_link, provider::Provider},
     error::{AppError, AppResult},
     state::AppState,
 };
@@ -24,7 +24,7 @@ pub(crate) async fn add_artist(
     name: String,
     provider: String,
     external_id: String,
-    image_url: Option<Url>,
+    image_url: Option<String>,
     external_url: Option<Url>,
 ) -> AppResult<()> {
     let provider_enum = parse_provider(&provider)?;
@@ -43,7 +43,7 @@ pub(crate) async fn add_artist(
     } else {
         let model = artist::ActiveModel {
             name: Set(name.clone()),
-            image_url: Set(image_url.map(DbUrl)),
+            image_url: Set(image_url),
             monitored: Set(true),
             ..artist::ActiveModel::new()
         };
@@ -126,7 +126,7 @@ pub(crate) async fn update_artist(
     state: &AppState,
     artist_id: Uuid,
     name: Option<String>,
-    image_url: Option<Url>,
+    image_url: Option<String>,
 ) -> AppResult<()> {
     let mut model: artist::ActiveModel = artist::Entity::find_by_id(artist_id)
         .one(&state.db)
@@ -138,7 +138,7 @@ pub(crate) async fn update_artist(
         model.name = Set(name.clone());
     }
     if let Some(image_url) = image_url {
-        model.image_url = Set(Some(DbUrl(image_url)));
+        model.image_url = Set(Some(image_url));
     }
 
     model.update(&state.db).await?;

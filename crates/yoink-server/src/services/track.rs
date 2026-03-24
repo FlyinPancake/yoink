@@ -66,8 +66,8 @@ pub(crate) async fn add_track(
         let album_type = prov_album
             .album_type
             .as_deref()
-            .and_then(|t| AlbumType::try_from_value(&t.to_string()).ok())
-            .unwrap_or(AlbumType::Album);
+            .map(AlbumType::parse)
+            .unwrap_or(AlbumType::Unknown);
 
         let release_date = prov_album.release_date;
 
