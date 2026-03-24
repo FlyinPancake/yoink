@@ -1,6 +1,7 @@
 use std::{collections::HashMap, num::NonZeroU32, time::Duration};
 
 use async_trait::async_trait;
+use chrono::NaiveDate;
 use governor::{Quota, RateLimiter, clock::DefaultClock, state::InMemoryState, state::NotKeyed};
 use serde::Deserialize;
 use serde_json::Value;
@@ -405,11 +406,28 @@ impl MetadataProvider for DeezerProvider {
 
                 let url = Some(format!("https://www.deezer.com/album/{}", a.id));
 
+                let release_date = a.release_date.as_deref().and_then(|d| {
+                    // Normalize to "YYYY-MM-DD" if possible, or just "YYYY" if that's all we have.
+                    if d.len() == 4 && d.chars().all(|c| c.is_ascii_digit()) {
+                        match d.parse::<i32>() {
+                            Ok(year) => NaiveDate::from_ymd_opt(year, 1, 1),
+                            Err(_) => None,
+                        }
+                    } else if d.len() >= 10 && &d[4..5] == "-" && &d[7..8] == "-" {
+                        match NaiveDate::parse_from_str(&d[..10], "%Y-%m-%d") {
+                            Ok(date) => Some(date),
+                            Err(_) => None,
+                        }
+                    } else {
+                        None
+                    }
+                });
+
                 ProviderAlbum {
                     external_id: a.id.to_string(),
                     title: a.title,
                     album_type,
-                    release_date: a.release_date,
+                    release_date,
                     cover_ref: a.md5_image,
                     url,
                     explicit: a.explicit_lyrics,

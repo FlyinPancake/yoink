@@ -11,6 +11,7 @@ use crate::{
         quality::Quality, track, url::DbUrl, wanted_status::WantedStatus,
     },
     error::{AppError, AppResult},
+    providers::provider_image_url,
     state::AppState,
 };
 
@@ -68,26 +69,12 @@ pub(crate) async fn add_track(
             .and_then(|t| AlbumType::try_from_value(&t.to_string()).ok())
             .unwrap_or(AlbumType::Album);
 
-        let release_date = prov_album
-            .release_date
-            .as_deref()
-            .and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+        let release_date = prov_album.release_date;
 
         let cover_url = prov_album
             .cover_ref
-            .as_deref()
-            .and_then(|c| {
-                let url_str = match provider {
-                    Provider::Tidal => format!(
-                        "https://resources.tidal.com/images/{}/640x640.jpg",
-                        c.replace('-', "/")
-                    ),
-                    Provider::Deezer => format!("https://api.deezer.com/album/{c}/image?size=big"),
-                    _ => return None,
-                };
-                url::Url::parse(&url_str).ok()
-            })
-            .map(DbUrl);
+            .as_ref()
+            .map(|r| provider_image_url(provider, r, 640));
 
         // Album-level not monitored; only the specific track will be
         let model = album::ActiveModel {

@@ -11,10 +11,11 @@ use yoink_shared::{Album, DownloadJob, MatchSuggestion, MonitoredArtist, Provide
 use crate::{
     db::{
         self, album, album_artist, album_provider_link, album_type::AlbumType, download_job,
-        download_status::DownloadStatus, provider::Provider, quality::Quality, url::DbUrl,
+        download_status::DownloadStatus, provider::Provider, quality::Quality,
         wanted_status::WantedStatus,
     },
     error::{AppError, AppResult},
+    providers::provider_image_url,
     services,
     state::AppState,
 };
@@ -406,27 +407,12 @@ pub(crate) async fn add_album(
             .and_then(|t| AlbumType::try_from_value(&t.to_string()).ok())
             .unwrap_or(AlbumType::Album);
 
-        let release_date = prov_album
-            .release_date
-            .as_deref()
-            .and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+        let release_date = prov_album.release_date;
 
         let cover_url = prov_album
             .cover_ref
-            .as_deref()
-            .and_then(|c| {
-                // Build provider-specific image URL
-                let url_str = match provider.to_string().as_str() {
-                    "tidal" => format!(
-                        "https://resources.tidal.com/images/{}/640x640.jpg",
-                        c.replace('-', "/")
-                    ),
-                    "deezer" => format!("https://api.deezer.com/album/{c}/image?size=big"),
-                    _ => return None,
-                };
-                url::Url::parse(&url_str).ok()
-            })
-            .map(DbUrl);
+            .as_ref()
+            .map(|r| provider_image_url(provider, r, 640));
 
         let wanted_status = if monitor_all {
             WantedStatus::Wanted

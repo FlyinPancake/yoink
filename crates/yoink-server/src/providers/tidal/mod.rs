@@ -13,7 +13,7 @@ pub(crate) mod models;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use sea_orm::ActiveEnum;
+use chrono::NaiveDate;
 use tokio::sync::RwLock;
 use tracing::warn;
 
@@ -144,22 +144,26 @@ impl MetadataProvider for TidalProvider {
             .albums
             .items
             .into_iter()
-            .map(|a| ProviderAlbum {
-                external_id: a.id.to_string(),
-                title: a.title,
-                album_type: a.album_type,
-                release_date: a.release_date,
-                cover_ref: a.cover,
-                url: a.url,
-                explicit: a.explicit.unwrap_or(false),
-                artists: a
-                    .artists
-                    .into_iter()
-                    .map(|ar| super::ProviderAlbumArtist {
-                        external_id: ar.id.to_string(),
-                        name: ar.name,
-                    })
-                    .collect(),
+            .map(|a| {
+                let release_date = a.release_date.map(|d| d.parse().ok()).flatten();
+
+                ProviderAlbum {
+                    external_id: a.id.to_string(),
+                    title: a.title,
+                    album_type: a.album_type,
+                    release_date,
+                    cover_ref: a.cover,
+                    url: a.url,
+                    explicit: a.explicit.unwrap_or(false),
+                    artists: a
+                        .artists
+                        .into_iter()
+                        .map(|ar| super::ProviderAlbumArtist {
+                            external_id: ar.id.to_string(),
+                            name: ar.name,
+                        })
+                        .collect(),
+                }
             })
             .collect())
     }

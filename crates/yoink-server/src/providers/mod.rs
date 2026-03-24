@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use async_trait::async_trait;
+use chrono::NaiveDate;
 use serde_json::Value;
 use thiserror::Error;
 
@@ -171,7 +172,7 @@ pub(crate) struct ProviderAlbum {
     pub external_id: String,
     pub title: String,
     pub album_type: Option<String>,
-    pub release_date: Option<String>,
+    pub release_date: Option<NaiveDate>,
     pub cover_ref: Option<String>,
     pub url: Option<String>,
     pub explicit: bool,
@@ -429,6 +430,11 @@ pub(crate) trait DownloadSource: Send + Sync {
         quality: &Quality,
         context: Option<&DownloadTrackContext>,
     ) -> Result<PlaybackInfo, ProviderError>;
+}
+
+/// Build an image proxy URL for a given provider and image reference.
+pub fn provider_image_url(provider: Provider, image_ref: &str, size: u16) -> String {
+    format!("/api/image/{provider}/{image_ref}/{size}")
 }
 
 #[cfg(test)]

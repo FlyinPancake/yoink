@@ -24,7 +24,7 @@ pub struct Model {
     pub title: String,
     pub album_type: AlbumType,
     pub release_date: Option<chrono::NaiveDate>,
-    pub cover_url: Option<DbUrl>,
+    pub cover_url: Option<String>,
     pub explicit: bool,
     pub wanted_status: WantedStatus,
     pub requested_quality: Option<Quality>,

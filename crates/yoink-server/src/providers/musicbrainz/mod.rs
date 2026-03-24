@@ -431,7 +431,10 @@ impl MetadataProvider for MusicBrainzProvider {
                     .primary_type
                     .as_ref()
                     .map(|pt| primary_type_str(pt).to_string());
-                let release_date = rg.first_release_date.map(|d| d.0);
+                let release_date = rg
+                    .first_release_date
+                    .map(|d| d.into_naive_date(1980, 1, 1).ok())
+                    .flatten();
                 // Use release group MBID as cover art ref (for Cover Art Archive)
                 let cover_ref = Some(rg.id.clone());
                 let url = Some(format!("https://musicbrainz.org/release-group/{}", &rg.id));
