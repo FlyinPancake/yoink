@@ -15,5 +15,4 @@ pub(crate) mod root_folder;
 pub(crate) mod track;
 pub(crate) mod track_artist;
 pub(crate) mod track_provider_link;
-pub(crate) mod url;
 pub(crate) mod wanted_status;

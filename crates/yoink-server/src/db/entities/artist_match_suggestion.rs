@@ -1,7 +1,7 @@
 use sea_orm::{ActiveValue::Set, entity::prelude::*};
 use uuid::Uuid;
 
-use crate::db::{provider::Provider, url::DbUrl};
+use crate::db::provider::Provider;
 
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
@@ -16,8 +16,8 @@ pub struct Model {
     pub provider_artist_id: String,
     pub provider_artist_name: String,
     pub confidence: f32,
-    pub url: Option<DbUrl>,
-    pub image_url: Option<DbUrl>,
+    pub url: Option<String>,
+    pub image_url: Option<String>,
     pub created_at: DateTimeUtc,
     pub modified_at: DateTimeUtc,
 }

@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sea_orm::{ActiveValue::Set, QueryOrder, entity::prelude::*};
 
 use crate::db::{
-    entities::{album_type::AlbumType, url::DbUrl},
+    entities::album_type::AlbumType,
     quality::Quality,
     wanted_status::WantedStatus,
 };
