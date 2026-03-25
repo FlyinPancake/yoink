@@ -63,7 +63,7 @@ pub(crate) async fn add_artist(
         artist_id
     };
 
-    super::sync_artist_albums(state, artist_id).await?;
+    super::sync_artist(state, artist_id).await?;
     helpers::spawn_fetch_artist_bio(state, artist_id);
     helpers::spawn_recompute_artist_match_suggestions(state, artist_id);
     state.notify_sse();
@@ -163,7 +163,7 @@ pub(crate) async fn toggle_artist_monitor(
     model.update(&state.db).await?;
 
     if monitored {
-        super::sync_artist_albums(state, artist_id).await?;
+        super::sync_artist(state, artist_id).await?;
         helpers::spawn_fetch_artist_bio(state, artist_id);
         helpers::spawn_recompute_artist_match_suggestions(state, artist_id);
     }
@@ -189,8 +189,8 @@ pub(crate) async fn fetch_artist_bio(state: &AppState, artist_id: Uuid) -> AppRe
     Ok(())
 }
 
-pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> AppResult<()> {
-    super::sync_artist_albums(state, artist_id).await?;
+pub(crate) async fn sync_artist_and_refresh(state: &AppState, artist_id: Uuid) -> AppResult<()> {
+    super::sync_artist(state, artist_id).await?;
 
     let artist = artist::Entity::find_by_id(artist_id).one(&state.db).await?;
     let has_bio = artist.as_ref().and_then(|a| a.bio.as_ref()).is_some();

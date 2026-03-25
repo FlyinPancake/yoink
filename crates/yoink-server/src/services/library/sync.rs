@@ -14,8 +14,8 @@ use crate::{
     util::provider_priority,
 };
 
-/// Sync albums for an artist from all linked metadata providers.
-pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> AppResult<()> {
+/// Sync albums and tracks for an artist from all linked metadata providers.
+pub(crate) async fn sync_artist(state: &AppState, artist_id: Uuid) -> AppResult<()> {
     tracing::info!(%artist_id, "starting album sync");
     let artist = db::artist::Entity::load()
         .filter_by_id(artist_id)
@@ -126,7 +126,7 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
             }
         }
 
-        let _album = match local_album_id {
+        let album = match local_album_id {
             Some(album_id) => {
                 tracing::debug!(%artist_id, %album_id, title = %best_album.title, provider = ?best_provider, "updating existing album");
                 let Some(album) = db::album::Entity::find_by_id(album_id)
@@ -138,7 +138,7 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
                 let album = album.into_active_model().into_ex();
                 Some(
                     album
-                        .set_title(best_album.title)
+                        .set_title(best_album.title.clone())
                         .set_album_type(
                             best_album
                                 .album_type
@@ -210,6 +210,10 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
             }
         };
 
+        if let Some(ref album) = album {
+            sync_album_tracks(state, best_provider, &best_album.external_id, album.id).await?;
+        }
+
         // TODO insert additional artists
     }
 
@@ -240,6 +244,139 @@ pub(crate) async fn sync_artist_albums(state: &AppState, artist_id: Uuid) -> App
 
     tracing::info!(%artist_id, "album sync complete");
     state.notify_sse();
+    Ok(())
+}
+
+/// Sync tracks for an album from a metadata provider.
+///
+/// Fetches tracks, deduplicates against local state, and inserts or updates.
+/// Does not delete local tracks missing from the provider (preserves user files).
+/// New tracks are always inserted as `Unmonitored`.
+pub(crate) async fn sync_album_tracks(
+    state: &AppState,
+    provider: Provider,
+    external_album_id: &str,
+    album_id: Uuid,
+) -> AppResult<()> {
+    let metadata = state.registry.metadata_provider(provider).ok_or_else(|| {
+        AppError::unavailable("metadata provider", format!("unknown provider '{provider}'"))
+    })?;
+
+    let (provider_tracks, _album_extra) = metadata.fetch_tracks(external_album_id).await?;
+
+    if provider_tracks.is_empty() {
+        tracing::debug!(%album_id, %provider, "no tracks returned from provider");
+        return Ok(());
+    }
+
+    // Pre-load existing tracks and their provider links for this album.
+    let existing_tracks = db::track::Entity::load()
+        .filter(db::track::Column::AlbumId.eq(album_id))
+        .all(&state.db)
+        .await?;
+
+    let existing_links = db::track_provider_link::Entity::find()
+        .filter(db::track_provider_link::Column::Provider.eq(provider))
+        .filter(
+            db::track_provider_link::Column::TrackId
+                .is_in(existing_tracks.iter().map(|t| t.id).collect::<Vec<_>>()),
+        )
+        .all(&state.db)
+        .await?;
+
+    // Build lookup maps for dedup.
+    let link_by_ext_id: HashMap<&str, &db::track_provider_link::Model> = existing_links
+        .iter()
+        .map(|l| (l.provider_track_id.as_str(), l))
+        .collect();
+
+    let track_by_id: HashMap<Uuid, &db::track::ModelEx> =
+        existing_tracks.iter().map(|t| (t.id, t)).collect();
+
+    let tx = state.db.begin().await?;
+    let mut inserted = 0u32;
+    let mut updated = 0u32;
+
+    for pt in &provider_tracks {
+        // Tier 1: match by provider + external_id
+        let matched = link_by_ext_id
+            .get(pt.external_id.as_str())
+            .and_then(|link| track_by_id.get(&link.track_id).copied());
+
+        // Tier 2: match by ISRC
+        let matched = matched.or_else(|| {
+            pt.isrc.as_deref().and_then(|isrc| {
+                existing_tracks
+                    .iter()
+                    .find(|t| t.isrc.as_deref() == Some(isrc))
+            })
+        });
+
+        // Tier 3: match by disc + track number
+        let matched = matched.or_else(|| {
+            existing_tracks.iter().find(|t| {
+                t.disc_number == pt.disc_number
+                    && t.track_number == Some(pt.track_number)
+            })
+        });
+
+        if let Some(existing) = matched {
+            // Update metadata, leave status/file_path/root_folder_id untouched.
+            existing
+                .clone()
+                .into_active_model()
+                .set_title(pt.title.clone())
+                .set_version(pt.version.clone())
+                .set_disc_number(pt.disc_number)
+                .set_track_number(Some(pt.track_number))
+                .set_duration(Some(pt.duration_secs))
+                .set_isrc(pt.isrc.clone())
+                .set_explicit(pt.explicit)
+                .update(&tx)
+                .await?;
+
+            // Ensure provider link exists for this provider.
+            if !link_by_ext_id.contains_key(pt.external_id.as_str()) {
+                let link = db::track_provider_link::ActiveModel {
+                    track_id: Set(existing.id),
+                    provider: Set(provider),
+                    provider_track_id: Set(pt.external_id.clone()),
+                    ..Default::default()
+                };
+                link.insert(&tx).await?;
+            }
+
+            updated += 1;
+        } else {
+            let model = db::track::ActiveModel {
+                title: Set(pt.title.clone()),
+                version: Set(pt.version.clone()),
+                disc_number: Set(pt.disc_number),
+                track_number: Set(Some(pt.track_number)),
+                duration: Set(Some(pt.duration_secs)),
+                album_id: Set(album_id),
+                explicit: Set(pt.explicit),
+                isrc: Set(pt.isrc.clone()),
+                status: Set(WantedStatus::Unmonitored),
+                ..Default::default()
+            };
+            let new_track = model.insert(&tx).await?;
+
+            let link = db::track_provider_link::ActiveModel {
+                track_id: Set(new_track.id),
+                provider: Set(provider),
+                provider_track_id: Set(pt.external_id.clone()),
+                ..Default::default()
+            };
+            link.insert(&tx).await?;
+
+            inserted += 1;
+        }
+    }
+
+    tx.commit().await?;
+
+    tracing::info!(%album_id, ?provider, inserted, updated, total = provider_tracks.len(), "track sync complete");
     Ok(())
 }
 

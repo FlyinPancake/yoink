@@ -359,7 +359,7 @@ async fn sync_artist(
     State(state): State<AppState>,
     Path(artist_id): Path<Uuid>,
 ) -> ApiStatusResult {
-    services::artist::sync_artist_albums(&state, artist_id)
+    services::artist::sync_artist_and_refresh(&state, artist_id)
         .await
         .map_err(app_error_response)?;
 

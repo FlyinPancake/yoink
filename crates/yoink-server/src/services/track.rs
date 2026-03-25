@@ -1,6 +1,6 @@
 use sea_orm::{
     ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
-    QueryFilter,
+    IntoActiveModel, QueryFilter,
 };
 use tracing::info;
 use uuid::Uuid;
@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::{
     db::{
         album, album_artist, album_provider_link, album_type::AlbumType, provider::Provider,
-        quality::Quality, track, url::DbUrl, wanted_status::WantedStatus,
+        quality::Quality, track, track_provider_link, wanted_status::WantedStatus,
     },
     error::{AppError, AppResult},
     providers::provider_image_url,
@@ -108,12 +108,26 @@ pub(crate) async fn add_track(
         new_id
     };
 
-    // 4. Fetch and store tracks (none monitored by default).
-    helpers::store_album_tracks(state, provider, &external_album_id, album_id, false).await?;
+    // 4. Sync tracks from provider.
+    super::sync_album_tracks(state, provider, &external_album_id, album_id).await?;
 
-    // 5. Find the target track and mark it as monitored.
-    // TODO: once track has a provider_link relation via SeaORM, look up and set monitored
-    // For now the track is stored but not individually marked.
+    // 5. Mark the target track as wanted.
+    let target_link = track_provider_link::Entity::find()
+        .filter(track_provider_link::Column::ProviderTrackId.eq(&external_track_id))
+        .filter(track_provider_link::Column::Provider.eq(provider))
+        .one(&state.db)
+        .await?;
+
+    if let Some(link) = target_link {
+        if let Some(found) = track::Entity::find_by_id(link.track_id)
+            .one(&state.db)
+            .await?
+        {
+            let mut model: track::ActiveModel = found.into();
+            model.status = Set(WantedStatus::Wanted);
+            model.update(&state.db).await?;
+        }
+    }
 
     info!(%album_id, %provider, %external_track_id, "Added track from search");
     state.notify_sse();

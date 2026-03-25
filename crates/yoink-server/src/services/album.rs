@@ -452,8 +452,8 @@ pub(crate) async fn add_album(
         new_id
     };
 
-    // 4. Fetch and store tracks.
-    helpers::store_album_tracks(state, provider, &external_album_id, album_id, monitor_all).await?;
+    // 4. Sync tracks from provider.
+    super::sync_album_tracks(state, provider, &external_album_id, album_id).await?;
 
     // TODO: enqueue download via SeaORM once download service is migrated
 

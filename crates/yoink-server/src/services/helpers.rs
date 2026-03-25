@@ -164,52 +164,6 @@ pub(crate) async fn find_or_create_lightweight_artist(
     Ok(Uuid::now_v7())
 }
 
-/// Fetch tracks for an album from a provider and store them in the DB.
-/// If `monitor_all` is true, every track is marked as monitored.
-pub(crate) async fn store_album_tracks(
-    state: &AppState,
-    provider: Provider,
-    external_album_id: &str,
-    album_id: Uuid,
-    monitor_all: bool,
-) -> AppResult<()> {
-    // TODO: re-enable this once i have time
-
-    // let prov = state.registry.metadata_provider(provider).ok_or_else(|| {
-    //     AppError::unavailable(
-    //         "metadata provider",
-    //         format!("unknown provider '{provider}'"),
-    //     )
-    // })?;
-
-    // let (tracks, _album_extra) = prov.fetch_tracks(external_album_id).await?;
-
-    // for track in tracks {
-    //     let ext_id = track.external_id.clone();
-
-    //     // Skip if this exact provider+external_id track already exists.
-    //     let existing = db::find_track_by_provider_link(&state.sqlite, provider, &ext_id)
-    //         .await
-    //         .ok()
-    //         .flatten();
-    //     if existing.is_some() {
-    //         continue;
-    //     }
-
-    //     let track_number = track.track_number.max(1);
-    //     let track_info = track.into_track_info(crate::providers::LocalTrackOverrides {
-    //         track_number: Some(track_number),
-    //         monitored: monitor_all,
-    //         ..Default::default()
-    //     });
-
-    //     db::upsert_track(&state.sqlite, &track_info, album_id).await?;
-    //     db::upsert_track_provider_link(&state.sqlite, track_info.id, provider, &ext_id).await?;
-    // }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     #[test]

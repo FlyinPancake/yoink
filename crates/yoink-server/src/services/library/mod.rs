@@ -11,7 +11,7 @@ pub(crate) use import::{
 };
 pub(crate) use merge::merge_albums;
 pub(crate) use reconcile::reconcile_library_files;
-pub(crate) use sync::sync_artist_albums;
+pub(crate) use sync::{sync_album_tracks, sync_artist};
 
 use crate::util::{is_audio_extension, normalize as normalize_text};
 
