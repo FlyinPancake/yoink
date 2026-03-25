@@ -9,7 +9,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: uuid::Uuid,
     pub album_id: uuid::Uuid,
-    #[sea_orm(belongs_to, from = "album_id", to = "id")]
+    #[sea_orm(belongs_to, from = "album_id", to = "id", on_delete = "Cascade")]
     pub album: Option<super::album::Entity>,
     pub provider: Provider,
     pub provider_album_id: String,

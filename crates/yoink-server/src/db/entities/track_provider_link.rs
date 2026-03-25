@@ -7,7 +7,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: uuid::Uuid,
     pub track_id: uuid::Uuid,
-    #[sea_orm(belongs_to, from = "track_id", to = "id")]
+    #[sea_orm(belongs_to, from = "track_id", to = "id", on_delete = "Cascade")]
     pub track: Option<super::track::Entity>,
     pub provider: super::provider::Provider,
     pub provider_track_id: String,

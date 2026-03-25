@@ -15,7 +15,7 @@ pub struct Model {
     pub track_number: Option<i32>,
     pub duration: Option<i32>,
     pub album_id: Uuid,
-    #[sea_orm(belongs_to, from = "album_id", to = "id")]
+    #[sea_orm(belongs_to, from = "album_id", to = "id", on_delete = "Cascade")]
     pub album: HasOne<super::album::Entity>,
     #[sea_orm(has_many, via = "track_artist")]
     pub artists: HasMany<super::artist::Entity>,
@@ -23,7 +23,7 @@ pub struct Model {
     /// International Standard Recording Code
     pub isrc: Option<String>,
     pub root_folder_id: Option<Uuid>,
-    #[sea_orm(belongs_to, from = "root_folder_id", to = "id")]
+    #[sea_orm(belongs_to, from = "root_folder_id", to = "id", on_delete = "SetNull")]
     pub root_folder: Option<super::root_folder::Entity>,
     pub status: super::wanted_status::WantedStatus,
     pub file_path: Option<String>,

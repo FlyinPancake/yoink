@@ -7,7 +7,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub artist_id: Uuid,
-    #[sea_orm(belongs_to, from = "artist_id", to = "id")]
+    #[sea_orm(belongs_to, from = "artist_id", to = "id", on_delete = "Cascade")]
     pub artist: HasOne<super::artist::Entity>,
     pub provider: super::provider::Provider,
     #[sea_orm(indexed)]
