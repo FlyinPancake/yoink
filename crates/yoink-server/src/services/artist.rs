@@ -1,4 +1,4 @@
-use sea_orm::{ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait};
+use sea_orm::{ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait, PaginatorTrait};
 use tracing::info;
 use url::Url;
 use uuid::Uuid;
@@ -75,49 +75,34 @@ pub(crate) async fn remove_artist(
     artist_id: Uuid,
     remove_files: bool,
 ) -> AppResult<()> {
-    if remove_files {
-        let album_artists = album_artist::Entity::find_by_artist(artist_id)
-            .all(&state.db)
-            .await?;
-
-        for aa in &album_artists {
-            if let Some(album) = db::album::Entity::find_by_id(aa.album_id)
-                .one(&state.db)
-                .await?
-            {
-                // TODO: check acquired status and remove files
-                let _ = album;
-            }
-        }
-    }
-
-    // Remove albums solely owned by this artist; for multi-artist albums
-    // just detach this artist.
+    // Delete albums solely owned by this artist.
+    // Multi-artist albums are kept; the cascade will remove the junction row.
     let album_artists = album_artist::Entity::find_by_artist(artist_id)
         .all(&state.db)
         .await?;
 
     for aa in &album_artists {
-        let all_artists_for_album = album_artist::Entity::find_by_album_ordered(aa.album_id)
-            .all(&state.db)
+        let artist_count = album_artist::Entity::find_by_album_ordered(aa.album_id)
+            .count(&state.db)
             .await?;
 
-        if all_artists_for_album.len() <= 1 {
+        if artist_count <= 1 {
+            if remove_files {
+                // TODO: remove downloaded files for this album
+            }
             db::album::Entity::delete_by_id(aa.album_id)
-                .exec(&state.db)
-                .await?;
-        } else {
-            album_artist::Entity::delete_pair(aa.album_id, artist_id)
                 .exec(&state.db)
                 .await?;
         }
     }
 
+    // Cascade deletes artist_provider_links, album_artist junctions,
+    // artist_match_suggestions, and track_artist junctions.
     artist::Entity::delete_by_id(artist_id)
         .exec(&state.db)
         .await?;
 
-    info!(%artist_id, remove_files, "Removed artist and their albums");
+    info!(%artist_id, remove_files, "Removed artist");
     state.notify_sse();
     Ok(())
 }
