@@ -1,1 +1,0 @@
-ALTER TABLE artists DROP COLUMN bio;

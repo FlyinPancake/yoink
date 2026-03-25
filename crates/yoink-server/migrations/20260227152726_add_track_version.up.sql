@@ -1,1 +1,0 @@
-ALTER TABLE tracks ADD COLUMN version TEXT;

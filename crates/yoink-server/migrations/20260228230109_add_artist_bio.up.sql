@@ -1,1 +1,0 @@
-ALTER TABLE artists ADD COLUMN bio TEXT;
