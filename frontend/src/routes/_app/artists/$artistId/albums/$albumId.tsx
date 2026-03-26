@@ -16,6 +16,7 @@ import {
   isAlbumAcquired,
   isAlbumInProgress,
   isAlbumWanted,
+  providerDisplayName,
 } from "@/lib/music";
 import {
   useAcceptMatchSuggestion,
@@ -64,18 +65,6 @@ export const Route = createFileRoute("/_app/artists/$artistId/albums/$albumId")(
 });
 
 // ── Helpers ────────────────────────────────────────────────────
-
-function providerDisplayName(provider: string): string {
-  const map: Record<string, string> = {
-    musicbrainz: "MusicBrainz",
-    spotify: "Spotify",
-    tidal: "Tidal",
-    deezer: "Deezer",
-    qobuz: "Qobuz",
-    lastfm: "Last.fm",
-  };
-  return map[provider] ?? provider;
-}
 
 function albumTypeLabel(albumType: string | null | undefined): string {
   if (!albumType) return "Album";

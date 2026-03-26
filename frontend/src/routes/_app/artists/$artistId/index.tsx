@@ -16,7 +16,13 @@ import type { components } from "@/lib/api/types.gen";
 import { $api } from "@/lib/api";
 import { useSleeveGlow } from "@/hooks/use-sleeve-glow";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { isAlbumAcquired, isAlbumInProgress, isAlbumWanted, isAlbumWantedLike } from "@/lib/music";
+import {
+  isAlbumAcquired,
+  isAlbumInProgress,
+  isAlbumWanted,
+  isAlbumWantedLike,
+  providerDisplayName,
+} from "@/lib/music";
 import {
   useAcceptMatchSuggestion,
   useDeleteArtist,
@@ -77,18 +83,6 @@ export const Route = createFileRoute("/_app/artists/$artistId/")({
 });
 
 // ── Helpers ────────────────────────────────────────────────────
-
-function providerDisplayName(provider: string): string {
-  const map: Record<string, string> = {
-    musicbrainz: "MusicBrainz",
-    spotify: "Spotify",
-    tidal: "Tidal",
-    deezer: "Deezer",
-    qobuz: "Qobuz",
-    lastfm: "Last.fm",
-  };
-  return map[provider] ?? provider;
-}
 
 function albumTypeLabel(albumType: string | null | undefined): string {
   if (!albumType) return "Album";

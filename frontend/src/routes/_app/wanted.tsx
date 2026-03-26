@@ -4,10 +4,7 @@ import type { components } from "@/lib/api/types.gen";
 import { formatDurationSeconds } from "@/lib/music";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type WantedAlbum = components["schemas"]["Album"] & {
-  artist_credits?: Array<{ name: string }>;
-  artist_id?: string;
-};
+type WantedAlbumWithTracks = components["schemas"]["WantedAlbumWithTracks"];
 
 export const Route = createFileRoute("/_app/wanted")({
   component: WantedPage,
@@ -48,10 +45,7 @@ function WantedPage() {
     );
   }
 
-  const wantedAlbums = data.albums as Array<{
-    album: WantedAlbum;
-    tracks: components["schemas"]["TrackInfo"][];
-  }>;
+  const wantedAlbums = data.albums as WantedAlbumWithTracks[];
   const { artists } = data;
 
   // Build a map for quick artist name lookup
@@ -84,7 +78,7 @@ function WantedPage() {
           {wantedAlbums.map(({ album, tracks }) => {
             const wantedTracks = tracks.filter((t) => t.monitored && !t.acquired);
             const artist = album.artist_id ? artistMap.get(album.artist_id) : undefined;
-            const artistName = album.artist_credits?.[0]?.name ?? artist?.name ?? "Unknown Artist";
+            const artistName = artist?.name ?? "Unknown Artist";
             const content = (
               <>
                 <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">

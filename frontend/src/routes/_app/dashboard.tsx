@@ -5,7 +5,7 @@ import type { components } from "@/lib/api/types.gen";
 import { isAlbumAcquired, isAlbumWantedLike } from "@/lib/music";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type DashboardAlbum = components["schemas"]["Album"] & { artist_id?: string };
+type DownloadJob = components["schemas"]["DownloadJob"];
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -13,6 +13,16 @@ export const Route = createFileRoute("/_app/dashboard")({
     breadcrumb: "Dashboard",
   },
 });
+
+function downloadTitle(job: DownloadJob) {
+  return job.kind === "track" ? (job.track_title ?? job.album_title) : job.album_title;
+}
+
+function downloadSubtitle(job: DownloadJob) {
+  return job.kind === "track"
+    ? `${job.artist_name} · ${job.album_title} · ${job.source}`
+    : `${job.artist_name} · ${job.source}`;
+}
 
 function StatCard({
   label,
@@ -93,9 +103,7 @@ function DashboardPage() {
     ["queued", "resolving", "downloading"].includes(j.status),
   ).length;
   const recentDownloads = jobs.slice(0, 3);
-  const wantedAlbumsList = (albums as DashboardAlbum[])
-    .filter((a) => isAlbumWantedLike(a.wanted_status))
-    .slice(0, 5);
+  const wantedAlbumsList = albums.filter((a) => isAlbumWantedLike(a.wanted_status)).slice(0, 5);
 
   return (
     <div className="space-y-8">
@@ -127,10 +135,8 @@ function DashboardPage() {
               {recentDownloads.map((dl) => (
                 <div key={dl.id} className="flex items-center justify-between px-5 py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{dl.album_title}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {dl.artist_name} &middot; {dl.source}
-                    </p>
+                    <p className="truncate text-sm font-medium">{downloadTitle(dl)}</p>
+                    <p className="truncate text-xs text-muted-foreground">{downloadSubtitle(dl)}</p>
                   </div>
                   <StatusBadge status={dl.status} />
                 </div>

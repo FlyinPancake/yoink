@@ -16,7 +16,7 @@ import {
 import { $api, getCollections, addedItemKey } from "@/lib/api";
 import { useCreateArtist, useCreateAlbum, useCreateTrack } from "@/lib/api/mutations";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { formatDurationSeconds, normalizeProvider } from "@/lib/music";
+import { formatDurationSeconds, normalizeProvider, providerDisplayName } from "@/lib/music";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -273,7 +273,7 @@ function ArtistResultCard({
         <p className="truncate font-semibold">{artist.name}</p>
         <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
           <Badge variant="outline" className="text-[10px]">
-            {artist.provider}
+            {providerDisplayName(artist.provider)}
           </Badge>
           {artist.disambiguation && <span className="truncate">{artist.disambiguation}</span>}
         </div>
@@ -340,7 +340,7 @@ function AlbumResultCard({
           <span>&middot;</span>
           <span>{album.release_date?.slice(0, 4)}</span>
           <Badge variant="outline" className="text-[10px]">
-            {album.provider}
+            {providerDisplayName(album.provider)}
           </Badge>
         </div>
       </div>
@@ -406,7 +406,7 @@ function TrackResultRow({
           <span>&middot;</span>
           <span>{formatDurationSeconds(track.duration_secs)}</span>
           <Badge variant="outline" className="text-[10px]">
-            {track.provider}
+            {providerDisplayName(track.provider)}
           </Badge>
         </div>
       </div>

@@ -1,5 +1,5 @@
 use sea_orm::{
-    ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
+    ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
     IntoActiveModel, QueryFilter,
 };
 use tracing::info;
@@ -12,6 +12,7 @@ use crate::{
     },
     error::{AppError, AppResult},
     providers::provider_image_url,
+    services,
     state::AppState,
 };
 
@@ -128,6 +129,7 @@ pub(crate) async fn add_track(
             let mut model: track::ActiveModel = found.into();
             model.status = Set(WantedStatus::Wanted);
             model.update(&state.db).await?;
+            services::downloads::enqueue_track_download(state, link.track_id).await?;
         }
     }
 
@@ -142,14 +144,31 @@ pub(crate) async fn toggle_track_monitor(
     album_id: Uuid,
     monitored: bool,
 ) -> AppResult<()> {
-    let _track = track::Entity::find_by_id(track_id)
+    let track = track::Entity::find_by_id(track_id)
         .one(&state.db)
         .await?
         .ok_or_else(|| AppError::not_found("track", Some(track_id.to_string())))?;
 
-    // TODO: set track.monitored once the column exists on the entity
-    // TODO: recompute album wanted_status based on track states
-    // TODO: enqueue download if track became wanted
+    let next_status = if monitored {
+        if track.file_path.is_some() || track.status == WantedStatus::Acquired {
+            WantedStatus::Acquired
+        } else {
+            WantedStatus::Wanted
+        }
+    } else {
+        WantedStatus::Unmonitored
+    };
+    let should_enqueue = monitored && next_status == WantedStatus::Wanted;
+
+    let mut active = track.into_active_model();
+    active.status = Set(next_status);
+    active.update(&state.db).await?;
+
+    services::downloads::sync_album_wanted_status_from_tracks(state, album_id).await?;
+
+    if should_enqueue {
+        services::downloads::enqueue_track_download(state, track_id).await?;
+    }
 
     info!(%track_id, %album_id, monitored, "Toggled track monitored status");
     state.notify_sse();
@@ -184,9 +203,26 @@ pub(crate) async fn bulk_toggle_track_monitor(
         .await?
         .ok_or_else(|| AppError::not_found("album", Some(album_id.to_string())))?;
 
-    // TODO: update all tracks for album once track has album_id + monitored columns
-    // TODO: recompute album wanted_status
-    // TODO: enqueue download if wanted
+    let next_status = if monitored {
+        WantedStatus::Wanted
+    } else {
+        WantedStatus::Unmonitored
+    };
+
+    track::Entity::update_many()
+        .set(track::ActiveModel {
+            status: Set(next_status),
+            ..Default::default()
+        })
+        .filter(track::Column::AlbumId.eq(album_id))
+        .exec(&state.db)
+        .await?;
+
+    services::downloads::sync_album_wanted_status_from_tracks(state, album_id).await?;
+
+    if monitored {
+        services::downloads::enqueue_album_download(state, album_id).await?;
+    }
 
     info!(%album_id, monitored, "Bulk toggled track monitoring");
     state.notify_sse();

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { $api } from "@/lib/api";
+import { providerDisplayName } from "@/lib/music";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
@@ -103,23 +104,11 @@ function SettingsIndexPage() {
   );
 }
 
-function providerDisplayName(provider: string): string {
-  const map: Record<string, string> = {
-    tidal: "Tidal",
-    deezer: "Deezer",
-    musicbrainz: "MusicBrainz",
-    soulseek: "Soulseek",
-    spotify: "Spotify",
-    qobuz: "Qobuz",
-    lastfm: "Last.fm",
-  };
-  return map[provider.toLowerCase()] ?? provider;
-}
-
 function providerDescription(provider: string): string {
   const map: Record<string, string> = {
     tidal: "Metadata + lossless downloads.",
     deezer: "Fallback metadata source.",
+    music_brainz: "Open metadata database.",
     musicbrainz: "Open metadata database.",
     soulseek: "Peer-to-peer file sharing network.",
     spotify: "Metadata from Spotify.",

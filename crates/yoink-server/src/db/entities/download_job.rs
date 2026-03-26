@@ -11,11 +11,15 @@ pub struct Model {
     pub album_id: uuid::Uuid,
     #[sea_orm(belongs_to, from = "album_id", to = "id", on_delete = "Cascade")]
     pub album: HasOne<super::album::Entity>,
+    pub track_id: Option<uuid::Uuid>,
+    #[sea_orm(belongs_to, from = "track_id", to = "id", on_delete = "SetNull")]
+    pub track: Option<super::track::Entity>,
     pub source: Provider,
     pub quality: Quality,
     pub status: DownloadStatus,
     pub total_tracks: i32,
     pub completed_tasks: i32,
+    pub error_message: Option<String>,
     pub created_at: DateTimeUtc,
     pub modified_at: DateTimeUtc,
 }
@@ -41,31 +45,5 @@ impl ActiveModelBehavior for ActiveModel {
             self.created_at = Set(now);
         }
         Ok(self)
-    }
-}
-
-impl From<ModelEx> for yoink_shared::DownloadJob {
-    fn from(value: ModelEx) -> Self {
-        let album_title = value
-            .album
-            .as_ref()
-            .map(|a| a.title.clone())
-            .unwrap_or_default();
-
-        Self {
-            id: value.id,
-            album_id: value.album_id,
-            source: value.source.to_value(),
-            quality: value.quality.into(),
-            status: value.status.into(),
-            total_tracks: value.total_tracks,
-            created_at: value.created_at,
-            album_title,
-            updated_at: value.modified_at,
-            completed_tracks: value.completed_tasks,
-            // FIXME remove or fill these placeholders
-            artist_name: "".to_string(),
-            error: Some("".to_string()),
-        }
     }
 }

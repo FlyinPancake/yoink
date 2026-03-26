@@ -45,3 +45,25 @@ export function normalizeProvider(provider: string): Provider | null {
       return null;
   }
 }
+
+export function providerDisplayName(provider: string): string {
+  switch (provider.toLowerCase()) {
+    case "musicbrainz":
+    case "music_brainz":
+      return "MusicBrainz";
+    case "soulseek":
+      return "Soulseek";
+    case "tidal":
+      return "Tidal";
+    case "deezer":
+      return "Deezer";
+    case "spotify":
+      return "Spotify";
+    case "qobuz":
+      return "Qobuz";
+    case "lastfm":
+      return "Last.fm";
+    default:
+      return provider;
+  }
+}

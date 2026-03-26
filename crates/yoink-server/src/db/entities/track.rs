@@ -56,6 +56,9 @@ impl ActiveModelBehavior for ActiveModel {
 
 impl From<ModelEx> for TrackInfo {
     fn from(value: ModelEx) -> Self {
+        let acquired = value.file_path.is_some()
+            || value.status == super::wanted_status::WantedStatus::Acquired;
+
         TrackInfo {
             id: value.id,
             title: value.title,
@@ -67,10 +70,9 @@ impl From<ModelEx> for TrackInfo {
             explicit: value.explicit,
             file_path: value.file_path,
             monitored: value.status != super::wanted_status::WantedStatus::Unmonitored,
-            // FIXME set these fields as well
+            acquired,
             quality_override: None,
             track_artist: None,
-            acquired: false,
         }
     }
 }

@@ -35,8 +35,10 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
 )]
 /// List Jobs
 async fn list_jobs(State(_state): State<AppState>) -> ApiResult<Vec<DownloadJob>> {
-    // TODO: load from SeaORM
-    Ok(Json(vec![]))
+    crate::services::downloads::list_jobs(&_state)
+        .await
+        .map(Json)
+        .map_err(app_error_response)
 }
 
 #[utoipa::path(
@@ -53,7 +55,7 @@ async fn list_jobs(State(_state): State<AppState>) -> ApiResult<Vec<DownloadJob>
 )]
 /// Cancel Job
 async fn cancel_job(State(state): State<AppState>, Path(job_id): Path<Uuid>) -> ApiStatusResult {
-    crate::actions::download::cancel_download(&state, job_id)
+    crate::services::downloads::cancel_job(&state, job_id)
         .await
         .map_err(app_error_response)?;
     Ok(StatusCode::NO_CONTENT)
@@ -70,7 +72,7 @@ async fn cancel_job(State(state): State<AppState>, Path(job_id): Path<Uuid>) -> 
 )]
 /// Clear Completed Jobs
 async fn clear_completed_jobs(State(state): State<AppState>) -> ApiStatusResult {
-    crate::actions::download::clear_completed(&state)
+    crate::services::downloads::clear_completed_jobs(&state)
         .await
         .map_err(app_error_response)?;
     Ok(StatusCode::NO_CONTENT)

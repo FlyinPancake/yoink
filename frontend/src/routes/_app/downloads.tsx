@@ -35,6 +35,16 @@ const statusConfig: Record<
   failed: { icon: AlertCircleIcon, color: "text-red-500" },
 };
 
+function downloadTitle(job: DownloadJob) {
+  return job.kind === "track" ? (job.track_title ?? job.album_title) : job.album_title;
+}
+
+function downloadSubtitle(job: DownloadJob) {
+  return job.kind === "track"
+    ? `${job.artist_name} · ${job.album_title} · ${job.source}`
+    : `${job.artist_name} · ${job.source}`;
+}
+
 function DownloadsPage() {
   const { data: jobs, isLoading, isError } = $api.useQuery("get", "/api/job");
   const cancelJob = useCancelJob();
@@ -164,14 +174,15 @@ function DownloadRow({
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate font-semibold">{dl.album_title}</p>
+            <p className="truncate font-semibold">{downloadTitle(dl)}</p>
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
+              {dl.kind}
+            </span>
             <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
               {dl.quality}
             </span>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {dl.artist_name} &middot; {dl.source}
-          </p>
+          <p className="text-sm text-muted-foreground">{downloadSubtitle(dl)}</p>
           {dl.error && <p className="mt-1 text-xs text-red-500">{dl.error}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-3">

@@ -1,7 +1,7 @@
-use std::{collections::VecDeque, sync::Arc, time::Duration};
+use std::{collections::VecDeque, path::Path, sync::Arc, time::Duration};
 
 use crate::{
-    db::{self, download_status::DownloadStatus, quality::Quality},
+    db::{self, download_status::DownloadStatus, quality::Quality, wanted_status::WantedStatus},
     error::{AppError, AppResult},
     providers::PlaybackInfo,
     services::{
@@ -16,29 +16,81 @@ use crate::{
     state::AppState,
     util::provider_priority,
 };
-use sea_orm::{ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter};
 use tokio::{sync::Semaphore, task::JoinSet};
 use uuid::Uuid;
 
 use super::lyrics::{fetch_track_lyrics, write_lrc_sidecar};
 
+const EXDEV_ERROR_CODE: i32 = 18;
+
 struct PlannedTrack {
     provider_track: crate::providers::ProviderTrack,
-    #[allow(dead_code)]
     db_track: db::track::Model,
 }
 
-/// Download all tracks for an album job.
-///
-/// FIXME: support for independent track downloads
+struct DownloadContext {
+    source: Arc<dyn crate::providers::DownloadSource>,
+    metadata_provider: Arc<dyn crate::providers::MetadataProvider>,
+    album: db::album::ModelEx,
+    artist: db::artist::Model,
+    external_album_id: String,
+}
+
 pub(crate) async fn download_album_job(
     state: &AppState,
     job: db::download_job::ModelEx,
 ) -> AppResult<()> {
-    let job_id = job.id;
+    let context = load_download_context(state, &job).await?;
+    let (provider_tracks, album_extra) = context
+        .metadata_provider
+        .fetch_tracks(&context.external_album_id)
+        .await?;
 
-    let quality = job.quality;
+    if provider_tracks.is_empty() {
+        return Err(AppError::download(
+            "fetch_metadata",
+            "no tracks found for album from metadata provider",
+        ));
+    }
 
+    let planned_tracks =
+        build_album_download_plan(state, &provider_tracks, context.album.id).await?;
+    run_download_plan(state, job, context, planned_tracks, album_extra).await
+}
+
+pub(crate) async fn download_track_job(
+    state: &AppState,
+    job: db::download_job::ModelEx,
+) -> AppResult<()> {
+    let track_id = job.track_id.ok_or_else(|| {
+        AppError::validation(None::<String>, "track download job is missing track_id")
+    })?;
+    let context = load_download_context(state, &job).await?;
+    let (provider_tracks, album_extra) = context
+        .metadata_provider
+        .fetch_tracks(&context.external_album_id)
+        .await?;
+
+    if provider_tracks.is_empty() {
+        return Err(AppError::download(
+            "fetch_metadata",
+            "no tracks found for album from metadata provider",
+        ));
+    }
+
+    let planned_track =
+        build_track_download_plan(state, &provider_tracks, context.album.id, track_id).await?;
+    let mut planned_tracks = VecDeque::with_capacity(1);
+    planned_tracks.push_back(planned_track);
+
+    run_download_plan(state, job, context, planned_tracks, album_extra).await
+}
+
+async fn load_download_context(
+    state: &AppState,
+    job: &db::download_job::ModelEx,
+) -> AppResult<DownloadContext> {
     let source = state.registry.download_source(job.source).ok_or_else(|| {
         AppError::unavailable(
             "download source",
@@ -46,60 +98,65 @@ pub(crate) async fn download_album_job(
         )
     })?;
 
-    let Some(album) = job.album.clone().take() else {
+    let Some(album) = job.album.as_ref().cloned() else {
         return Err(AppError::not_found("album", Some(job.album_id.to_string())));
     };
-    let album_id = album.id;
 
     let (metadata_link, metadata_provider) = album
         .provider_links
         .iter()
-        .find_map(|l| {
-            let metadata_provider = state.registry.metadata_provider(l.provider);
+        .find_map(|link| {
+            let metadata_provider = state.registry.metadata_provider(link.provider);
             match metadata_provider {
-                Some(prov) => {
-                    if l.provider == job.source {
-                        Some((l, prov))
-                    } else {
-                        None
-                    }
-                }
-                None => None,
+                Some(provider) if link.provider == job.source => Some((link, provider)),
+                _ => None,
             }
         })
         .or_else(|| {
             album
                 .provider_links
                 .iter()
-                .filter_map(|l| {
-                    let prov = state.registry.metadata_provider(l.provider);
-                    prov.map(|p| (l, p))
+                .filter_map(|link| {
+                    state
+                        .registry
+                        .metadata_provider(link.provider)
+                        .map(|provider| (link, provider))
                 })
-                .max_by_key(|(l, _)| provider_priority(l.provider))
+                .max_by_key(|(link, _)| provider_priority(link.provider))
         })
-        .ok_or_else(|| AppError::not_found("metadata_provider_Link", Some(album.id)))?;
+        .ok_or_else(|| AppError::not_found("metadata_provider_link", Some(album.id.to_string())))?;
+
+    let artist: db::artist::Model = album
+        .fetch_primary_artist(&state.db)
+        .await?
+        .ok_or_else(|| AppError::not_found("artist", Some(album.id.to_string())))?;
 
     let external_album_id = metadata_link.provider_album_id.clone();
 
-    tracing::info!(?job_id, ?album_id, ?external_album_id, source = ?job.source, "starting download job");
+    Ok(DownloadContext {
+        source,
+        metadata_provider,
+        album,
+        artist,
+        external_album_id,
+    })
+}
 
-    let (provider_tracks, album_extra) = metadata_provider.fetch_tracks(&external_album_id).await?;
-
-    if provider_tracks.is_empty() {
-        return Err(AppError::DownloadPipeline {
-            stage: "fetch_metadata".into(),
-            reason: "no tracks found for album from metadata provider".into(),
-        });
-    }
-
+async fn build_album_download_plan(
+    state: &AppState,
+    provider_tracks: &[crate::providers::ProviderTrack],
+    album_id: Uuid,
+) -> AppResult<VecDeque<PlannedTrack>> {
     let mut planned_tracks = VecDeque::new();
 
-    for track in provider_tracks {
-        let Some(existing_track) = match_local_track(state, &track, album_id).await? else {
+    for provider_track in provider_tracks.iter().cloned() {
+        let Some(existing_track) = match_local_track(state, &provider_track, album_id).await?
+        else {
             continue;
         };
+
         planned_tracks.push_back(PlannedTrack {
-            provider_track: track,
+            provider_track,
             db_track: existing_track,
         });
     }
@@ -111,6 +168,42 @@ pub(crate) async fn download_album_job(
         ));
     }
 
+    Ok(planned_tracks)
+}
+
+async fn build_track_download_plan(
+    state: &AppState,
+    provider_tracks: &[crate::providers::ProviderTrack],
+    album_id: Uuid,
+    track_id: Uuid,
+) -> AppResult<PlannedTrack> {
+    for provider_track in provider_tracks.iter().cloned() {
+        let Some(existing_track) = match_local_track(state, &provider_track, album_id).await?
+        else {
+            continue;
+        };
+
+        if existing_track.id == track_id {
+            return Ok(PlannedTrack {
+                provider_track,
+                db_track: existing_track,
+            });
+        }
+    }
+
+    Err(AppError::not_found("track", Some(track_id.to_string())))
+}
+
+async fn run_download_plan(
+    state: &AppState,
+    job: db::download_job::ModelEx,
+    context: DownloadContext,
+    planned_tracks: VecDeque<PlannedTrack>,
+    album_extra: std::collections::HashMap<String, serde_json::Value>,
+) -> AppResult<()> {
+    let job_id = job.id;
+    let album_id = context.album.id;
+    let quality = job.quality;
     let total_tracks = planned_tracks.len() as i32;
 
     let job = job
@@ -120,19 +213,18 @@ pub(crate) async fn download_album_job(
         .set_completed_tasks(0)
         .update(&state.db)
         .await?;
+    state.notify_sse();
 
-    let artist = album
-        .fetch_primary_artist(&state.db)
-        .await?
-        .expect("album without artist");
-
-    let release_suffix = album
+    let release_suffix = context
+        .album
         .release_date
-        .map(|d| d.to_string())
+        .map(|date| date.to_string())
         .unwrap_or("Unknown".to_string());
 
-    let artist_dir = state.music_root.join(sanitize_path_component(&artist.name));
-    let album_dir = artist_dir.join(format!("{} ({})", album.title, release_suffix));
+    let artist_dir = state
+        .music_root
+        .join(sanitize_path_component(&context.artist.name));
+    let album_dir = artist_dir.join(format!("{} ({})", context.album.title, release_suffix));
     tokio::fs::create_dir_all(&album_dir).await.map_err(|err| {
         AppError::filesystem(
             "create_output_directory",
@@ -141,41 +233,44 @@ pub(crate) async fn download_album_job(
         )
     })?;
 
-    // ── Fetch album cover art once (shared across all tracks) ─────────
-    let cover_art_jpeg =
-        fetch_album_cover_art(state, &metadata_provider, &album_extra, &album).await;
+    let cover_art_jpeg = fetch_album_cover_art(
+        state,
+        &context.metadata_provider,
+        &album_extra,
+        &context.album,
+    )
+    .await;
 
-    // ── Download tracks in parallel ─────────────────────────────────────
     let mut join_set: JoinSet<AppResult<_>> = JoinSet::new();
-
     let semaphore = Arc::new(Semaphore::new(state.download_max_parallel_tracks.max(1)));
-
     let temp_dir = tempfile::tempdir()?;
 
     for track in planned_tracks {
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let state = state.clone();
-        let id = track.provider_track.external_id.clone();
+        let external_track_id = track.provider_track.external_id.clone();
         let quality = job.quality;
         let temp_dir = temp_dir.path().to_path_buf();
-        let source = source.clone();
+        let source = context.source.clone();
 
         join_set.spawn(async move {
-            let pb_info = source.resolve_playback(&id, &quality, None).await?;
+            let playback_info = source
+                .resolve_playback(&external_track_id, &quality, None)
+                .await?;
 
             let temp_path = temp_dir.join(format!("{}.part", track.provider_track.title));
 
-            let payload = match pb_info {
+            let payload = match playback_info {
                 PlaybackInfo::DirectUrl(url) => Some(DownloadPayload::DirectUrl(url)),
                 PlaybackInfo::SegmentUrls(items) => Some(DownloadPayload::DashSegmentUrls(items)),
                 PlaybackInfo::LocalFile(path_buf) => {
-                    tokio::fs::copy(&path_buf, &temp_path).await.map_err(|e| {
-                        AppError::Filesystem {
+                    tokio::fs::copy(&path_buf, &temp_path)
+                        .await
+                        .map_err(|err| AppError::Filesystem {
                             operation: "copy downloaded track".to_string(),
                             path: path_buf.display().to_string(),
-                            source: e,
-                        }
-                    })?;
+                            source: err,
+                        })?;
                     None
                 }
             };
@@ -194,29 +289,20 @@ pub(crate) async fn download_album_job(
         });
     }
 
-    // ── Process completed downloads sequentially ────────────────────────
     let mut completed_tracks = 0;
     let mut failed_tracks = 0;
 
-    while let Some(res) = join_set.join_next().await {
-        let (track, temp_path) = match res {
+    while let Some(result) = join_set.join_next().await {
+        let (track, temp_path) = match result {
             Ok(Ok(pair)) => pair,
             Ok(Err(err)) => {
                 failed_tracks += 1;
-                tracing::error!(
-                    job_id = %job_id,
-                    error = %err,
-                    "track download failed"
-                );
+                tracing::error!(job_id = %job_id, error = %err, "Track download failed");
                 continue;
             }
             Err(join_err) => {
                 failed_tracks += 1;
-                tracing::error!(
-                    job_id = %job_id,
-                    error = %join_err,
-                    "track download task panicked"
-                );
+                tracing::error!(job_id = %job_id, error = %join_err, "Track download task panicked");
                 continue;
             }
         };
@@ -227,6 +313,7 @@ pub(crate) async fn download_album_job(
             .set_completed_tasks(completed_tracks)
             .update(&state.db)
             .await?;
+        state.notify_sse();
 
         let container = sniff_media_container(&temp_path).await?;
 
@@ -238,14 +325,13 @@ pub(crate) async fn download_album_job(
             if !is_flac && container != MediaContainer::Mp4 {
                 tracing::warn!(
                     track_id = %track.provider_track.external_id,
-                    album_id = %job.album_id,
+                    album_id = %album_id,
                     file = ?temp_path,
                     "HI_RES output is not FLAC"
                 );
             }
         }
 
-        // ── Determine final file name and move ──────────────────────────
         let file_name = match track.provider_track.disc_number {
             Some(disc) => format!("{disc}-"),
             None => String::new(),
@@ -264,10 +350,18 @@ pub(crate) async fn download_album_job(
         };
         let final_path = album_dir.join(file_name);
 
-        tokio::fs::rename(&temp_path, &final_path).await?;
+        move_downloaded_track(&temp_path, &final_path)
+            .await
+            .map_err(|err| {
+                AppError::filesystem(
+                    "move_downloaded_track",
+                    final_path.display().to_string(),
+                    err,
+                )
+            })?;
 
-        // ── Fetch per-track extra metadata ──────────────────────────────
-        let track_info_extra = metadata_provider
+        let track_info_extra = context
+            .metadata_provider
             .fetch_track_info_extra(&track.provider_track.external_id)
             .await;
 
@@ -275,10 +369,9 @@ pub(crate) async fn download_album_job(
             &track.provider_track.title,
             &track.provider_track.extra,
             track_info_extra.as_ref(),
-            &artist.name,
+            &context.artist.name,
         );
 
-        // ── Fetch lyrics (conditionally) ────────────────────────────────
         let lyrics = if state.download_lyrics {
             let duration = if track.provider_track.duration_secs > 0 {
                 Some(track.provider_track.duration_secs as u32)
@@ -289,7 +382,7 @@ pub(crate) async fn download_album_job(
                 state,
                 &track.provider_track.title,
                 &track_artist,
-                &album.title,
+                &context.album.title,
                 duration,
             )
             .await
@@ -297,32 +390,32 @@ pub(crate) async fn download_album_job(
             None
         };
 
-        // ── Write audio metadata tags ───────────────────────────────────
         if let Err(err) = write_audio_metadata(&TrackMetadata {
             path: &final_path,
             title: &track.provider_track.title,
             track_artist: &track_artist,
-            album_artist: &artist.name,
-            album: &album.title,
+            album_artist: &context.artist.name,
+            album: &context.album.title,
             track_number: track.provider_track.track_number as u32,
-            disc_number: track.provider_track.disc_number.map(|d| d as u32),
+            disc_number: track.provider_track.disc_number.map(|disc| disc as u32),
             total_tracks: total_tracks as u32,
             release_date: &release_suffix,
             track_extra: &track.provider_track.extra,
             album_extra: &album_extra,
             track_info_extra: track_info_extra.as_ref(),
-            lyrics_text: lyrics.as_ref().and_then(|l| l.embedded_text.as_deref()),
+            lyrics_text: lyrics
+                .as_ref()
+                .and_then(|bundle| bundle.embedded_text.as_deref()),
             cover_art_jpeg: cover_art_jpeg.as_deref(),
         }) {
             tracing::warn!(
                 track = %track.provider_track.title,
                 track_id = %track.provider_track.external_id,
                 error = %err,
-                "failed to write audio metadata"
+                "Failed to write audio metadata"
             );
         }
 
-        // ── Write synced lyrics sidecar (.lrc) ──────────────────────────
         if let Some(ref bundle) = lyrics
             && let Some(ref synced_lrc) = bundle.synced_lrc
             && let Err(err) = write_lrc_sidecar(&final_path, synced_lrc).await
@@ -330,30 +423,66 @@ pub(crate) async fn download_album_job(
             tracing::warn!(
                 track = %track.provider_track.title,
                 error = %err,
-                "failed to write LRC sidecar"
+                "Failed to write LRC sidecar"
             );
         }
+
+        persist_downloaded_track(state, &track.db_track, &final_path).await?;
+        state.notify_sse();
 
         tracing::debug!(
             track = %track.provider_track.title,
             track_number = track.provider_track.track_number,
             path = %final_path.display(),
-            "track downloaded and tagged"
+            "Track downloaded and tagged"
         );
     }
 
     temp_dir.close()?;
 
     if failed_tracks > 0 {
-        tracing::warn!(
-            job_id = %job_id,
-            completed = completed_tracks,
-            failed = failed_tracks,
-            "download job completed with failures"
-        );
+        return Err(AppError::download(
+            "download_tracks",
+            format!("{failed_tracks} of {total_tracks} track(s) failed for download job {job_id}"),
+        ));
     }
 
     Ok(())
+}
+
+async fn persist_downloaded_track(
+    state: &AppState,
+    track: &db::track::Model,
+    final_path: &Path,
+) -> AppResult<()> {
+    let relative_path = final_path
+        .strip_prefix(&state.music_root)
+        .unwrap_or(final_path)
+        .to_string_lossy()
+        .to_string();
+
+    let mut active = track.clone().into_active_model();
+    active.status = sea_orm::ActiveValue::Set(WantedStatus::Acquired);
+    active.file_path = sea_orm::ActiveValue::Set(Some(relative_path));
+    active.update(&state.db).await?;
+
+    Ok(())
+}
+
+async fn move_downloaded_track(temp_path: &Path, final_path: &Path) -> std::io::Result<()> {
+    match tokio::fs::rename(temp_path, final_path).await {
+        Ok(()) => Ok(()),
+        Err(err) if is_cross_device_link_error(&err) => {
+            tokio::fs::copy(temp_path, final_path).await?;
+            tokio::fs::remove_file(temp_path).await?;
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn is_cross_device_link_error(err: &std::io::Error) -> bool {
+    err.raw_os_error() == Some(EXDEV_ERROR_CODE)
 }
 
 /// Attempt to find a local track matching the provided provider track, either via existing provider link or by matching ISRC.
@@ -402,10 +531,9 @@ async fn fetch_album_cover_art(
     album_extra: &std::collections::HashMap<String, serde_json::Value>,
     album: &db::album::ModelEx,
 ) -> Option<Vec<u8>> {
-    // Try to extract a cover image reference from album_extra (provider-specific key).
     let cover_ref = album_extra
         .get("cover")
-        .and_then(|v| v.as_str())
+        .and_then(|value| value.as_str())
         .map(String::from);
 
     if let Some(ref image_ref) = cover_ref
@@ -414,12 +542,11 @@ async fn fetch_album_cover_art(
         tracing::debug!(
             image_ref,
             bytes = bytes.len(),
-            "fetched cover art via metadata provider"
+            "Fetched cover art via metadata provider"
         );
         return Some(bytes);
     }
 
-    // Fallback: download the album's cover_url directly.
     if let Some(ref cover_url) = album.cover_url {
         match state
             .http
@@ -430,31 +557,58 @@ async fn fetch_album_cover_art(
         {
             Ok(resp) if resp.status().is_success() => {
                 if let Ok(bytes) = resp.bytes().await {
-                    tracing::debug!(
-                        url = %cover_url,
-                        bytes = bytes.len(),
-                        "fetched cover art from cover_url"
-                    );
+                    tracing::debug!(url = %cover_url, bytes = bytes.len(), "Fetched cover art from cover_url");
                     return Some(bytes.to_vec());
                 }
             }
             Ok(resp) => {
-                tracing::warn!(
-                    url = %cover_url,
-                    status = %resp.status(),
-                    "cover_url returned non-success status"
-                );
+                tracing::warn!(url = %cover_url, status = %resp.status(), "cover_url returned non-success status");
             }
             Err(err) => {
-                tracing::warn!(
-                    url = %cover_url,
-                    error = %err,
-                    "failed to fetch cover art from cover_url"
-                );
+                tracing::warn!(url = %cover_url, error = %err, "Failed to fetch cover art from cover_url");
             }
         }
     }
 
-    tracing::debug!(album_id = %album.id, "no cover art available for album");
+    tracing::debug!(album_id = %album.id, "No cover art available for album");
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::{is_cross_device_link_error, move_downloaded_track};
+
+    #[test]
+    fn detects_cross_device_link_errors() {
+        assert!(is_cross_device_link_error(
+            &std::io::Error::from_raw_os_error(18)
+        ));
+        assert!(!is_cross_device_link_error(&std::io::Error::other(
+            "different error"
+        )));
+    }
+
+    #[tokio::test]
+    async fn move_downloaded_track_renames_within_same_filesystem() {
+        let dir = tempdir().expect("create temp dir");
+        let source = dir.path().join("source.flac");
+        let target = dir.path().join("target.flac");
+
+        tokio::fs::write(&source, b"audio")
+            .await
+            .expect("write source");
+
+        move_downloaded_track(&source, &target)
+            .await
+            .expect("move track");
+
+        assert!(!tokio::fs::try_exists(&source).await.expect("check source"));
+        assert!(tokio::fs::try_exists(&target).await.expect("check target"));
+        assert_eq!(
+            tokio::fs::read(&target).await.expect("read target"),
+            b"audio"
+        );
+    }
 }
