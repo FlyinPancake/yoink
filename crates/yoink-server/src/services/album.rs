@@ -1,5 +1,5 @@
 use sea_orm::{
-    ActiveModelBehavior, ActiveModelTrait,
+    ActiveModelTrait,
     ActiveValue::{NotSet, Set},
     ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter,
 };
@@ -11,12 +11,10 @@ use yoink_shared::{Album, DownloadJob, MonitoredArtist, ProviderLink, TrackInfo}
 
 use crate::{
     db::{
-        self, album, album_artist, album_provider_link, album_type::AlbumType, download_job,
-        download_status::DownloadStatus, provider::Provider, quality::Quality,
-        wanted_status::WantedStatus,
+        self, album, album_artist, download_job, download_status::DownloadStatus,
+        provider::Provider, quality::Quality, wanted_status::WantedStatus,
     },
     error::{AppError, AppResult},
-    providers::provider_image_url,
     services,
     state::AppState,
 };
@@ -397,96 +395,21 @@ pub(crate) async fn add_album(
     artist_name: String,
     monitor_all: bool,
 ) -> AppResult<()> {
-    // 1. Find or create lightweight (unmonitored) artist.
-    let artist_id = helpers::find_or_create_lightweight_artist(
+    let wanted_status = if monitor_all {
+        WantedStatus::Wanted
+    } else {
+        WantedStatus::Unmonitored
+    };
+
+    let album_id = helpers::ensure_local_album(
         state,
         provider,
+        &external_album_id,
         &artist_external_id,
         &artist_name,
+        wanted_status,
     )
     .await?;
-
-    // 2. Fetch album metadata from the provider.
-    let metadata_provider = state.registry.metadata_provider(provider).ok_or_else(|| {
-        AppError::unavailable(
-            "metadata provider",
-            format!("unknown provider '{provider}'"),
-        )
-    })?;
-
-    let albums = metadata_provider.fetch_albums(&artist_external_id).await?;
-
-    let prov_album = albums
-        .into_iter()
-        .find(|a| a.external_id == external_album_id)
-        .ok_or_else(|| {
-            AppError::not_found(
-                "provider album",
-                Some(format!("{provider}:{external_album_id}")),
-            )
-        })?;
-
-    let existing = album_provider_link::Entity::find()
-        .filter(album_provider_link::Column::Provider.eq(provider))
-        .filter(album_provider_link::Column::ProviderAlbumId.eq(&external_album_id))
-        .one(&state.db)
-        .await?;
-
-    let album_id = if let Some(link) = existing {
-        link.album_id
-    } else {
-        let album_type = prov_album
-            .album_type
-            .as_deref()
-            .map(AlbumType::parse)
-            .unwrap_or(AlbumType::Unknown);
-
-        let release_date = prov_album.release_date;
-
-        let cover_url = prov_album
-            .cover_ref
-            .as_ref()
-            .map(|r| provider_image_url(provider, r, 640));
-
-        let wanted_status = if monitor_all {
-            WantedStatus::Wanted
-        } else {
-            WantedStatus::Unmonitored
-        };
-
-        let model = album::ActiveModel {
-            title: Set(prov_album.title.clone()),
-            album_type: Set(album_type),
-            release_date: Set(release_date),
-            cover_url: Set(cover_url),
-            explicit: Set(prov_album.explicit),
-            wanted_status: Set(wanted_status),
-            ..album::ActiveModel::new()
-        };
-        let new_album = model.insert(&state.db).await?;
-        let new_id = new_album.id;
-
-        // Create provider link
-        let link = album_provider_link::ActiveModel {
-            album_id: Set(new_id),
-            provider: Set(provider),
-            provider_album_id: Set(external_album_id.clone()),
-            external_url: Set(prov_album.url.clone()),
-            external_name: Set(Some(prov_album.title.clone())),
-            ..album_provider_link::ActiveModel::new()
-        };
-        link.insert(&state.db).await?;
-
-        // Create junction table entry
-        let junction = album_artist::ActiveModel {
-            album_id: Set(new_id),
-            artist_id: Set(artist_id),
-            priority: Set(0),
-        };
-        junction.insert(&state.db).await?;
-
-        new_id
-    };
 
     // 4. Sync tracks from provider.
     super::sync_album_tracks(state, provider, &external_album_id, album_id).await?;

@@ -1,26 +1,15 @@
-use sea_orm::{
-    ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait,
-    PaginatorTrait,
-};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, EntityTrait, PaginatorTrait};
 use tracing::info;
 use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    db::{self, album_artist, artist, artist_provider_link, provider::Provider},
+    db::{self, album_artist, artist, artist_provider_link},
     error::{AppError, AppResult},
     state::AppState,
 };
 
 use super::helpers;
-
-/// Parse a provider string into the `Provider` enum.
-fn parse_provider(s: &str) -> AppResult<Provider> {
-    Provider::try_from_value(&s.to_string()).map_err(|_| AppError::Validation {
-        field: Some("provider".into()),
-        reason: format!("unknown provider '{s}'"),
-    })
-}
 
 pub(crate) async fn add_artist(
     state: &AppState,
@@ -30,41 +19,23 @@ pub(crate) async fn add_artist(
     image_url: Option<String>,
     external_url: Option<Url>,
 ) -> AppResult<()> {
-    let provider_enum = parse_provider(&provider)?;
+    let provider_enum = helpers::parse_provider(&provider)?;
     let external_url = external_url
         .map(|u| u.to_string())
         .or_else(|| helpers::default_provider_artist_url(&provider, &external_id));
+    let external_name = name.clone();
 
-    // Check if artist already exists via provider link
-    let existing =
-        artist_provider_link::Entity::find_by_provider_external(provider_enum, &external_id)
-            .one(&state.db)
-            .await?;
-
-    let artist_id = if let Some(link) = existing {
-        link.artist_id
-    } else {
-        let model = artist::ActiveModel {
-            name: Set(name.clone()),
-            image_url: Set(image_url),
-            monitored: Set(true),
-            ..artist::ActiveModel::new()
-        };
-        let artist = model.insert(&state.db).await?;
-        let artist_id = artist.id;
-
-        let link = artist_provider_link::ActiveModel {
-            artist_id: Set(artist_id),
-            provider: Set(provider_enum),
-            external_id: Set(external_id),
-            external_url: Set(external_url),
-            external_name: Set(Some(name)),
-            ..artist_provider_link::ActiveModel::new()
-        };
-        link.insert(&state.db).await?;
-
-        artist_id
-    };
+    let artist_id = helpers::find_or_create_artist_with_provider_link(
+        state,
+        provider_enum,
+        &external_id,
+        &name,
+        image_url,
+        true,
+        external_url,
+        Some(external_name),
+    )
+    .await?;
 
     super::sync_artist(state, artist_id).await?;
     helpers::spawn_fetch_artist_bio(state, artist_id);
@@ -201,34 +172,19 @@ pub(crate) async fn link_artist_provider(
     external_name: Option<String>,
     _image_ref: Option<String>,
 ) -> AppResult<()> {
-    let provider_enum = parse_provider(&provider)?;
+    let provider_enum = helpers::parse_provider(&provider)?;
     let external_url =
         external_url.or_else(|| helpers::default_provider_artist_url(&provider, &external_id));
 
-    let existing = artist_provider_link::Entity::find_by_artist_provider_external(
+    helpers::upsert_artist_provider_link(
+        state,
         artist_id,
         provider_enum,
         &external_id,
+        external_url,
+        external_name,
     )
-    .one(&state.db)
     .await?;
-
-    if let Some(existing) = existing {
-        let mut model: artist_provider_link::ActiveModel = existing.into();
-        model.external_url = Set(external_url);
-        model.external_name = Set(external_name);
-        model.update(&state.db).await?;
-    } else {
-        let model = artist_provider_link::ActiveModel {
-            artist_id: Set(artist_id),
-            provider: Set(provider_enum),
-            external_id: Set(external_id),
-            external_url: Set(external_url),
-            external_name: Set(external_name),
-            ..artist_provider_link::ActiveModel::new()
-        };
-        model.insert(&state.db).await?;
-    }
 
     let artist = artist::Entity::find_by_id(artist_id).one(&state.db).await?;
     let has_bio = artist.as_ref().and_then(|a| a.bio.as_ref()).is_some();
@@ -247,7 +203,7 @@ pub(crate) async fn unlink_artist_provider(
     provider: String,
     external_id: String,
 ) -> AppResult<()> {
-    let provider_enum = parse_provider(&provider)?;
+    let provider_enum = helpers::parse_provider(&provider)?;
 
     artist_provider_link::Entity::delete_by_artist_provider_external(
         artist_id,

@@ -1,10 +1,17 @@
-use sea_orm::{ActiveModelBehavior, ActiveModelTrait};
+use sea_orm::{
+    ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
+    QueryFilter,
+};
 use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
-    db::{artist, artist_provider_link, provider::Provider},
-    error::AppResult,
+    db::{
+        album, album_artist, album_provider_link, album_type::AlbumType, artist,
+        artist_provider_link, provider::Provider, wanted_status::WantedStatus,
+    },
+    error::{AppError, AppResult},
+    providers::{ProviderAlbum, provider_image_url},
     state::AppState,
 };
 
@@ -28,6 +35,13 @@ pub(crate) fn default_provider_album_url(provider: &str, external_id: &str) -> O
         )),
         _ => None,
     }
+}
+
+pub(crate) fn parse_provider(s: &str) -> AppResult<Provider> {
+    Provider::try_from_value(&s.to_string()).map_err(|_| AppError::Validation {
+        field: Some("provider".into()),
+        reason: format!("unknown provider '{s}'"),
+    })
 }
 
 /// Fetch artist bio from linked metadata providers in background.
@@ -127,6 +141,177 @@ pub(crate) fn spawn_recompute_artist_match_suggestions(state: &AppState, artist_
     });
 }
 
+pub(crate) async fn upsert_artist_provider_link(
+    state: &AppState,
+    artist_id: Uuid,
+    provider: Provider,
+    external_id: &str,
+    external_url: Option<String>,
+    external_name: Option<String>,
+) -> AppResult<()> {
+    let existing = artist_provider_link::Entity::find_by_artist_provider_external(
+        artist_id,
+        provider,
+        external_id,
+    )
+    .one(&state.db)
+    .await?;
+
+    if let Some(existing) = existing {
+        let mut model: artist_provider_link::ActiveModel = existing.into();
+        model.external_url = Set(external_url);
+        model.external_name = Set(external_name);
+        model.update(&state.db).await?;
+    } else {
+        let model = artist_provider_link::ActiveModel {
+            artist_id: Set(artist_id),
+            provider: Set(provider),
+            external_id: Set(external_id.to_string()),
+            external_url: Set(external_url),
+            external_name: Set(external_name),
+            ..artist_provider_link::ActiveModel::new()
+        };
+        model.insert(&state.db).await?;
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn find_or_create_artist_with_provider_link(
+    state: &AppState,
+    provider: Provider,
+    external_id: &str,
+    name: &str,
+    image_url: Option<String>,
+    monitored: bool,
+    external_url: Option<String>,
+    external_name: Option<String>,
+) -> AppResult<Uuid> {
+    if let Some(existing) =
+        artist_provider_link::Entity::find_by_provider_external(provider, external_id)
+            .one(&state.db)
+            .await?
+    {
+        return Ok(existing.artist_id);
+    }
+
+    let artist = artist::ActiveModel {
+        name: Set(name.to_string()),
+        image_url: Set(image_url),
+        bio: Set(None),
+        monitored: Set(monitored),
+        ..artist::ActiveModel::new()
+    }
+    .insert(&state.db)
+    .await?;
+
+    upsert_artist_provider_link(
+        state,
+        artist.id,
+        provider,
+        external_id,
+        external_url,
+        external_name,
+    )
+    .await?;
+
+    Ok(artist.id)
+}
+
+async fn fetch_provider_album(
+    state: &AppState,
+    provider: Provider,
+    artist_external_id: &str,
+    external_album_id: &str,
+) -> AppResult<ProviderAlbum> {
+    let metadata_provider = state.registry.metadata_provider(provider).ok_or_else(|| {
+        AppError::unavailable(
+            "metadata provider",
+            format!("unknown provider '{provider}'"),
+        )
+    })?;
+
+    metadata_provider
+        .fetch_albums(artist_external_id)
+        .await?
+        .into_iter()
+        .find(|album| album.external_id == external_album_id)
+        .ok_or_else(|| {
+            AppError::not_found(
+                "provider album",
+                Some(format!("{provider}:{external_album_id}")),
+            )
+        })
+}
+
+pub(crate) async fn ensure_local_album(
+    state: &AppState,
+    provider: Provider,
+    external_album_id: &str,
+    artist_external_id: &str,
+    artist_name: &str,
+    wanted_status: WantedStatus,
+) -> AppResult<Uuid> {
+    let artist_id =
+        find_or_create_lightweight_artist(state, provider, artist_external_id, artist_name).await?;
+
+    if let Some(link) = album_provider_link::Entity::find()
+        .filter(album_provider_link::Column::Provider.eq(provider))
+        .filter(album_provider_link::Column::ProviderAlbumId.eq(external_album_id))
+        .one(&state.db)
+        .await?
+    {
+        return Ok(link.album_id);
+    }
+
+    let provider_album =
+        fetch_provider_album(state, provider, artist_external_id, external_album_id).await?;
+
+    let album_type = provider_album
+        .album_type
+        .as_deref()
+        .map(AlbumType::parse)
+        .unwrap_or(AlbumType::Unknown);
+    let cover_url = provider_album
+        .cover_ref
+        .as_ref()
+        .map(|image_ref| provider_image_url(provider, image_ref, 640));
+
+    let created_album = album::ActiveModel {
+        title: Set(provider_album.title.clone()),
+        album_type: Set(album_type),
+        release_date: Set(provider_album.release_date),
+        cover_url: Set(cover_url),
+        explicit: Set(provider_album.explicit),
+        wanted_status: Set(wanted_status),
+        ..album::ActiveModel::new()
+    }
+    .insert(&state.db)
+    .await?;
+
+    let album_id = created_album.id;
+
+    let link = album_provider_link::ActiveModel {
+        album_id: Set(album_id),
+        provider: Set(provider),
+        provider_album_id: Set(external_album_id.to_string()),
+        external_url: Set(provider_album.url),
+        external_name: Set(Some(provider_album.title)),
+        ..album_provider_link::ActiveModel::new()
+    };
+    link.insert(&state.db).await?;
+
+    let junction = album_artist::ActiveModel {
+        album_id: Set(album_id),
+        artist_id: Set(artist_id),
+        priority: Set(0),
+        ..Default::default()
+    };
+    junction.insert(&state.db).await?;
+
+    Ok(album_id)
+}
+
 /// Find an existing artist by provider link, or create a new lightweight
 /// (unmonitored) artist with a single provider link.
 pub(crate) async fn find_or_create_lightweight_artist(
@@ -135,37 +320,18 @@ pub(crate) async fn find_or_create_lightweight_artist(
     artist_external_id: &str,
     artist_name: &str,
 ) -> AppResult<Uuid> {
-    if let Some(existing) =
-        artist_provider_link::Entity::find_by_provider_external(provider, artist_external_id)
-            .one(&state.db)
-            .await?
-    {
-        return Ok(existing.artist_id);
-    }
-
     let external_url = default_provider_artist_url(&provider.to_string(), artist_external_id);
-
-    let artist = artist::ActiveModel {
-        name: sea_orm::ActiveValue::Set(artist_name.to_string()),
-        image_url: sea_orm::ActiveValue::Set(None),
-        bio: sea_orm::ActiveValue::Set(None),
-        monitored: sea_orm::ActiveValue::Set(false),
-        ..artist::ActiveModel::new()
-    }
-    .insert(&state.db)
-    .await?;
-
-    let link = artist_provider_link::ActiveModel {
-        artist_id: sea_orm::ActiveValue::Set(artist.id),
-        provider: sea_orm::ActiveValue::Set(provider),
-        external_id: sea_orm::ActiveValue::Set(artist_external_id.to_string()),
-        external_url: sea_orm::ActiveValue::Set(external_url),
-        external_name: sea_orm::ActiveValue::Set(Some(artist_name.to_string())),
-        ..artist_provider_link::ActiveModel::new()
-    };
-    link.insert(&state.db).await?;
-
-    Ok(artist.id)
+    find_or_create_artist_with_provider_link(
+        state,
+        provider,
+        artist_external_id,
+        artist_name,
+        None,
+        false,
+        external_url,
+        Some(artist_name.to_string()),
+    )
+    .await
 }
 
 #[cfg(test)]
