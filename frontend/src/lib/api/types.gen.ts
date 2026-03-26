@@ -1150,6 +1150,18 @@ export interface components {
         DownloadJobKind: "album" | "track";
         /** @enum {string} */
         DownloadStatus: "queued" | "resolving" | "downloading" | "completed" | "failed";
+        /**
+         * @description User-confirmed external import: which source to import, how, and the
+         *     individual album-level confirmations.
+         */
+        ExternalImportConfirmation: {
+            /** @description Per-album confirmations (same structure as the library-scan import). */
+            items: components["schemas"]["ImportConfirmation"][];
+            /** @description Copy or hardlink. */
+            mode: components["schemas"]["ManualImportMode"];
+            /** @description Absolute path on the server that was scanned. */
+            source_path: string;
+        };
         /** @description A candidate album match for a discovered local folder. */
         ImportAlbumCandidate: {
             acquired: boolean;
@@ -1227,6 +1239,11 @@ export interface components {
             password: string;
             username: string;
         };
+        /**
+         * @description How files are integrated into the music library during an external import.
+         * @enum {string}
+         */
+        ManualImportMode: "copy" | "hardlink";
         MergeAlbumsRequest: {
             result_cover_url?: string | null;
             result_title?: string | null;
@@ -2721,7 +2738,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ImportConfirmation"][];
+                "application/json": components["schemas"]["ExternalImportConfirmation"];
             };
         };
         responses: {
@@ -3077,7 +3094,6 @@ export interface operations {
     search_tracks: {
         parameters: {
             query: {
-                /** @description Track search query */
                 query: string;
             };
             header?: never;

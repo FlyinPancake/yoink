@@ -1,6 +1,6 @@
-use tracing::{info, warn};
+use tracing::info;
 
-use yoink_shared::ImportConfirmation;
+use yoink_shared::{ImportConfirmation, ManualImportMode};
 
 use crate::{error::AppResult, services, state::AppState};
 
@@ -59,10 +59,10 @@ pub(crate) async fn confirm_import(
 pub(crate) async fn confirm_external_import(
     state: &AppState,
     source_path: String,
-    _mode: String,
+    mode: ManualImportMode,
     items: Vec<ImportConfirmation>,
 ) -> AppResult<()> {
-    let summary = services::confirm_external_import(state, source_path, _mode, items).await?;
+    let summary = services::confirm_external_import(state, source_path, mode, items).await?;
     info!(
         imported = summary.imported,
         failed = summary.failed,

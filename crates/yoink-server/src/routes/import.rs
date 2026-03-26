@@ -3,7 +3,10 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use yoink_shared::{BrowseEntry, ImportConfirmation, ImportPreviewItem, ImportResultSummary};
+use yoink_shared::{
+    BrowseEntry, ExternalImportConfirmation, ImportConfirmation, ImportPreviewItem,
+    ImportResultSummary,
+};
 
 use crate::{services, state::AppState};
 
@@ -136,7 +139,7 @@ async fn preview_external_import(
     post,
     path = "/external/confirm",
     tag = TAG,
-    request_body = Vec<ImportConfirmation>,
+    request_body = ExternalImportConfirmation,
     responses(
         (status = 200, description = "External import result summary", body = ImportResultSummary),
         (status = 500, description = "Failed to confirm external import"),
@@ -145,11 +148,11 @@ async fn preview_external_import(
 /// Confirm External Import
 async fn confirm_external_import(
     State(state): State<AppState>,
-    Json(items): Json<Vec<ImportConfirmation>>,
+    Json(request): Json<ExternalImportConfirmation>,
 ) -> ApiResult<ImportResultSummary> {
-    // TODO: needs source_path and mode from request
-    let summary = services::confirm_external_import(&state, String::new(), String::new(), items)
-        .await
-        .map_err(app_error_response)?;
+    let summary =
+        services::confirm_external_import(&state, request.source_path, request.mode, request.items)
+            .await
+            .map_err(app_error_response)?;
     Ok(Json(summary))
 }

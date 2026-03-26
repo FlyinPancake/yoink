@@ -338,7 +338,11 @@ function ExternalImportTab() {
 
     try {
       const res = await confirmExternal.mutateAsync({
-        body: confirmations,
+        body: {
+          source_path: sourcePath,
+          mode: importMode,
+          items: confirmations,
+        },
       });
       setResult(res);
       setStep("result");
