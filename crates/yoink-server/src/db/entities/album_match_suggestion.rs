@@ -5,13 +5,13 @@ use crate::db::provider::Provider;
 
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
-#[sea_orm(table_name = "artist_match_candidates")]
+#[sea_orm(table_name = "album_match_candidates")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    pub artist_id: Uuid,
-    #[sea_orm(belongs_to, from = "artist_id", to = "id", on_delete = "Cascade")]
-    pub artist: HasOne<super::artist::Entity>,
+    pub album_id: Uuid,
+    #[sea_orm(belongs_to, from = "album_id", to = "id", on_delete = "Cascade")]
+    pub album: HasOne<super::album::Entity>,
     pub left_provider: Provider,
     pub left_external_id: String,
     pub right_provider: Provider,
@@ -22,9 +22,6 @@ pub struct Model {
     pub external_name: Option<String>,
     pub external_url: Option<String>,
     pub image_url: Option<String>,
-    pub disambiguation: Option<String>,
-    pub artist_type: Option<String>,
-    pub country: Option<String>,
     pub tags_json: Option<String>,
     pub popularity: Option<i32>,
     pub status: String,
@@ -55,17 +52,17 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 impl Entity {
-    pub fn find_by_artist(artist_id: Uuid) -> Select<Entity> {
+    pub fn find_by_album(album_id: Uuid) -> Select<Entity> {
         Entity::find()
-            .filter(Column::ArtistId.eq(artist_id))
+            .filter(Column::AlbumId.eq(album_id))
             .order_by_asc(Column::Status)
             .order_by_desc(Column::Confidence)
             .order_by_desc(Column::CreatedAt)
     }
 
-    pub fn delete_pending_for_artist(artist_id: Uuid) -> DeleteMany<Entity> {
+    pub fn delete_pending_for_album(album_id: Uuid) -> DeleteMany<Entity> {
         Entity::delete_many()
-            .filter(Column::ArtistId.eq(artist_id))
+            .filter(Column::AlbumId.eq(album_id))
             .filter(Column::Status.eq("pending"))
     }
 }

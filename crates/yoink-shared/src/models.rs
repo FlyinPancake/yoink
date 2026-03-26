@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use url::Url;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -180,30 +179,6 @@ pub struct AuthStatus {
     pub authenticated: bool,
     pub username: Option<String>,
     pub must_change_password: bool,
-}
-
-/// Potential cross-provider match suggestion.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct MatchSuggestion {
-    pub id: Uuid,
-    pub scope_type: String,
-    pub scope_id: Uuid,
-    pub left_provider: String,
-    pub left_external_id: String,
-    pub right_provider: String,
-    pub right_external_id: String,
-    pub match_kind: String,
-    pub confidence: u8,
-    pub explanation: Option<String>,
-    pub external_name: Option<String>,
-    pub external_url: Option<String>,
-    pub image_url: Option<String>,
-    pub disambiguation: Option<String>,
-    pub artist_type: Option<String>,
-    pub country: Option<String>,
-    pub tags: Vec<String>,
-    pub popularity: Option<u8>,
-    pub status: String,
 }
 
 /// An artist image option from a linked provider.

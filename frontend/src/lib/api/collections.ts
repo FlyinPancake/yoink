@@ -27,7 +27,7 @@ import type { components } from "./types.gen";
 // ── Type aliases for convenience ───────────────────────────────
 
 export type MonitoredArtist = components["schemas"]["MonitoredArtist"];
-export type MonitoredAlbum = components["schemas"]["MonitoredAlbum"];
+export type MonitoredAlbum = components["schemas"]["Album"];
 export type LibraryTrack = components["schemas"]["LibraryTrack"];
 export type DownloadJob = components["schemas"]["DownloadJob"];
 

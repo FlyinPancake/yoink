@@ -632,10 +632,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /**
-     * Browse Path
-     * @description Lists directories and recognised audio files for a server-side filesystem path.
-     */
+    /** Browse Path */
     post: operations["browse_path"];
     delete?: never;
     options?: never;
@@ -652,10 +649,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /**
-     * Confirm Import
-     * @description Confirms a library-scan import selection and imports the chosen albums.
-     */
+    /** Confirm Import */
     post: operations["confirm_import"];
     delete?: never;
     options?: never;
@@ -672,11 +666,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /**
-     * Confirm External Import
-     * @description Confirms an external import selection and imports the chosen files via copy
-     *     or hardlink.
-     */
+    /** Confirm External Import */
     post: operations["confirm_external_import"];
     delete?: never;
     options?: never;
@@ -693,10 +683,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /**
-     * Preview External Import
-     * @description Scans an arbitrary server-side source path and returns external import candidates.
-     */
+    /** Preview External Import */
     post: operations["preview_external_import"];
     delete?: never;
     options?: never;
@@ -711,11 +698,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /**
-     * Preview Import
-     * @description Scans the configured music library for import candidates and returns the
-     *     current preview set.
-     */
+    /** Preview Import */
     get: operations["preview_import"];
     put?: never;
     post?: never;
@@ -734,10 +717,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /**
-     * Scan Import
-     * @description Triggers a scan-and-import run using the existing server-side import action.
-     */
+    /** Scan Import */
     post: operations["scan_import"];
     delete?: never;
     options?: never;
@@ -752,10 +732,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /**
-     * List Jobs
-     * @description Returns the current in-memory download job list in its UI-facing sort order.
-     */
+    /** List Jobs */
     get: operations["list_jobs"];
     put?: never;
     post?: never;
@@ -775,10 +752,7 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /**
-     * Clear Completed Jobs
-     * @description Deletes completed download job rows and removes them from the in-memory job list.
-     */
+    /** Clear Completed Jobs */
     delete: operations["clear_completed_jobs"];
     options?: never;
     head?: never;
@@ -794,10 +768,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /**
-     * Cancel Job
-     * @description Marks a queued download job as cancelled and failed.
-     */
+    /** Cancel Job */
     post: operations["cancel_job"];
     delete?: never;
     options?: never;
@@ -814,11 +785,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /**
-     * Accept Match Suggestion
-     * @description Accepts a pending match suggestion and applies the provider-link change for
-     *     the associated local artist or album.
-     */
+    /** Accept Match Suggestion */
     post: operations["accept_match_suggestion"];
     delete?: never;
     options?: never;
@@ -835,10 +802,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /**
-     * Dismiss Match Suggestion
-     * @description Marks a match suggestion as dismissed without linking the suggested provider entity.
-     */
+    /** Dismiss Match Suggestion */
     post: operations["dismiss_match_suggestion"];
     delete?: never;
     options?: never;
@@ -893,18 +857,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /**
-     * List Tracks
-     * @description Returns the library-wide track view, including parent album and artist
-     *     context for each local track row.
-     */
+    /** List Tracks */
     get: operations["list_tracks"];
     put?: never;
-    /**
-     * Create Track
-     * @description Adds a single provider track to the local library, creating the parent
-     *     lightweight artist and album as needed and marking only that track wanted.
-     */
+    /** Create Track */
     post: operations["create_track"];
     delete?: never;
     options?: never;
@@ -919,11 +875,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /**
-     * Search Tracks
-     * @description Searches all registered metadata providers for tracks matching the query
-     *     string and returns the aggregated results.
-     */
+    /** Search Tracks */
     get: operations["search_tracks"];
     put?: never;
     post?: never;
@@ -1020,40 +972,98 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /**
+     * @description Core album data as stored in the database.
+     *     Relation data (artists, tracks, provider links) is returned separately
+     *     in API responses — not embedded here.
+     */
+    Album: {
+      album_type?: string | null;
+      cover_url?: string | null;
+      /** Format: date-time */
+      created_at: string;
+      explicit: boolean;
+      /** Format: uuid */
+      id: string;
+      monitored: boolean;
+      release_date?: string | null;
+      title: string;
+      wanted_status: components["schemas"]["WantedStatus"];
+    };
     AlbumArtistRequest: {
       /** Format: uuid */
       artist_id: string;
     };
     AlbumDetailResponse: {
-      album: components["schemas"]["MonitoredAlbum"];
-      album_artists: components["schemas"]["ResolvedArtistCredit"][];
-      artist?: null | components["schemas"]["MonitoredArtist"];
+      album: components["schemas"]["Album"];
+      album_artists: components["schemas"]["ArtistWithPriority"][];
+      album_match_suggestions: components["schemas"]["AlbumMatchSuggestion"][];
       default_quality: components["schemas"]["Quality"];
       jobs: components["schemas"]["DownloadJob"][];
-      match_suggestions: components["schemas"]["MatchSuggestion"][];
       provider_links: components["schemas"]["ProviderLink"][];
       tracks: components["schemas"]["TrackInfo"][];
     };
-    /**
-     * @description A raw artist credit from a provider, stored on the album.
-     *     Used to display all album artists even when some aren't monitored locally.
-     */
-    ArtistCredit: {
-      external_id?: string | null;
-      name: string;
-      provider?: string | null;
+    AlbumMatchSuggestion: {
+      /** Format: uuid */
+      album_id: string;
+      /** Format: int32 */
+      confidence: number;
+      explanation?: string | null;
+      external_name?: string | null;
+      external_url?: string | null;
+      /** Format: uuid */
+      id: string;
+      image_url?: string | null;
+      left_external_id: string;
+      left_provider: string;
+      match_kind: string;
+      /** Format: int32 */
+      popularity?: number | null;
+      right_external_id: string;
+      right_provider: string;
+      status: string;
+      tags: string[];
     };
     ArtistDetailResponse: {
-      albums: components["schemas"]["MonitoredAlbum"][];
+      album_match_suggestions: components["schemas"]["AlbumMatchSuggestion"][];
+      albums: components["schemas"]["Album"][];
       artist: components["schemas"]["MonitoredArtist"];
+      artist_match_suggestions: components["schemas"]["ArtistMatchSuggestion"][];
       default_quality: components["schemas"]["Quality"];
-      match_suggestions: components["schemas"]["MatchSuggestion"][];
       provider_links: components["schemas"]["ProviderLink"][];
     };
     /** @description An artist image option from a linked provider. */
     ArtistImageOption: {
       image_url: string;
       provider: string;
+    };
+    ArtistMatchSuggestion: {
+      /** Format: uuid */
+      artist_id: string;
+      artist_type?: string | null;
+      /** Format: int32 */
+      confidence: number;
+      country?: string | null;
+      disambiguation?: string | null;
+      explanation?: string | null;
+      external_name?: string | null;
+      external_url?: string | null;
+      /** Format: uuid */
+      id: string;
+      image_url?: string | null;
+      left_external_id: string;
+      left_provider: string;
+      match_kind: string;
+      /** Format: int32 */
+      popularity?: number | null;
+      right_external_id: string;
+      right_provider: string;
+      status: string;
+      tags: string[];
+    };
+    ArtistWithPriority: components["schemas"]["MonitoredArtist"] & {
+      /** Format: int32 */
+      priority: number;
     };
     AuthStatus: {
       auth_enabled: boolean;
@@ -1080,10 +1090,11 @@ export interface components {
       artist_name: string;
       external_album_id: string;
       monitor_all: boolean;
-      provider: string;
+      provider: components["schemas"]["Provider"];
     };
     CreateArtistRequest: {
       external_id: string;
+      /** Format: uri */
       external_url?: string | null;
       image_url?: string | null;
       name: string;
@@ -1094,7 +1105,7 @@ export interface components {
       artist_name: string;
       external_album_id: string;
       external_track_id: string;
-      provider: string;
+      provider: components["schemas"]["Provider"];
     };
     CredentialsForm: {
       confirm_password: string;
@@ -1103,7 +1114,7 @@ export interface components {
       username: string;
     };
     DashboardData: {
-      albums: components["schemas"]["MonitoredAlbum"][];
+      albums: components["schemas"]["Album"][];
       artists: components["schemas"]["MonitoredArtist"][];
       jobs: components["schemas"]["DownloadJob"][];
     };
@@ -1112,6 +1123,7 @@ export interface components {
       album_id: string;
       album_title: string;
       artist_name: string;
+      /** Format: int32 */
       completed_tracks: number;
       /** Format: date-time */
       created_at: string;
@@ -1121,24 +1133,13 @@ export interface components {
       quality: components["schemas"]["Quality"];
       source: string;
       status: components["schemas"]["DownloadStatus"];
+      /** Format: int32 */
       total_tracks: number;
       /** Format: date-time */
       updated_at: string;
     };
     /** @enum {string} */
     DownloadStatus: "queued" | "resolving" | "downloading" | "completed" | "failed";
-    /**
-     * @description User-confirmed external import: which source to import, how, and the
-     *     individual album-level confirmations.
-     */
-    ExternalImportConfirmation: {
-      /** @description Per-album confirmations (same structure as the library-scan import). */
-      items: components["schemas"]["ImportConfirmation"][];
-      /** @description Copy or hardlink. */
-      mode: components["schemas"]["ManualImportMode"];
-      /** @description Absolute path on the server that was scanned. */
-      source_path: string;
-    };
     /** @description A candidate album match for a discovered local folder. */
     ImportAlbumCandidate: {
       acquired: boolean;
@@ -1216,37 +1217,6 @@ export interface components {
       password: string;
       username: string;
     };
-    /**
-     * @description How files are integrated into the music library during an external import.
-     * @enum {string}
-     */
-    ManualImportMode: "copy" | "hardlink";
-    /** @description Potential cross-provider match suggestion. */
-    MatchSuggestion: {
-      artist_type?: string | null;
-      /** Format: int32 */
-      confidence: number;
-      country?: string | null;
-      disambiguation?: string | null;
-      explanation?: string | null;
-      external_name?: string | null;
-      external_url?: string | null;
-      /** Format: uuid */
-      id: string;
-      image_url?: string | null;
-      left_external_id: string;
-      left_provider: string;
-      match_kind: string;
-      /** Format: int32 */
-      popularity?: number | null;
-      right_external_id: string;
-      right_provider: string;
-      /** Format: uuid */
-      scope_id: string;
-      scope_type: string;
-      status: string;
-      tags: string[];
-    };
     MergeAlbumsRequest: {
       result_cover_url?: string | null;
       result_title?: string | null;
@@ -1255,46 +1225,10 @@ export interface components {
       /** Format: uuid */
       target_album_id: string;
     };
-    MonitoredAlbum: {
-      acquired: boolean;
-      /** Format: date-time */
-      added_at: string;
-      album_type?: string | null;
-      /**
-       * @description Raw artist credits from providers. Includes artists that may not be
-       *     monitored locally. Used for display on the album detail page.
-       */
-      artist_credits?: components["schemas"]["ArtistCredit"][];
-      /**
-       * Format: uuid
-       * @description Primary (first) artist — kept for backward compatibility and as a
-       *     convenient shorthand for the common single-artist case.
-       */
-      artist_id: string;
-      /**
-       * @description All artists associated with this album, ordered by display priority.
-       *     The first entry always equals `artist_id`.
-       */
-      artist_ids?: string[];
-      cover_url?: string | null;
-      explicit: boolean;
-      /** Format: uuid */
-      id: string;
-      monitored: boolean;
-      /**
-       * @description True when the album is not fully monitored but has individually monitored
-       *     tracks that are not yet acquired.
-       */
-      partially_wanted?: boolean;
-      quality_override?: null | components["schemas"]["Quality"];
-      release_date?: string | null;
-      title: string;
-      wanted: boolean;
-    };
     MonitoredArtist: {
-      /** Format: date-time */
-      added_at: string;
       bio?: string | null;
+      /** Format: date-time */
+      created_at: string;
       /** Format: uuid */
       id: string;
       image_url?: string | null;
@@ -1308,6 +1242,8 @@ export interface components {
     PreviewExternalImportRequest: {
       source_path: string;
     };
+    /** @enum {string} */
+    Provider: "tidal" | "deezer" | "music_brainz" | "soulseek" | "none";
     /** @description Provider link info for the UI. */
     ProviderLink: {
       external_id: string;
@@ -1315,18 +1251,8 @@ export interface components {
       external_url?: string | null;
       provider: string;
     };
-    /**
-     * @description Normalized quality level, provider-agnostic.
-     * @enum {string}
-     */
-    Quality: "HiRes" | "Lossless" | "High" | "Low";
-    ResolvedArtistCredit: {
-      /** Format: uuid */
-      artist_id?: string | null;
-      external_id?: string | null;
-      name: string;
-      provider?: string | null;
-    };
+    /** @enum {string} */
+    Quality: "Low" | "High" | "Lossless" | "HiRes";
     /** @description An album search result from a metadata provider. */
     SearchAlbumResult: {
       album_type?: string | null;
@@ -1385,7 +1311,6 @@ export interface components {
       artist_external_id: string;
       /** @description Display-ready track artist string. */
       artist_name: string;
-      duration_display: string;
       /** Format: int32 */
       duration_secs: number;
       explicit: boolean;
@@ -1415,7 +1340,6 @@ export interface components {
       acquired: boolean;
       /** Format: int32 */
       disc_number: number;
-      duration_display: string;
       /** Format: int32 */
       duration_secs: number;
       explicit: boolean;
@@ -1443,7 +1367,7 @@ export interface components {
       name?: string | null;
     };
     WantedAlbumWithTracks: {
-      album: components["schemas"]["MonitoredAlbum"];
+      album: components["schemas"]["Album"];
       tracks: components["schemas"]["TrackInfo"][];
     };
     WantedData: {
@@ -1451,6 +1375,11 @@ export interface components {
       artists: components["schemas"]["MonitoredArtist"][];
       jobs: components["schemas"]["DownloadJob"][];
     };
+    /**
+     * @description Album status indicating what the download system should do with it.
+     * @enum {string}
+     */
+    WantedStatus: "unwanted" | "wanted" | "in_progress" | "acquired";
   };
   responses: never;
   parameters: never;
@@ -1475,7 +1404,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["MonitoredAlbum"][];
+          "application/json": components["schemas"]["Album"][];
         };
       };
       /** @description Failed to load albums */
@@ -2674,7 +2603,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
-        provider: string;
+        provider: components["schemas"]["Provider"];
         image_id: string;
         size: number;
       };
@@ -2729,13 +2658,6 @@ export interface operations {
           "application/json": components["schemas"]["BrowseEntry"][];
         };
       };
-      /** @description Invalid path */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
       /** @description Failed to browse path */
       500: {
         headers: {
@@ -2785,7 +2707,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": components["schemas"]["ExternalImportConfirmation"];
+        "application/json": components["schemas"]["ImportConfirmation"][];
       };
     };
     responses: {
@@ -2828,13 +2750,6 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["ImportPreviewItem"][];
         };
-      };
-      /** @description Invalid source path */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
       };
       /** @description Failed to preview external import */
       500: {
@@ -2961,13 +2876,6 @@ export interface operations {
         };
         content?: never;
       };
-      /** @description Invalid job id */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
       /** @description Failed to cancel job */
       500: {
         headers: {
@@ -2996,22 +2904,8 @@ export interface operations {
         };
         content?: never;
       };
-      /** @description Invalid suggestion id */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
       /** @description Match suggestion not found */
       404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Suggestion conflicts with existing links */
-      409: {
         headers: {
           [name: string]: unknown;
         };
@@ -3040,13 +2934,6 @@ export interface operations {
     responses: {
       /** @description Match suggestion dismissed */
       204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Invalid suggestion id */
-      400: {
         headers: {
           [name: string]: unknown;
         };
@@ -3084,7 +2971,6 @@ export interface operations {
   search_all: {
     parameters: {
       query: {
-        /** @description Search query */
         query: string;
       };
       header?: never;

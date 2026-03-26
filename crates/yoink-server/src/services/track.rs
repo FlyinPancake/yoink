@@ -93,6 +93,8 @@ pub(crate) async fn add_track(
             album_id: Set(new_id),
             provider: Set(provider),
             provider_album_id: Set(external_album_id.clone()),
+            external_url: Set(prov_album.url.clone()),
+            external_name: Set(Some(prov_album.title.clone())),
             ..album_provider_link::ActiveModel::new()
         };
         link.insert(&state.db).await?;

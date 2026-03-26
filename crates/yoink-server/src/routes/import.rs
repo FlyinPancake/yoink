@@ -3,9 +3,7 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use yoink_shared::{
-    BrowseEntry, ImportConfirmation, ImportPreviewItem, ImportResultSummary,
-};
+use yoink_shared::{BrowseEntry, ImportConfirmation, ImportPreviewItem, ImportResultSummary};
 
 use crate::{services, state::AppState};
 

@@ -1,11 +1,7 @@
 use async_trait::async_trait;
 use sea_orm::{ActiveValue::Set, QueryOrder, entity::prelude::*};
 
-use crate::db::{
-    entities::album_type::AlbumType,
-    quality::Quality,
-    wanted_status::WantedStatus,
-};
+use crate::db::{entities::album_type::AlbumType, quality::Quality, wanted_status::WantedStatus};
 
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]

@@ -1,12 +1,13 @@
 use sea_orm::{
-    ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait,
-    DatabaseConnection, EntityTrait, ModelTrait, QueryFilter,
+    ActiveModelBehavior, ActiveModelTrait,
+    ActiveValue::{NotSet, Set},
+    ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter,
 };
 use serde::Serialize;
 use tracing::info;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use yoink_shared::{Album, DownloadJob, MatchSuggestion, MonitoredArtist, ProviderLink, TrackInfo};
+use yoink_shared::{Album, DownloadJob, MonitoredArtist, ProviderLink, TrackInfo};
 
 use crate::{
     db::{
@@ -21,6 +22,7 @@ use crate::{
 };
 
 use super::helpers;
+use super::matching::AlbumMatchSuggestion;
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ArtistWithPriority {
@@ -36,7 +38,7 @@ pub struct AlbumDetailResponse {
     tracks: Vec<TrackInfo>,
     jobs: Vec<DownloadJob>,
     provider_links: Vec<ProviderLink>,
-    match_suggestions: Vec<MatchSuggestion>,
+    album_match_suggestions: Vec<AlbumMatchSuggestion>,
     default_quality: Quality,
 }
 
@@ -88,14 +90,21 @@ pub(crate) async fn get_album_details(
         .map(|l| l.into())
         .collect();
 
+    let album_match_suggestions: Vec<AlbumMatchSuggestion> =
+        db::album_match_suggestion::Entity::find_by_album(album_id)
+            .all(&state.db)
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect();
+
     Ok(AlbumDetailResponse {
         album: album.into(),
         album_artists,
         tracks,
         jobs,
         provider_links,
-        // FIXME: compute real match suggestions based on linked providers and metadata
-        match_suggestions: vec![],
+        album_match_suggestions,
         default_quality: state.default_quality,
     })
 }
@@ -119,20 +128,31 @@ pub(crate) async fn toggle_album_monitor(
     album_id: Uuid,
     monitored: bool,
 ) -> AppResult<()> {
-    let mut model: album::ActiveModel = album::Entity::find_by_id(album_id)
+    let existing = album::Entity::find_by_id(album_id)
         .one(&state.db)
         .await?
         .ok_or_else(|| AppError::not_found("album", Some(album_id.to_string())))?
-        .into();
+        .wanted_status;
 
-    if monitored {
-        if model.wanted_status.as_ref() == &WantedStatus::Unmonitored {
-            model.wanted_status = Set(WantedStatus::Wanted);
+    let next_status = if monitored {
+        if existing == WantedStatus::Unmonitored {
+            WantedStatus::Wanted
+        } else {
+            existing
         }
     } else {
-        model.wanted_status = Set(WantedStatus::Unmonitored);
-    }
-    model.update(&state.db).await?;
+        WantedStatus::Unmonitored
+    };
+
+    album::Entity::update_many()
+        .set(album::ActiveModel {
+            id: NotSet,
+            wanted_status: Set(next_status),
+            ..Default::default()
+        })
+        .filter(album::Column::Id.eq(album_id))
+        .exec(&state.db)
+        .await?;
 
     let result = if monitored {
         monitor_all_tracks(state, album_id).await?
@@ -154,6 +174,7 @@ async fn monitor_all_tracks(
 ) -> Result<sea_orm::UpdateResult, AppError> {
     let result = db::track::Entity::update_many()
         .set(db::track::ActiveModel {
+            id: NotSet,
             status: Set(WantedStatus::Wanted),
             ..Default::default()
         })
@@ -170,6 +191,7 @@ async fn unmonitor_all_tracks(
 ) -> Result<sea_orm::UpdateResult, AppError> {
     let result = db::track::Entity::update_many()
         .set(db::track::ActiveModel {
+            id: NotSet,
             status: Set(WantedStatus::Unmonitored),
             ..Default::default()
         })
@@ -203,14 +225,20 @@ pub(crate) async fn set_album_quality(
     album_id: Uuid,
     quality: Option<Quality>,
 ) -> AppResult<()> {
-    let mut model: album::ActiveModel = album::Entity::find_by_id(album_id)
+    album::Entity::find_by_id(album_id)
         .one(&state.db)
         .await?
-        .ok_or_else(|| AppError::not_found("album", Some(album_id.to_string())))?
-        .into();
+        .ok_or_else(|| AppError::not_found("album", Some(album_id.to_string())))?;
 
-    model.requested_quality = Set(quality);
-    model.update(&state.db).await?;
+    album::Entity::update_many()
+        .set(album::ActiveModel {
+            id: NotSet,
+            requested_quality: Set(quality),
+            ..Default::default()
+        })
+        .filter(album::Column::Id.eq(album_id))
+        .exec(&state.db)
+        .await?;
 
     // Update quality on queued/failed download jobs for this album
     if let Some(quality) = quality {
@@ -282,12 +310,18 @@ pub(crate) async fn remove_album_files(
 
     services::downloads::remove_downloaded_album_files(state, &album_model).await?;
 
-    let mut model: album::ActiveModel = album_model.into();
     if unmonitor {
         toggle_album_monitor(state, album_id, false).await?;
     } else {
-        model.wanted_status = Set(WantedStatus::Wanted); // no longer acquired
-        model.update(&state.db).await?;
+        album::Entity::update_many()
+            .set(album::ActiveModel {
+                id: NotSet,
+                wanted_status: Set(WantedStatus::Wanted), // no longer acquired
+                ..Default::default()
+            })
+            .filter(album::Column::Id.eq(album_id))
+            .exec(&state.db)
+            .await?;
     }
 
     // Delete completed download jobs for this album
@@ -437,6 +471,8 @@ pub(crate) async fn add_album(
             album_id: Set(new_id),
             provider: Set(provider),
             provider_album_id: Set(external_album_id.clone()),
+            external_url: Set(prov_album.url.clone()),
+            external_name: Set(Some(prov_album.title.clone())),
             ..album_provider_link::ActiveModel::new()
         };
         link.insert(&state.db).await?;
@@ -460,4 +496,118 @@ pub(crate) async fn add_album(
     info!(%album_id, %provider, %external_album_id, monitor_all, "Added album from search");
     state.notify_sse();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use sea_orm::{ActiveModelBehavior, ActiveModelTrait, EntityTrait};
+
+    use super::toggle_album_monitor;
+    use crate::{
+        app_config::AuthConfig,
+        db::{
+            self, album, album_type::AlbumType, quality::Quality, track,
+            wanted_status::WantedStatus,
+        },
+        providers::registry::ProviderRegistry,
+        state::AppState,
+    };
+
+    async fn test_state() -> AppState {
+        let db_path = format!(
+            "sqlite:/tmp/yoink-album-monitor-test-{}.db?mode=rwc",
+            uuid::Uuid::now_v7()
+        );
+
+        AppState::new(
+            PathBuf::from("./music"),
+            Quality::Lossless,
+            false,
+            1,
+            &db_path,
+            ProviderRegistry::new(),
+            AuthConfig {
+                enabled: false,
+                session_secret: String::new(),
+                init_admin_username: None,
+                init_admin_password: None,
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn toggle_album_monitor_updates_album_and_track_statuses() {
+        let state = test_state().await;
+
+        let album = album::ActiveModel {
+            title: sea_orm::ActiveValue::Set("Test Album".to_string()),
+            album_type: sea_orm::ActiveValue::Set(AlbumType::Album),
+            release_date: sea_orm::ActiveValue::Set(None),
+            cover_url: sea_orm::ActiveValue::Set(None),
+            explicit: sea_orm::ActiveValue::Set(false),
+            wanted_status: sea_orm::ActiveValue::Set(WantedStatus::Unmonitored),
+            requested_quality: sea_orm::ActiveValue::Set(None),
+            ..album::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album");
+
+        let track = track::ActiveModel {
+            title: sea_orm::ActiveValue::Set("Track 1".to_string()),
+            version: sea_orm::ActiveValue::Set(None),
+            disc_number: sea_orm::ActiveValue::Set(Some(1)),
+            track_number: sea_orm::ActiveValue::Set(Some(1)),
+            duration: sea_orm::ActiveValue::Set(Some(180)),
+            album_id: sea_orm::ActiveValue::Set(album.id),
+            explicit: sea_orm::ActiveValue::Set(false),
+            isrc: sea_orm::ActiveValue::Set(None),
+            root_folder_id: sea_orm::ActiveValue::Set(None),
+            status: sea_orm::ActiveValue::Set(WantedStatus::Unmonitored),
+            file_path: sea_orm::ActiveValue::Set(None),
+            ..track::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert track");
+
+        toggle_album_monitor(&state, album.id, true)
+            .await
+            .expect("monitor album");
+
+        let album = db::album::Entity::find_by_id(album.id)
+            .one(&state.db)
+            .await
+            .expect("reload album")
+            .expect("album exists");
+        let track = db::track::Entity::find_by_id(track.id)
+            .one(&state.db)
+            .await
+            .expect("reload track")
+            .expect("track exists");
+
+        assert_eq!(album.wanted_status, WantedStatus::Wanted);
+        assert_eq!(track.status, WantedStatus::Wanted);
+
+        toggle_album_monitor(&state, album.id, false)
+            .await
+            .expect("unmonitor album");
+
+        let album = db::album::Entity::find_by_id(album.id)
+            .one(&state.db)
+            .await
+            .expect("reload album")
+            .expect("album exists");
+        let track = db::track::Entity::find_by_id(track.id)
+            .one(&state.db)
+            .await
+            .expect("reload track")
+            .expect("track exists");
+
+        assert_eq!(album.wanted_status, WantedStatus::Unmonitored);
+        assert_eq!(track.status, WantedStatus::Unmonitored);
+    }
 }

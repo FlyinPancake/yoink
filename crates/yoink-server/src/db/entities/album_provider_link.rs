@@ -1,6 +1,7 @@
 use sea_orm::{ActiveValue::Set, entity::prelude::*};
 
 use crate::db::provider::Provider;
+use crate::services::helpers::default_provider_album_url;
 
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
@@ -13,6 +14,8 @@ pub struct Model {
     pub album: Option<super::album::Entity>,
     pub provider: Provider,
     pub provider_album_id: String,
+    pub external_url: Option<String>,
+    pub external_name: Option<String>,
     pub created_at: DateTimeUtc,
     pub modified_at: DateTimeUtc,
 }
@@ -44,10 +47,11 @@ impl From<Model> for yoink_shared::ProviderLink {
     fn from(value: Model) -> Self {
         Self {
             provider: value.provider.to_value(),
+            external_url: value.external_url.or_else(|| {
+                default_provider_album_url(&value.provider.to_value(), &value.provider_album_id)
+            }),
+            external_name: value.external_name,
             external_id: value.provider_album_id,
-            // FIXME: These fields have to be populated later
-            external_url: None,
-            external_name: None,
         }
     }
 }

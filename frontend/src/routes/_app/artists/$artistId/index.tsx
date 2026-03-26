@@ -16,6 +16,7 @@ import type { components } from "@/lib/api/types.gen";
 import { $api } from "@/lib/api";
 import { useSleeveGlow } from "@/hooks/use-sleeve-glow";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { isAlbumAcquired, isAlbumInProgress, isAlbumWanted, isAlbumWantedLike } from "@/lib/music";
 import {
   useAcceptMatchSuggestion,
   useDeleteArtist,
@@ -64,9 +65,11 @@ import {
 } from "@/components/ui/select";
 
 type MonitoredArtist = components["schemas"]["MonitoredArtist"];
-type MonitoredAlbum = components["schemas"]["MonitoredAlbum"];
+type Album = components["schemas"]["Album"] & {
+  quality_override?: components["schemas"]["Quality"] | null;
+};
 type ProviderLink = components["schemas"]["ProviderLink"];
-type MatchSuggestion = components["schemas"]["MatchSuggestion"];
+type ArtistMatchSuggestion = components["schemas"]["ArtistMatchSuggestion"];
 type Quality = components["schemas"]["Quality"];
 
 export const Route = createFileRoute("/_app/artists/$artistId/")({
@@ -181,7 +184,7 @@ function ArtistDetailPage() {
       artist={data.artist}
       albums={data.albums}
       providerLinks={data.provider_links}
-      matchSuggestions={data.match_suggestions}
+      artistMatchSuggestions={data.artist_match_suggestions}
       defaultQuality={data.default_quality}
     />
   );
@@ -234,17 +237,20 @@ function ArtistDetailContent({
   artist,
   albums,
   providerLinks,
-  matchSuggestions,
+  artistMatchSuggestions,
   defaultQuality,
 }: {
   artist: MonitoredArtist;
-  albums: Array<MonitoredAlbum>;
+  albums: Array<Album>;
   providerLinks: Array<ProviderLink>;
-  matchSuggestions: Array<MatchSuggestion>;
+  artistMatchSuggestions: Array<ArtistMatchSuggestion>;
   defaultQuality: Quality;
 }) {
   const navigate = useNavigate();
-  const [albumSort, setAlbumSort] = useLocalStorage("artist-detail-albums-sort", "newest");
+  const [albumSort, setAlbumSort] = useLocalStorage<"az" | "newest" | "oldest">(
+    "artist-detail-albums-sort",
+    "newest",
+  );
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
 
@@ -254,13 +260,13 @@ function ArtistDetailContent({
 
   const albumCount = albums.length;
   const monitoredCount = albums.filter((a) => a.monitored).length;
-  const acquiredCount = albums.filter((a) => a.acquired).length;
-  const wantedCount = albums.filter((a) => a.wanted).length;
+  const acquiredCount = albums.filter((a) => isAlbumAcquired(a.wanted_status)).length;
+  const wantedCount = albums.filter((a) => isAlbumWantedLike(a.wanted_status)).length;
 
-  const pendingSuggestions = matchSuggestions.filter((m) => m.status === "pending");
+  const pendingSuggestions = artistMatchSuggestions.filter((m) => m.status === "pending");
 
   /** Sort a list of albums by the current sort mode. */
-  const sortList = (list: MonitoredAlbum[]): MonitoredAlbum[] => {
+  const sortList = (list: Album[]): Album[] => {
     const sorted = [...list];
     switch (albumSort) {
       case "az":
@@ -286,7 +292,7 @@ function ArtistDetailContent({
 
   /** Albums grouped by type, each group sorted by the active sort. */
   const albumGroups = useMemo(() => {
-    const buckets = new Map<string, MonitoredAlbum[]>();
+    const buckets = new Map<string, Album[]>();
     for (const album of albums) {
       const key = albumTypeKey(album.album_type);
       const bucket = buckets.get(key);
@@ -562,7 +568,7 @@ function MatchSuggestionsPanel({
   suggestions,
 }: {
   artistId: string;
-  suggestions: Array<MatchSuggestion>;
+  suggestions: Array<ArtistMatchSuggestion>;
 }) {
   const acceptMatch = useAcceptMatchSuggestion();
   const dismissMatch = useDismissMatchSuggestion();
@@ -704,7 +710,7 @@ function AlbumGroupSection({
   albumSort,
 }: {
   label: string;
-  albums: Array<MonitoredAlbum>;
+  albums: Array<Album>;
   artistId: string;
   defaultQuality: Quality;
   albumSort: string;
@@ -741,7 +747,7 @@ function AlbumCard({
   artistId,
   defaultQuality,
 }: {
-  album: MonitoredAlbum;
+  album: Album;
   artistId: string;
   defaultQuality: Quality;
 }) {
@@ -750,11 +756,13 @@ function AlbumCard({
   const releaseDate = album.release_date ?? "\u2014";
   const at = albumTypeLabel(album.album_type);
 
-  const statusBadge = album.acquired
+  const statusBadge = isAlbumAcquired(album.wanted_status)
     ? { label: "Acquired", className: "bg-green-500/10 text-green-600" }
-    : album.wanted
+    : isAlbumWanted(album.wanted_status)
       ? { label: "Wanted", className: "bg-amber-500/10 text-amber-500" }
-      : null;
+      : isAlbumInProgress(album.wanted_status)
+        ? { label: "In Progress", className: "bg-blue-500/10 text-blue-500" }
+        : null;
 
   return (
     <div className="sleeve group relative">

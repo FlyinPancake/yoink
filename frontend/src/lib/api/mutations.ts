@@ -13,6 +13,94 @@ import { useQueryClient } from "@tanstack/react-query";
 import { $api } from "./client";
 import { getCollections, addedItemKey } from "./collections";
 import type { AddedItem } from "./collections";
+import type { components } from "./types.gen";
+
+type MonitoredArtist = components["schemas"]["MonitoredArtist"];
+type Album = components["schemas"]["Album"];
+type TrackInfo = components["schemas"]["TrackInfo"];
+type ArtistDetailResponse = components["schemas"]["ArtistDetailResponse"];
+type AlbumDetailResponse = components["schemas"]["AlbumDetailResponse"];
+
+function patchArtistMonitorCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  artistId: string,
+  monitored: boolean,
+) {
+  queryClient.setQueryData<Array<MonitoredArtist> | undefined>(["get", "/api/artist"], (current) =>
+    current?.map((artist) => (artist.id === artistId ? { ...artist, monitored } : artist)),
+  );
+
+  queryClient.setQueriesData<ArtistDetailResponse | undefined>(
+    { queryKey: ["get", "/api/artist/{artist_id}"] },
+    (current) =>
+      current?.artist.id === artistId
+        ? {
+            ...current,
+            artist: { ...current.artist, monitored },
+          }
+        : current,
+  );
+}
+
+function patchAlbumMonitorCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  albumId: string,
+  monitored: boolean,
+) {
+  queryClient.setQueryData<Array<Album> | undefined>(["get", "/api/album"], (current) =>
+    current?.map((album) => (album.id === albumId ? { ...album, monitored } : album)),
+  );
+
+  queryClient.setQueriesData<ArtistDetailResponse | undefined>(
+    { queryKey: ["get", "/api/artist/{artist_id}"] },
+    (current) =>
+      current
+        ? {
+            ...current,
+            albums: current.albums.map((album) =>
+              album.id === albumId ? { ...album, monitored } : album,
+            ),
+          }
+        : current,
+  );
+
+  queryClient.setQueriesData<AlbumDetailResponse | undefined>(
+    { queryKey: ["get", "/api/album/{album_id}"] },
+    (current) =>
+      current?.album.id === albumId
+        ? {
+            ...current,
+            album: { ...current.album, monitored },
+          }
+        : current,
+  );
+}
+
+function patchTrackMonitorCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  albumId: string,
+  trackId: string,
+  monitored: boolean,
+) {
+  queryClient.setQueriesData<AlbumDetailResponse | undefined>(
+    { queryKey: ["get", "/api/album/{album_id}"] },
+    (current) =>
+      current?.album.id === albumId
+        ? {
+            ...current,
+            tracks: current.tracks.map((track) =>
+              track.id === trackId ? { ...track, monitored } : track,
+            ),
+          }
+        : current,
+  );
+
+  queryClient.setQueriesData<Array<TrackInfo> | undefined>(
+    { queryKey: ["get", "/api/album/{album_id}/track"] },
+    (current) =>
+      current?.map((track) => (track.id === trackId ? { ...track, monitored } : track)),
+  );
+}
 
 // ── Artist mutations ───────────────────────────────────────────
 
@@ -67,8 +155,14 @@ export function useUpdateArtist() {
 export function useToggleArtistMonitor() {
   const qc = useQueryClient();
   return $api.useMutation("patch", "/api/artist/{artist_id}/monitor", {
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      patchArtistMonitorCaches(
+        qc,
+        variables.params.path.artist_id,
+        variables.body.monitored,
+      );
       void qc.invalidateQueries({ queryKey: ["get", "/api/artist"] });
+      void qc.invalidateQueries({ queryKey: ["get", "/api/artist/{artist_id}"] });
       void qc.invalidateQueries({ queryKey: ["get", "/api/dashboard"] });
     },
   });
@@ -191,8 +285,15 @@ export function useMergeAlbums() {
 export function useToggleAlbumMonitor() {
   const qc = useQueryClient();
   return $api.useMutation("patch", "/api/album/{album_id}/monitor", {
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      patchAlbumMonitorCaches(
+        qc,
+        variables.params.path.album_id,
+        variables.body.monitored,
+      );
       void qc.invalidateQueries({ queryKey: ["get", "/api/album"] });
+      void qc.invalidateQueries({ queryKey: ["get", "/api/album/{album_id}"] });
+      void qc.invalidateQueries({ queryKey: ["get", "/api/artist/{artist_id}"] });
       void qc.invalidateQueries({ queryKey: ["get", "/api/wanted"] });
       void qc.invalidateQueries({ queryKey: ["get", "/api/dashboard"] });
     },
@@ -255,6 +356,12 @@ export function useToggleSingleTrackMonitor() {
   const qc = useQueryClient();
   return $api.useMutation("patch", "/api/album/{album_id}/track/{track_id}/monitor", {
     onSuccess: (_data, variables) => {
+      patchTrackMonitorCaches(
+        qc,
+        variables.params.path.album_id,
+        variables.params.path.track_id,
+        variables.body.monitored,
+      );
       void qc.invalidateQueries({
         queryKey: [
           "get",
@@ -264,6 +371,13 @@ export function useToggleSingleTrackMonitor() {
               path: { album_id: variables.params.path.album_id },
             },
           },
+        ],
+      });
+      void qc.invalidateQueries({
+        queryKey: [
+          "get",
+          "/api/album/{album_id}/track",
+          { params: { path: { album_id: variables.params.path.album_id } } },
         ],
       });
       void qc.invalidateQueries({ queryKey: ["get", "/api/wanted"] });

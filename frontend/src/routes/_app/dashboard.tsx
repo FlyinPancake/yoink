@@ -1,7 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DiscAlbumIcon, DownloadIcon, HeartIcon, LibraryIcon, MicIcon } from "lucide-react";
 import { $api } from "@/lib/api";
+import type { components } from "@/lib/api/types.gen";
+import { isAlbumAcquired, isAlbumWantedLike } from "@/lib/music";
 import { Skeleton } from "@/components/ui/skeleton";
+
+type DashboardAlbum = components["schemas"]["Album"] & { artist_id?: string };
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -83,13 +87,15 @@ function DashboardPage() {
 
   const totalArtists = artists.length;
   const totalAlbums = albums.length;
-  const wantedAlbums = albums.filter((a) => a.wanted || a.partially_wanted).length;
-  const acquiredAlbums = albums.filter((a) => a.acquired).length;
+  const wantedAlbums = albums.filter((a) => isAlbumWantedLike(a.wanted_status)).length;
+  const acquiredAlbums = albums.filter((a) => isAlbumAcquired(a.wanted_status)).length;
   const activeDownloads = jobs.filter((j) =>
     ["queued", "resolving", "downloading"].includes(j.status),
   ).length;
   const recentDownloads = jobs.slice(0, 3);
-  const wantedAlbumsList = albums.filter((a) => a.wanted || a.partially_wanted).slice(0, 5);
+  const wantedAlbumsList = (albums as DashboardAlbum[])
+    .filter((a) => isAlbumWantedLike(a.wanted_status))
+    .slice(0, 5);
 
   return (
     <div className="space-y-8">
@@ -145,17 +151,11 @@ function DashboardPage() {
           ) : (
             <div className="divide-y">
               {wantedAlbumsList.map((album) => {
-                const artist = artists.find((a) => a.id === album.artist_id);
-                return (
-                  <Link
-                    key={album.id}
-                    to="/artists/$artistId/albums/$albumId"
-                    params={{
-                      artistId: album.artist_id,
-                      albumId: album.id,
-                    }}
-                    className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-muted/50"
-                  >
+                const artist = album.artist_id
+                  ? artists.find((a) => a.id === album.artist_id)
+                  : undefined;
+                const body = (
+                  <>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{album.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
@@ -166,6 +166,28 @@ function DashboardPage() {
                     <span className="shrink-0 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-500">
                       Wanted
                     </span>
+                  </>
+                );
+
+                if (!album.artist_id) {
+                  return (
+                    <div key={album.id} className="flex items-center justify-between px-5 py-3">
+                      {body}
+                    </div>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={album.id}
+                    to="/artists/$artistId/albums/$albumId"
+                    params={{
+                      artistId: album.artist_id,
+                      albumId: album.id,
+                    }}
+                    className="flex items-center justify-between px-5 py-3 transition-colors hover:bg-muted/50"
+                  >
+                    {body}
                   </Link>
                 );
               })}

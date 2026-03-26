@@ -27,7 +27,7 @@ function fallbackInitial(name: string): string {
 
 function ArtistsPage() {
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useLocalStorage("artists-sort", "az");
+  const [sort, setSort] = useLocalStorage<"az" | "newest" | "oldest" | "za">("artists-sort", "az");
 
   const { data: artists, isLoading, isError } = $api.useQuery("get", "/api/artist");
 
@@ -48,10 +48,10 @@ function ArtistsPage() {
         list.sort((a, b) => b.name.toLowerCase().localeCompare(a.name.toLowerCase()));
         break;
       case "newest":
-        list.sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime());
+        list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         break;
       case "oldest":
-        list.sort((a, b) => new Date(a.added_at).getTime() - new Date(b.added_at).getTime());
+        list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         break;
     }
     return list;
@@ -192,7 +192,7 @@ function ArtistsPage() {
 
                     <div className="mt-1.5 text-[12px] text-muted-foreground/60">
                       Added{" "}
-                      {new Date(artist.added_at).toLocaleDateString(undefined, {
+                      {new Date(artist.created_at).toLocaleDateString(undefined, {
                         year: "numeric",
                         month: "short",
                         day: "numeric",

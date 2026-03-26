@@ -3,21 +3,19 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
 };
-use sea_orm::{EntityLoaderTrait, EntityTrait};
+use sea_orm::{ColumnTrait, EntityLoaderTrait, EntityTrait, QueryFilter, QueryOrder};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
-use yoink_shared::{
-    Album, ArtistImageOption, MatchSuggestion, MonitoredArtist, ProviderLink, SearchArtistResult,
-};
+use yoink_shared::{Album, ArtistImageOption, MonitoredArtist, ProviderLink, SearchArtistResult};
 
 use crate::{
     db::{self, quality::Quality},
     error::AppError,
-    services::{self, search::SearchQuery},
+    services::{self, AlbumMatchSuggestion, ArtistMatchSuggestion, search::SearchQuery},
     state::AppState,
 };
 
@@ -82,7 +80,8 @@ struct ArtistDetailResponse {
     artist: MonitoredArtist,
     albums: Vec<Album>,
     provider_links: Vec<ProviderLink>,
-    match_suggestions: Vec<MatchSuggestion>,
+    artist_match_suggestions: Vec<ArtistMatchSuggestion>,
+    album_match_suggestions: Vec<AlbumMatchSuggestion>,
     default_quality: Quality,
 }
 
@@ -236,16 +235,37 @@ async fn get_artist(
         monitored,
         created_at,
     };
+    let album_ids: Vec<Uuid> = loaded_albums.iter().map(|album| album.id).collect();
     let albums: Vec<Album> = loaded_albums.into_iter().map(Into::into).collect();
     let provider_links: Vec<ProviderLink> = loaded_links.into_iter().map(Into::into).collect();
 
-    let match_suggestions = vec![]; // FIXME fetch pending match suggestions for this artist
+    let artist_match_suggestions: Vec<ArtistMatchSuggestion> =
+        db::artist_match_suggestion::Entity::find_by_artist(artist_id)
+            .all(&state.db)
+            .await
+            .map(|models| models.into_iter().map(Into::into).collect())
+            .map_err(|e| app_error_response(e.into()))?;
+
+    let album_match_suggestions: Vec<AlbumMatchSuggestion> = if album_ids.is_empty() {
+        Vec::new()
+    } else {
+        db::album_match_suggestion::Entity::find()
+            .filter(db::album_match_suggestion::Column::AlbumId.is_in(album_ids))
+            .order_by_asc(db::album_match_suggestion::Column::Status)
+            .order_by_desc(db::album_match_suggestion::Column::Confidence)
+            .order_by_desc(db::album_match_suggestion::Column::CreatedAt)
+            .all(&state.db)
+            .await
+            .map(|models| models.into_iter().map(Into::into).collect())
+            .map_err(|e| app_error_response(e.into()))?
+    };
 
     Ok(Json(ArtistDetailResponse {
         artist,
         albums,
         provider_links,
-        match_suggestions,
+        artist_match_suggestions,
+        album_match_suggestions,
         default_quality: state.default_quality,
     }))
 }

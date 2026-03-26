@@ -1,6 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { $api } from "@/lib/api";
+import type { components } from "@/lib/api/types.gen";
+import { formatDurationSeconds } from "@/lib/music";
 import { Skeleton } from "@/components/ui/skeleton";
+
+type WantedAlbum = components["schemas"]["Album"] & {
+  artist_credits?: Array<{ name: string }>;
+  artist_id?: string;
+};
 
 export const Route = createFileRoute("/_app/wanted")({
   component: WantedPage,
@@ -41,7 +48,11 @@ function WantedPage() {
     );
   }
 
-  const { albums: wantedAlbums, artists } = data;
+  const wantedAlbums = data.albums as Array<{
+    album: WantedAlbum;
+    tracks: components["schemas"]["TrackInfo"][];
+  }>;
+  const { artists } = data;
 
   // Build a map for quick artist name lookup
   const artistMap = new Map(artists.map((a) => [a.id, a]));
@@ -72,48 +83,57 @@ function WantedPage() {
         <div className="space-y-4">
           {wantedAlbums.map(({ album, tracks }) => {
             const wantedTracks = tracks.filter((t) => t.monitored && !t.acquired);
-            const artist = artistMap.get(album.artist_id);
+            const artist = album.artist_id ? artistMap.get(album.artist_id) : undefined;
             const artistName = album.artist_credits?.[0]?.name ?? artist?.name ?? "Unknown Artist";
+            const content = (
+              <>
+                <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+                  {album.cover_url ? (
+                    <img
+                      src={album.cover_url}
+                      alt={album.title}
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex size-full items-center justify-center text-lg font-bold text-muted-foreground/30">
+                      {album.title.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold">{album.title}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {artistName} &middot; {album.release_date?.slice(0, 4)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {tracks.length} track{tracks.length !== 1 ? "s" : ""} &middot;{" "}
+                    {album.monitored
+                      ? "Album monitored"
+                      : `${wantedTracks.length} track${wantedTracks.length !== 1 ? "s" : ""} wanted`}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-500">
+                  Wanted
+                </span>
+              </>
+            );
 
             return (
               <div key={album.id} className="overflow-hidden rounded-xl border bg-card shadow-sm">
-                <Link
-                  to="/artists/$artistId/albums/$albumId"
-                  params={{
-                    artistId: album.artist_id,
-                    albumId: album.id,
-                  }}
-                  className="flex items-center gap-4 p-4 transition-colors hover:bg-muted/50"
-                >
-                  <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
-                    {album.cover_url ? (
-                      <img
-                        src={album.cover_url}
-                        alt={album.title}
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex size-full items-center justify-center text-lg font-bold text-muted-foreground/30">
-                        {album.title.charAt(0)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold">{album.title}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {artistName} &middot; {album.release_date?.slice(0, 4)}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {tracks.length} track{tracks.length !== 1 ? "s" : ""} &middot;{" "}
-                      {album.monitored
-                        ? "Full album wanted"
-                        : `${wantedTracks.length} track${wantedTracks.length !== 1 ? "s" : ""} wanted`}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-500">
-                    Wanted
-                  </span>
-                </Link>
+                {album.artist_id ? (
+                  <Link
+                    to="/artists/$artistId/albums/$albumId"
+                    params={{
+                      artistId: album.artist_id,
+                      albumId: album.id,
+                    }}
+                    className="flex items-center gap-4 p-4 transition-colors hover:bg-muted/50"
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-4 p-4">{content}</div>
+                )}
 
                 {wantedTracks.length > 0 && (
                   <div className="border-t">
@@ -125,7 +145,7 @@ function WantedPage() {
                           </span>
                           <span className="flex-1 truncate">{track.title}</span>
                           <span className="text-xs text-muted-foreground">
-                            {track.duration_display}
+                            {formatDurationSeconds(track.duration_secs)}
                           </span>
                         </div>
                       ))}

@@ -34,7 +34,7 @@ import type { components } from "@/lib/api/types.gen";
 
 type ImportPreviewItem = components["schemas"]["ImportPreviewItem"];
 type ImportResultSummary = components["schemas"]["ImportResultSummary"];
-type ManualImportMode = components["schemas"]["ManualImportMode"];
+type ManualImportMode = "copy" | "hardlink";
 
 export const Route = createFileRoute("/_app/import/")({
   component: ImportPage,
@@ -338,11 +338,7 @@ function ExternalImportTab() {
 
     try {
       const res = await confirmExternal.mutateAsync({
-        body: {
-          source_path: sourcePath,
-          mode: importMode,
-          items: confirmations,
-        },
+        body: confirmations,
       });
       setResult(res);
       setStep("result");

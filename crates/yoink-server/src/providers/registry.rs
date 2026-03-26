@@ -59,7 +59,10 @@ impl ProviderRegistry {
 
     /// Fan-out album search to all metadata providers concurrently.
     /// Returns a list of (provider, results).
-    pub async fn search_albums_all(&self, query: &str) -> Vec<(Provider, Vec<ProviderSearchAlbum>)> {
+    pub async fn search_albums_all(
+        &self,
+        query: &str,
+    ) -> Vec<(Provider, Vec<ProviderSearchAlbum>)> {
         let mut handles = Vec::new();
 
         for provider in &self.metadata {
@@ -85,7 +88,10 @@ impl ProviderRegistry {
 
     /// Fan-out track search to all metadata providers concurrently.
     /// Returns a list of (provider, results).
-    pub async fn search_tracks_all(&self, query: &str) -> Vec<(Provider, Vec<ProviderSearchTrack>)> {
+    pub async fn search_tracks_all(
+        &self,
+        query: &str,
+    ) -> Vec<(Provider, Vec<ProviderSearchTrack>)> {
         let mut handles = Vec::new();
 
         for provider in &self.metadata {

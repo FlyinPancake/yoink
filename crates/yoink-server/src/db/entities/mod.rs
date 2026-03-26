@@ -1,5 +1,6 @@
 pub(crate) mod album;
 pub(crate) mod album_artist;
+pub(crate) mod album_match_suggestion;
 pub(crate) mod album_provider_link;
 pub(crate) mod album_type;
 pub(crate) mod artist;

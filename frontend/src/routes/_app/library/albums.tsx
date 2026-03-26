@@ -5,6 +5,7 @@ import { $api } from "@/lib/api";
 import type { components } from "@/lib/api/types.gen";
 import { useSleeveGlow } from "@/hooks/use-sleeve-glow";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { isAlbumAcquired, isAlbumInProgress, isAlbumWanted } from "@/lib/music";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -15,7 +16,10 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type MonitoredAlbum = components["schemas"]["MonitoredAlbum"];
+type AlbumListItem = components["schemas"]["Album"] & {
+  artist_credits?: Array<{ name: string }>;
+  artist_id?: string;
+};
 
 export const Route = createFileRoute("/_app/library/albums")({
   component: AlbumsPage,
@@ -64,7 +68,10 @@ function albumTypeRank(albumType: string | null | undefined): number {
 
 function AlbumsPage() {
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useLocalStorage("albums-sort", "newest");
+  const [sort, setSort] = useLocalStorage<"added" | "artist" | "az" | "newest" | "oldest" | "za">(
+    "albums-sort",
+    "newest",
+  );
 
   const { data: albums, isLoading, isError } = $api.useQuery("get", "/api/album");
 
@@ -74,11 +81,13 @@ function AlbumsPage() {
   const artistMap = useMemo(() => new Map((artists ?? []).map((a) => [a.id, a.name])), [artists]);
 
   /** Resolve the display name for an album's primary artist. */
-  const artistName = (album: MonitoredAlbum): string =>
-    album.artist_credits?.[0]?.name ?? artistMap.get(album.artist_id) ?? "Unknown Artist";
+  const artistName = (album: AlbumListItem): string =>
+    album.artist_credits?.[0]?.name ??
+    (album.artist_id ? artistMap.get(album.artist_id) : undefined) ??
+    "Unknown Artist";
 
   /** Apply search filter then sort within each group. */
-  const sortList = (list: MonitoredAlbum[]): MonitoredAlbum[] => {
+  const sortList = (list: AlbumListItem[]): AlbumListItem[] => {
     const sorted = [...list];
     switch (sort) {
       case "az":
@@ -107,7 +116,7 @@ function AlbumsPage() {
         );
         break;
       case "added":
-        sorted.sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime());
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         break;
     }
     return sorted;
@@ -125,7 +134,7 @@ function AlbumsPage() {
       : albums;
 
     // Bucket by album type
-    const buckets = new Map<string, MonitoredAlbum[]>();
+    const buckets = new Map<string, AlbumListItem[]>();
     for (const album of list) {
       const key = albumTypeKey(album.album_type);
       const bucket = buckets.get(key);
@@ -262,8 +271,8 @@ function AlbumGroup({
   sort,
 }: {
   label: string;
-  albums: MonitoredAlbum[];
-  artistNameFn: (album: MonitoredAlbum) => string;
+  albums: AlbumListItem[];
+  artistNameFn: (album: AlbumListItem) => string;
   sort: string;
 }) {
   const gridRef = useSleeveGlow([albums.length, sort]);
@@ -278,55 +287,64 @@ function AlbumGroup({
       <div ref={gridRef} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {albums.map((album) => {
           const name = artistNameFn(album);
+          const cardBody = (
+            <>
+              <div className="relative aspect-square bg-muted">
+                {album.cover_url ? (
+                  <img
+                    src={album.cover_url}
+                    alt={album.title}
+                    className="sleeve-cover"
+                    crossOrigin="anonymous"
+                  />
+                ) : (
+                  <div className="flex size-full items-center justify-center text-4xl font-bold text-muted-foreground/30">
+                    {album.title.charAt(0)}
+                  </div>
+                )}
+              </div>
+              <div className="p-4">
+                <p className="truncate font-semibold">{album.title}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {name} &middot; {album.release_date?.slice(0, 4) ?? "Unknown"}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {isAlbumAcquired(album.wanted_status) && (
+                    <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-500">
+                      Acquired
+                    </span>
+                  )}
+                  {isAlbumWanted(album.wanted_status) && (
+                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
+                      Wanted
+                    </span>
+                  )}
+                  {isAlbumInProgress(album.wanted_status) && (
+                    <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-500">
+                      In Progress
+                    </span>
+                  )}
+                </div>
+              </div>
+            </>
+          );
 
           return (
             <div key={album.id} className="sleeve group">
-              <Link
-                to="/artists/$artistId/albums/$albumId"
-                params={{
-                  artistId: album.artist_id,
-                  albumId: album.id,
-                }}
-                className="block"
-              >
-                <div className="relative aspect-square bg-muted">
-                  {album.cover_url ? (
-                    <img
-                      src={album.cover_url}
-                      alt={album.title}
-                      className="sleeve-cover"
-                      crossOrigin="anonymous"
-                    />
-                  ) : (
-                    <div className="flex size-full items-center justify-center text-4xl font-bold text-muted-foreground/30">
-                      {album.title.charAt(0)}
-                    </div>
-                  )}
-                </div>
-                <div className="p-4">
-                  <p className="truncate font-semibold">{album.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {name} &middot; {album.release_date?.slice(0, 4) ?? "Unknown"}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {album.acquired && (
-                      <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-500">
-                        Acquired
-                      </span>
-                    )}
-                    {album.wanted && (
-                      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
-                        Wanted
-                      </span>
-                    )}
-                    {album.partially_wanted && !album.wanted && (
-                      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
-                        Partial
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </Link>
+              {album.artist_id ? (
+                <Link
+                  to="/artists/$artistId/albums/$albumId"
+                  params={{
+                    artistId: album.artist_id,
+                    albumId: album.id,
+                  }}
+                  className="block"
+                >
+                  {cardBody}
+                </Link>
+              ) : (
+                <div>{cardBody}</div>
+              )}
             </div>
           );
         })}

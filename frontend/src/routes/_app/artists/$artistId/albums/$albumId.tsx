@@ -12,6 +12,12 @@ import {
 import type { components } from "@/lib/api/types.gen";
 import { $api, queryKeys } from "@/lib/api";
 import {
+  formatDurationSeconds,
+  isAlbumAcquired,
+  isAlbumInProgress,
+  isAlbumWanted,
+} from "@/lib/music";
+import {
   useAcceptMatchSuggestion,
   useDismissMatchSuggestion,
   useRemoveAlbumFiles,
@@ -37,14 +43,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type MonitoredAlbum = components["schemas"]["MonitoredAlbum"];
-type MonitoredArtist = components["schemas"]["MonitoredArtist"];
+type Album = components["schemas"]["Album"] & {
+  quality_override?: components["schemas"]["Quality"] | null;
+};
 type TrackInfo = components["schemas"]["TrackInfo"];
 type ProviderLink = components["schemas"]["ProviderLink"];
-type MatchSuggestion = components["schemas"]["MatchSuggestion"];
+type AlbumMatchSuggestion = components["schemas"]["AlbumMatchSuggestion"];
 type DownloadJob = components["schemas"]["DownloadJob"];
 type Quality = components["schemas"]["Quality"];
-type ResolvedArtistCredit = components["schemas"]["ResolvedArtistCredit"];
+type ArtistWithPriority = components["schemas"]["ArtistWithPriority"];
 
 export const Route = createFileRoute("/_app/artists/$artistId/albums/$albumId")({
   component: AlbumDetailPage,
@@ -139,12 +146,11 @@ function AlbumDetailPage() {
   return (
     <AlbumDetailContent
       album={data.album}
-      artist={data.artist ?? undefined}
       albumArtists={data.album_artists}
       tracks={data.tracks}
       jobs={data.jobs}
       providerLinks={data.provider_links}
-      matchSuggestions={data.match_suggestions}
+      matchSuggestions={data.album_match_suggestions}
       defaultQuality={data.default_quality}
       artistIdParam={artistId}
     />
@@ -198,7 +204,6 @@ function AlbumDetailSkeleton() {
 
 function AlbumDetailContent({
   album,
-  artist,
   albumArtists,
   tracks,
   jobs,
@@ -207,13 +212,12 @@ function AlbumDetailContent({
   defaultQuality,
   artistIdParam,
 }: {
-  album: MonitoredAlbum;
-  artist?: MonitoredArtist;
-  albumArtists: Array<ResolvedArtistCredit>;
+  album: Album;
+  albumArtists: Array<ArtistWithPriority>;
   tracks: Array<TrackInfo>;
   jobs: Array<DownloadJob>;
   providerLinks: Array<ProviderLink>;
-  matchSuggestions: Array<MatchSuggestion>;
+  matchSuggestions: Array<AlbumMatchSuggestion>;
   defaultQuality: Quality;
   artistIdParam: string;
 }) {
@@ -230,7 +234,7 @@ function AlbumDetailContent({
   const durationDisplay = formatDuration(totalDurationSecs);
   const trackCount = tracks.length;
 
-  const artistName = artist?.name ?? "Unknown Artist";
+  const artistName = albumArtists[0]?.name ?? "Unknown Artist";
 
   // Find the latest job for this album
   const latestJob = jobs
@@ -239,7 +243,8 @@ function AlbumDetailContent({
 
   const hasActiveJob =
     latestJob && ["queued", "resolving", "downloading"].includes(latestJob.status);
-  const canDownload = album.wanted && !album.acquired && !hasActiveJob;
+  const canDownload =
+    isAlbumWanted(album.wanted_status) && !isAlbumAcquired(album.wanted_status) && !hasActiveJob;
   const canRetry = latestJob?.status === "failed";
 
   const pendingSuggestions = matchSuggestions.filter((m) => m.status === "pending");
@@ -251,13 +256,15 @@ function AlbumDetailContent({
         {/* Status + action buttons header bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            {album.acquired && <Badge className="bg-green-500/10 text-green-600">Acquired</Badge>}
-            {!album.acquired && album.wanted && (
+            {isAlbumAcquired(album.wanted_status) && (
+              <Badge className="bg-green-500/10 text-green-600">Acquired</Badge>
+            )}
+            {!isAlbumAcquired(album.wanted_status) && isAlbumWanted(album.wanted_status) && (
               <Badge className="bg-amber-500/10 text-amber-500">Wanted</Badge>
             )}
-            {!album.acquired && !album.wanted && album.partially_wanted && (
-              <Badge variant="outline" className="text-amber-500">
-                Partially Wanted
+            {!isAlbumAcquired(album.wanted_status) && isAlbumInProgress(album.wanted_status) && (
+              <Badge variant="outline" className="text-blue-500">
+                In Progress
               </Badge>
             )}
             {latestJob && <JobStatusBadge job={latestJob} />}
@@ -311,7 +318,7 @@ function AlbumDetailContent({
               }
               pending={toggleAlbumMonitor.isPending || setAlbumQuality.isPending}
             />
-            {album.acquired && (
+            {isAlbumAcquired(album.wanted_status) && (
               <Button variant="destructive" size="sm" onClick={() => setShowRemoveFiles(true)}>
                 <Trash2Icon className="mr-1.5 size-3.5" />
                 Remove Files
@@ -373,13 +380,13 @@ function AlbumDetailContent({
                 ) : (
                   <span className="inline-flex flex-wrap items-center gap-0">
                     {albumArtists.map((credit, i) => (
-                      <span key={credit.name + String(i)}>
+                      <span key={credit.id ?? `${credit.name}-${String(i)}`}>
                         {i > 0 && ", "}
-                        {credit.artist_id ? (
+                        {credit.id ? (
                           <Link
                             to="/artists/$artistId"
                             params={{
-                              artistId: credit.artist_id,
+                              artistId: credit.id,
                             }}
                             className="font-medium text-foreground/70 no-underline hover:text-blue-500"
                           >
@@ -542,7 +549,7 @@ function TrackList({
 }: {
   tracks: Array<TrackInfo>;
   albumId: string;
-  albumArtists: Array<ResolvedArtistCredit>;
+  albumArtists: Array<ArtistWithPriority>;
   artistName: string;
   effectiveAlbumQuality: Quality;
 }) {
@@ -660,7 +667,7 @@ function TrackRow({
       </div>
 
       <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-        {track.duration_display}
+        {formatDurationSeconds(track.duration_secs)}
       </span>
     </div>
   );
@@ -733,7 +740,7 @@ function TrackStatusIndicator({
 
 // ── Album match suggestions panel ──────────────────────────────
 
-function AlbumMatchSuggestionsPanel({ suggestions }: { suggestions: Array<MatchSuggestion> }) {
+function AlbumMatchSuggestionsPanel({ suggestions }: { suggestions: Array<AlbumMatchSuggestion> }) {
   const acceptMatch = useAcceptMatchSuggestion();
   const dismissMatch = useDismissMatchSuggestion();
 

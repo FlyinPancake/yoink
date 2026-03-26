@@ -16,13 +16,10 @@ import {
 import { $api, getCollections, addedItemKey } from "@/lib/api";
 import { useCreateArtist, useCreateAlbum, useCreateTrack } from "@/lib/api/mutations";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { formatDurationSeconds, normalizeProvider } from "@/lib/music";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { components } from "@/lib/api/types.gen";
 
 type SearchArtistResult = components["schemas"]["SearchArtistResult"];
@@ -64,9 +61,18 @@ function useAddedItemKeys(): Set<string> {
 function SearchPage() {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
-  const [artistsOpen, setArtistsOpen] = useLocalStorage("search-artists-open", "true");
-  const [albumsOpen, setAlbumsOpen] = useLocalStorage("search-albums-open", "true");
-  const [tracksOpen, setTracksOpen] = useLocalStorage("search-tracks-open", "true");
+  const [artistsOpen, setArtistsOpen] = useLocalStorage<"false" | "true">(
+    "search-artists-open",
+    "true",
+  );
+  const [albumsOpen, setAlbumsOpen] = useLocalStorage<"false" | "true">(
+    "search-albums-open",
+    "true",
+  );
+  const [tracksOpen, setTracksOpen] = useLocalStorage<"false" | "true">(
+    "search-tracks-open",
+    "true",
+  );
 
   const { data, isLoading, isError } = $api.useQuery(
     "get",
@@ -247,6 +253,7 @@ function ArtistResultCard({
   addedKeys: Set<string>;
 }) {
   const createArtist = useCreateArtist();
+  const provider = normalizeProvider(artist.provider);
 
   const isAdded =
     artist.already_monitored || addedKeys.has(addedItemKey(artist.provider, artist.external_id));
@@ -278,13 +285,14 @@ function ArtistResultCard({
           size="sm"
           variant="outline"
           className="shrink-0"
-          disabled={createArtist.isPending}
+          disabled={createArtist.isPending || provider == null}
           onClick={() =>
+            provider &&
             createArtist.mutate({
               body: {
                 name: artist.name,
                 external_id: artist.external_id,
-                provider: artist.provider,
+                provider,
                 image_url: artist.image_url ?? null,
                 external_url: artist.url ?? null,
               },
@@ -292,7 +300,7 @@ function ArtistResultCard({
           }
         >
           <PlusIcon className="mr-1 size-3.5" />
-          {createArtist.isPending ? "Adding..." : "Add"}
+          {provider == null ? "Unsupported" : createArtist.isPending ? "Adding..." : "Add"}
         </Button>
       )}
     </div>
@@ -309,6 +317,7 @@ function AlbumResultCard({
   addedKeys: Set<string>;
 }) {
   const createAlbum = useCreateAlbum();
+  const provider = normalizeProvider(album.provider);
 
   const isAdded =
     album.already_added || addedKeys.has(addedItemKey(album.provider, album.external_id));
@@ -342,21 +351,22 @@ function AlbumResultCard({
           size="sm"
           variant="outline"
           className="shrink-0"
-          disabled={createAlbum.isPending}
+          disabled={createAlbum.isPending || provider == null}
           onClick={() =>
+            provider &&
             createAlbum.mutate({
               body: {
                 external_album_id: album.external_id,
                 artist_external_id: album.artist_external_id,
                 artist_name: album.artist_name,
-                provider: album.provider,
+                provider,
                 monitor_all: true,
               },
             })
           }
         >
           <PlusIcon className="mr-1 size-3.5" />
-          {createAlbum.isPending ? "Adding..." : "Add"}
+          {provider == null ? "Unsupported" : createAlbum.isPending ? "Adding..." : "Add"}
         </Button>
       )}
     </div>
@@ -373,6 +383,7 @@ function TrackResultRow({
   addedKeys: Set<string>;
 }) {
   const createTrack = useCreateTrack();
+  const provider = normalizeProvider(track.provider);
 
   const isAdded =
     track.already_added || addedKeys.has(addedItemKey(track.provider, track.external_id));
@@ -393,7 +404,7 @@ function TrackResultRow({
           <span>&middot;</span>
           <span className="truncate">{track.album_title}</span>
           <span>&middot;</span>
-          <span>{track.duration_display}</span>
+          <span>{formatDurationSeconds(track.duration_secs)}</span>
           <Badge variant="outline" className="text-[10px]">
             {track.provider}
           </Badge>
@@ -406,21 +417,22 @@ function TrackResultRow({
           size="sm"
           variant="outline"
           className="shrink-0"
-          disabled={createTrack.isPending}
+          disabled={createTrack.isPending || provider == null}
           onClick={() =>
+            provider &&
             createTrack.mutate({
               body: {
                 external_track_id: track.external_id,
                 external_album_id: track.album_external_id,
                 artist_external_id: track.artist_external_id,
                 artist_name: track.artist_name,
-                provider: track.provider,
+                provider,
               },
             })
           }
         >
           <PlusIcon className="mr-1 size-3.5" />
-          {createTrack.isPending ? "Adding..." : "Add"}
+          {provider == null ? "Unsupported" : createTrack.isPending ? "Adding..." : "Add"}
         </Button>
       )}
     </div>

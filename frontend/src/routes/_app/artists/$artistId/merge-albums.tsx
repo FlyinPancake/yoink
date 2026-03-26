@@ -4,14 +4,15 @@ import { ArrowLeftIcon, GitMergeIcon, XIcon } from "lucide-react";
 
 import type { components } from "@/lib/api/types.gen";
 import { $api } from "@/lib/api";
+import { isAlbumAcquired, isAlbumWanted } from "@/lib/music";
 import { useDismissMatchSuggestion, useMergeAlbums } from "@/lib/api/mutations";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type MonitoredAlbum = components["schemas"]["MonitoredAlbum"];
-type MatchSuggestion = components["schemas"]["MatchSuggestion"];
+type Album = components["schemas"]["Album"];
+type AlbumMatchSuggestion = components["schemas"]["AlbumMatchSuggestion"];
 
 export const Route = createFileRoute("/_app/artists/$artistId/merge-albums")({
   component: MergeAlbumsPage,
@@ -23,9 +24,9 @@ export const Route = createFileRoute("/_app/artists/$artistId/merge-albums")({
 // ── Helpers ────────────────────────────────────────────────────
 
 interface MergeCandidate {
-  suggestion: MatchSuggestion;
-  leftAlbum: MonitoredAlbum;
-  rightAlbum: MonitoredAlbum;
+  suggestion: AlbumMatchSuggestion;
+  leftAlbum: Album;
+  rightAlbum: Album;
 }
 
 function fallbackInitial(name: string): string {
@@ -61,7 +62,7 @@ function MergeAlbumsPage() {
       artistId={artistId}
       artistName={data.artist.name}
       albums={data.albums}
-      matchSuggestions={data.match_suggestions}
+      matchSuggestions={data.album_match_suggestions}
     />
   );
 }
@@ -99,19 +100,15 @@ function MergeAlbumsContent({
 }: {
   artistId: string;
   artistName: string;
-  albums: Array<MonitoredAlbum>;
-  matchSuggestions: Array<MatchSuggestion>;
+  albums: Array<Album>;
+  matchSuggestions: Array<AlbumMatchSuggestion>;
 }) {
   // Build merge candidates from album-scoped pending match suggestions
   const candidates = useMemo(() => {
     const albumMap = new Map(albums.map((a) => [a.id, a]));
     const results: Array<MergeCandidate> = [];
 
-    // Album-level merge suggestions have scope_type === "album"
-    // left_external_id and right_external_id are album UUIDs
-    const pending = matchSuggestions.filter(
-      (m) => m.status === "pending" && m.scope_type === "album",
-    );
+    const pending = matchSuggestions.filter((m) => m.status === "pending");
 
     for (const suggestion of pending) {
       const left = albumMap.get(suggestion.left_external_id);
@@ -294,7 +291,7 @@ function AlbumComparisonCard({
   onSelect,
   label,
 }: {
-  album: MonitoredAlbum;
+  album: Album;
   artistId: string;
   isTarget: boolean;
   onSelect: () => void;
@@ -339,12 +336,12 @@ function AlbumComparisonCard({
             {album.release_date?.slice(0, 4) ?? "\u2014"} &middot; {album.album_type ?? "Album"}
           </p>
           <div className="mt-1 flex flex-wrap gap-1">
-            {album.acquired && (
+            {isAlbumAcquired(album.wanted_status) && (
               <Badge className="bg-green-500/10 text-green-600" variant="secondary">
                 Acquired
               </Badge>
             )}
-            {album.wanted && !album.acquired && (
+            {isAlbumWanted(album.wanted_status) && !isAlbumAcquired(album.wanted_status) && (
               <Badge className="bg-amber-500/10 text-amber-500" variant="secondary">
                 Wanted
               </Badge>

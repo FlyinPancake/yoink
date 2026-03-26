@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckIcon, XIcon } from "lucide-react";
 import { $api } from "@/lib/api";
+import { formatDurationSeconds } from "@/lib/music";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/library/tracks")({
@@ -108,7 +109,7 @@ function TracksPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums">
-                    {lt.track.duration_display}
+                    {formatDurationSeconds(lt.track.duration_secs)}
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     {lt.track.acquired ? (

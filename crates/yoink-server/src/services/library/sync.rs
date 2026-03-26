@@ -113,8 +113,7 @@ pub(crate) async fn sync_artist(state: &AppState, artist_id: Uuid) -> AppResult<
         for (prov, album) in entries {
             let link = db::album_provider_link::Entity::find()
                 .filter(
-                    db::album_provider_link::Column::ProviderAlbumId
-                        .eq(album.external_id.clone()),
+                    db::album_provider_link::Column::ProviderAlbumId.eq(album.external_id.clone()),
                 )
                 .filter(db::album_provider_link::Column::Provider.eq(*prov))
                 .one(&state.db)
@@ -191,6 +190,8 @@ pub(crate) async fn sync_artist(state: &AppState, artist_id: Uuid) -> AppResult<
                         album_id: Set(new_id),
                         provider: Set(*prov),
                         provider_album_id: Set(album.external_id.clone()),
+                        external_url: Set(album.url.clone()),
+                        external_name: Set(Some(album.title.clone())),
                         ..db::album_provider_link::ActiveModel::new()
                     };
                     link.insert(&tx).await?;
@@ -259,7 +260,10 @@ pub(crate) async fn sync_album_tracks(
     album_id: Uuid,
 ) -> AppResult<()> {
     let metadata = state.registry.metadata_provider(provider).ok_or_else(|| {
-        AppError::unavailable("metadata provider", format!("unknown provider '{provider}'"))
+        AppError::unavailable(
+            "metadata provider",
+            format!("unknown provider '{provider}'"),
+        )
     })?;
 
     let (provider_tracks, _album_extra) = metadata.fetch_tracks(external_album_id).await?;
@@ -315,8 +319,7 @@ pub(crate) async fn sync_album_tracks(
         // Tier 3: match by disc + track number
         let matched = matched.or_else(|| {
             existing_tracks.iter().find(|t| {
-                t.disc_number == pt.disc_number
-                    && t.track_number == Some(pt.track_number)
+                t.disc_number == pt.disc_number && t.track_number == Some(pt.track_number)
             })
         });
 

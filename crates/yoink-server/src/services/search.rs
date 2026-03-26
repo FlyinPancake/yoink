@@ -11,6 +11,8 @@ use crate::{
     providers::{provider_image_url, registry::ProviderRegistry},
 };
 
+const SEARCH_ARTIST_IMAGE_SIZE: u16 = 320;
+
 #[derive(Debug, Deserialize, ToSchema, IntoParams)]
 pub struct SearchQuery {
     #[serde(deserialize_with = "serde_trim::string_trim")]
@@ -38,7 +40,10 @@ pub async fn search_aritsts(
                 image_url: result
                     .image_ref
                     .as_deref()
-                    .map(|r| provider_image_url(provider, r, 640)),
+                    // Search result artist avatars render small in the UI, and
+                    // some providers do not reliably serve larger variants for
+                    // artist images.
+                    .map(|r| provider_image_url(provider, r, SEARCH_ARTIST_IMAGE_SIZE)),
                 url: result.url,
                 disambiguation: result.disambiguation,
                 artist_type: result.artist_type,

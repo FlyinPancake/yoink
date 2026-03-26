@@ -20,9 +20,7 @@ pub(crate) async fn scan_and_import_library(state: &AppState) -> AppResult<Impor
 /// Preview items that would be imported from the local library.
 ///
 /// TODO: rewrite to use SeaORM entities
-pub(crate) async fn preview_import_library(
-    state: &AppState,
-) -> AppResult<Vec<ImportPreviewItem>> {
+pub(crate) async fn preview_import_library(state: &AppState) -> AppResult<Vec<ImportPreviewItem>> {
     tracing::warn!("preview_import_library is currently stubbed out");
     let _ = state;
     Ok(vec![])

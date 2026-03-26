@@ -13,4 +13,6 @@ pub(crate) use library::{
     preview_external_import, preview_import_library, reconcile_library_files,
     scan_and_import_library, sync_album_tracks, sync_artist,
 };
-pub(crate) use matching::recompute_artist_match_suggestions;
+pub(crate) use matching::{
+    AlbumMatchSuggestion, ArtistMatchSuggestion, recompute_artist_match_suggestions,
+};

@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
 };
-use sea_orm::EntityTrait;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -422,10 +422,15 @@ async fn list_album_providers(
     Path(album_id): Path<Uuid>,
 ) -> ApiResult<Vec<ProviderLink>> {
     require_album(&state, album_id).await?;
-
-    // FIXME: load via SeaORM once album_provider_link entity is defined
-
-    Ok(Json(vec![]))
+    let links = db::album_provider_link::Entity::find()
+        .filter(db::album_provider_link::Column::AlbumId.eq(album_id))
+        .all(&state.db)
+        .await
+        .map_err(|err| app_error_response(err.into()))?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    Ok(Json(links))
 }
 
 /// List Album Tracks

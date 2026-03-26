@@ -1,4 +1,7 @@
-use sea_orm::{ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait, PaginatorTrait};
+use sea_orm::{
+    ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait,
+    PaginatorTrait,
+};
 use tracing::info;
 use url::Url;
 use uuid::Uuid;
@@ -96,8 +99,8 @@ pub(crate) async fn remove_artist(
         }
     }
 
-    // Cascade deletes artist_provider_links, album_artist junctions,
-    // artist_match_suggestions, and track_artist junctions.
+    // Cascade deletes provider links, match suggestions, album junctions,
+    // and track-artist junctions.
     artist::Entity::delete_by_id(artist_id)
         .exec(&state.db)
         .await?;
