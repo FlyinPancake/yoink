@@ -1,15 +1,21 @@
+use std::collections::HashSet;
+
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, EntityTrait, PaginatorTrait};
 use tracing::info;
 use url::Url;
 use uuid::Uuid;
+use yoink_shared::ArtistImageOption;
 
 use crate::{
     db::{self, album_artist, artist, artist_provider_link},
     error::{AppError, AppResult},
+    providers::provider_image_url,
     state::AppState,
 };
 
 use super::helpers;
+
+const ARTIST_IMAGE_SIZE: u16 = 320;
 
 pub(crate) async fn add_artist(
     state: &AppState,
@@ -148,6 +154,46 @@ pub(crate) async fn fetch_artist_bio(state: &AppState, artist_id: Uuid) -> AppRe
     Ok(())
 }
 
+pub(crate) async fn get_artist_images(
+    state: &AppState,
+    artist_id: Uuid,
+) -> AppResult<Vec<ArtistImageOption>> {
+    let artist = artist::Entity::find_by_id(artist_id)
+        .one(&state.db)
+        .await?
+        .ok_or_else(|| AppError::not_found("artist", Some(artist_id.to_string())))?;
+
+    let provider_links = artist_provider_link::Entity::find_by_artist(artist_id)
+        .all(&state.db)
+        .await?;
+
+    let mut images = Vec::new();
+    let mut seen_urls = HashSet::new();
+
+    for link in provider_links {
+        let Some(provider) = state.registry.metadata_provider(link.provider) else {
+            continue;
+        };
+
+        let Some(image_ref) = provider
+            .fetch_artist_image_ref(&link.external_id, Some(&artist.name))
+            .await
+        else {
+            continue;
+        };
+
+        let image_url = provider_image_url(link.provider, &image_ref, ARTIST_IMAGE_SIZE);
+        if seen_urls.insert(image_url.clone()) {
+            images.push(ArtistImageOption {
+                provider: link.provider.to_string(),
+                image_url,
+            });
+        }
+    }
+
+    Ok(images)
+}
+
 pub(crate) async fn sync_artist_and_refresh(state: &AppState, artist_id: Uuid) -> AppResult<()> {
     super::sync_artist(state, artist_id).await?;
 
@@ -216,4 +262,158 @@ pub(crate) async fn unlink_artist_provider(
     helpers::spawn_recompute_artist_match_suggestions(state, artist_id);
     state.notify_sse();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, path::PathBuf, sync::Arc};
+
+    use async_trait::async_trait;
+    use serde_json::Value;
+
+    use super::*;
+    use crate::{
+        app_config::AuthConfig,
+        db::provider::Provider,
+        providers::{
+            MetadataProvider, ProviderAlbum, ProviderArtist, ProviderError, ProviderTrack,
+            registry::ProviderRegistry,
+        },
+    };
+
+    async fn test_state() -> AppState {
+        let db_path = format!(
+            "sqlite:/tmp/yoink-artist-service-test-{}.db?mode=rwc",
+            uuid::Uuid::now_v7()
+        );
+
+        AppState::new(
+            PathBuf::from("./music"),
+            crate::db::quality::Quality::Lossless,
+            false,
+            1,
+            &db_path,
+            ProviderRegistry::new(),
+            AuthConfig {
+                enabled: false,
+                session_secret: String::new(),
+                init_admin_username: None,
+                init_admin_password: None,
+            },
+        )
+        .await
+    }
+
+    struct TestArtistImageProvider;
+
+    #[async_trait]
+    impl MetadataProvider for TestArtistImageProvider {
+        fn id(&self) -> Provider {
+            Provider::Deezer
+        }
+
+        fn display_name(&self) -> &str {
+            "Test Provider"
+        }
+
+        async fn search_artists(&self, _query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
+            Ok(Vec::new())
+        }
+
+        async fn fetch_albums(
+            &self,
+            _external_artist_id: &str,
+        ) -> Result<Vec<ProviderAlbum>, ProviderError> {
+            Ok(Vec::new())
+        }
+
+        async fn fetch_tracks(
+            &self,
+            _external_album_id: &str,
+        ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError> {
+            Ok((Vec::new(), HashMap::new()))
+        }
+
+        async fn fetch_track_info_extra(
+            &self,
+            _external_track_id: &str,
+        ) -> Option<HashMap<String, Value>> {
+            None
+        }
+
+        fn image_url(&self, image_ref: &str, size: u16) -> String {
+            format!("https://example.test/{image_ref}/{size}")
+        }
+
+        async fn fetch_cover_art_bytes(&self, _image_ref: &str) -> Option<Vec<u8>> {
+            None
+        }
+
+        async fn fetch_artist_image_ref(
+            &self,
+            external_artist_id: &str,
+            _name_hint: Option<&str>,
+        ) -> Option<String> {
+            Some(format!("artist:{external_artist_id}"))
+        }
+    }
+
+    async fn test_state_with_artist_image_provider() -> AppState {
+        let db_path = format!(
+            "sqlite:/tmp/yoink-artist-image-test-{}.db?mode=rwc",
+            uuid::Uuid::now_v7()
+        );
+
+        let mut registry = ProviderRegistry::new();
+        registry.register_metadata(Arc::new(TestArtistImageProvider));
+
+        AppState::new(
+            PathBuf::from("./music"),
+            crate::db::quality::Quality::Lossless,
+            false,
+            1,
+            &db_path,
+            registry,
+            AuthConfig {
+                enabled: false,
+                session_secret: String::new(),
+                init_admin_username: None,
+                init_admin_password: None,
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn get_artist_images_returns_provider_candidates() {
+        let state = test_state_with_artist_image_provider().await;
+
+        let artist_id = helpers::find_or_create_lightweight_artist(
+            &state,
+            Provider::Deezer,
+            "123",
+            "Test Artist",
+        )
+        .await
+        .expect("create artist");
+
+        let images = get_artist_images(&state, artist_id)
+            .await
+            .expect("get artist images");
+
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0].provider, "deezer");
+        assert_eq!(images[0].image_url, "/api/image/deezer/artist:123/320");
+    }
+
+    #[tokio::test]
+    async fn get_artist_images_errors_for_missing_artist() {
+        let state = test_state().await;
+
+        let err = get_artist_images(&state, Uuid::now_v7())
+            .await
+            .expect_err("missing artist should error");
+
+        assert!(matches!(err, AppError::NotFound { .. }));
+    }
 }

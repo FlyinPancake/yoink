@@ -1,12 +1,16 @@
+use std::collections::{HashMap, HashSet};
+
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
+    QueryOrder,
 };
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
+use yoink_shared::LibraryTrack;
 
 use crate::{
     db::{
-        album, provider::Provider, quality::Quality, track, track_provider_link,
+        self, album, provider::Provider, quality::Quality, track, track_provider_link,
         wanted_status::WantedStatus,
     },
     error::{AppError, AppResult},
@@ -15,6 +19,81 @@ use crate::{
 };
 
 use super::helpers;
+
+pub(crate) async fn list_library_tracks(state: &AppState) -> AppResult<Vec<LibraryTrack>> {
+    let tracks_with_albums = track::Entity::find()
+        .find_also_related(album::Entity)
+        .order_by_asc(track::Column::CreatedAt)
+        .all(&state.db)
+        .await?;
+
+    if tracks_with_albums.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let album_ids: Vec<Uuid> = tracks_with_albums
+        .iter()
+        .filter_map(|(_, album)| album.as_ref().map(|album| album.id))
+        .collect();
+
+    let album_artists = db::album_artist::Entity::find()
+        .filter(db::album_artist::Column::AlbumId.is_in(album_ids.iter().copied()))
+        .order_by_asc(db::album_artist::Column::Priority)
+        .all(&state.db)
+        .await?;
+
+    let mut primary_artist_by_album = HashMap::new();
+    let mut artist_ids = HashSet::new();
+
+    for album_artist in album_artists {
+        primary_artist_by_album
+            .entry(album_artist.album_id)
+            .or_insert(album_artist.artist_id);
+        artist_ids.insert(album_artist.artist_id);
+    }
+
+    let artists_by_id: HashMap<Uuid, db::artist::Model> = if artist_ids.is_empty() {
+        HashMap::new()
+    } else {
+        db::artist::Entity::find()
+            .filter(db::artist::Column::Id.is_in(artist_ids))
+            .all(&state.db)
+            .await?
+            .into_iter()
+            .map(|artist| (artist.id, artist))
+            .collect()
+    };
+
+    let mut library_tracks = Vec::with_capacity(tracks_with_albums.len());
+
+    for (track, album) in tracks_with_albums {
+        let Some(album) = album else {
+            warn!(track_id = %track.id, "Track without album found, skipping library track row");
+            continue;
+        };
+
+        let Some(artist_id) = primary_artist_by_album.get(&album.id).copied() else {
+            warn!(track_id = %track.id, album_id = %album.id, "Album without primary artist found, skipping library track row");
+            continue;
+        };
+
+        let Some(artist) = artists_by_id.get(&artist_id) else {
+            warn!(track_id = %track.id, album_id = %album.id, artist_id = %artist_id, "Primary artist missing for album, skipping library track row");
+            continue;
+        };
+
+        library_tracks.push(LibraryTrack {
+            track: track.into(),
+            album_id: album.id,
+            album_title: album.title,
+            album_cover_url: album.cover_url,
+            artist_id,
+            artist_name: artist.name.clone(),
+        });
+    }
+
+    Ok(library_tracks)
+}
 
 pub(crate) async fn add_track(
     state: &AppState,
@@ -150,4 +229,117 @@ pub(crate) async fn bulk_toggle_track_monitor(
     info!(%album_id, monitored, "Bulk toggled track monitoring");
     state.notify_sse();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use sea_orm::{ActiveModelBehavior, ActiveModelTrait};
+
+    use super::list_library_tracks;
+    use crate::{
+        app_config::AuthConfig,
+        db::{
+            album, album_artist, album_type::AlbumType, artist, quality::Quality, track,
+            wanted_status::WantedStatus,
+        },
+        providers::registry::ProviderRegistry,
+        state::AppState,
+    };
+
+    async fn test_state() -> AppState {
+        let db_path = format!(
+            "sqlite:/tmp/yoink-track-service-test-{}.db?mode=rwc",
+            uuid::Uuid::now_v7()
+        );
+
+        AppState::new(
+            PathBuf::from("./music"),
+            Quality::Lossless,
+            false,
+            1,
+            &db_path,
+            ProviderRegistry::new(),
+            AuthConfig {
+                enabled: false,
+                session_secret: String::new(),
+                init_admin_username: None,
+                init_admin_password: None,
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn list_library_tracks_returns_track_with_album_and_primary_artist() {
+        let state = test_state().await;
+
+        let artist = artist::ActiveModel {
+            name: sea_orm::ActiveValue::Set("Test Artist".to_string()),
+            image_url: sea_orm::ActiveValue::Set(None),
+            bio: sea_orm::ActiveValue::Set(None),
+            monitored: sea_orm::ActiveValue::Set(true),
+            ..artist::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert artist");
+
+        let album = album::ActiveModel {
+            title: sea_orm::ActiveValue::Set("Test Album".to_string()),
+            album_type: sea_orm::ActiveValue::Set(AlbumType::Album),
+            release_date: sea_orm::ActiveValue::Set(None),
+            cover_url: sea_orm::ActiveValue::Set(Some("/cover.jpg".to_string())),
+            explicit: sea_orm::ActiveValue::Set(false),
+            wanted_status: sea_orm::ActiveValue::Set(WantedStatus::Wanted),
+            requested_quality: sea_orm::ActiveValue::Set(None),
+            ..album::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album");
+
+        album_artist::ActiveModel {
+            album_id: sea_orm::ActiveValue::Set(album.id),
+            artist_id: sea_orm::ActiveValue::Set(artist.id),
+            priority: sea_orm::ActiveValue::Set(0),
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album artist");
+
+        let track = track::ActiveModel {
+            title: sea_orm::ActiveValue::Set("Track 1".to_string()),
+            version: sea_orm::ActiveValue::Set(None),
+            disc_number: sea_orm::ActiveValue::Set(Some(1)),
+            track_number: sea_orm::ActiveValue::Set(Some(1)),
+            duration: sea_orm::ActiveValue::Set(Some(215)),
+            album_id: sea_orm::ActiveValue::Set(album.id),
+            explicit: sea_orm::ActiveValue::Set(false),
+            isrc: sea_orm::ActiveValue::Set(Some("ISRC123".to_string())),
+            root_folder_id: sea_orm::ActiveValue::Set(None),
+            status: sea_orm::ActiveValue::Set(WantedStatus::Wanted),
+            file_path: sea_orm::ActiveValue::Set(None),
+            ..track::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert track");
+
+        let tracks = list_library_tracks(&state)
+            .await
+            .expect("list library tracks");
+
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(tracks[0].track.id, track.id);
+        assert_eq!(tracks[0].album_id, album.id);
+        assert_eq!(tracks[0].album_title, "Test Album");
+        assert_eq!(tracks[0].album_cover_url.as_deref(), Some("/cover.jpg"));
+        assert_eq!(tracks[0].artist_id, artist.id);
+        assert_eq!(tracks[0].artist_name, "Test Artist");
+        assert_eq!(tracks[0].track.title, "Track 1");
+        assert!(tracks[0].track.monitored);
+        assert!(!tracks[0].track.acquired);
+    }
 }

@@ -9,7 +9,11 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 
 use yoink_shared::{LibraryTrack, SearchTrackResult};
 
-use crate::{db::provider::Provider, services, state::AppState};
+use crate::{
+    db::provider::Provider,
+    services::{self, search::SearchQuery},
+    state::AppState,
+};
 
 use super::helpers::{ApiErrorResponse, app_error_response};
 
@@ -18,11 +22,6 @@ pub(crate) const TAG_DESCRIPTION: &str = "Endpoints for track search and library
 
 type ApiResult<T> = Result<Json<T>, ApiErrorResponse>;
 type ApiStatusResult = Result<StatusCode, ApiErrorResponse>;
-
-#[derive(Debug, Deserialize, ToSchema)]
-struct TrackSearchQuery {
-    query: String,
-}
 
 #[derive(Debug, Deserialize, ToSchema)]
 struct CreateTrackRequest {
@@ -44,9 +43,7 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
     get,
     path = "/search",
     tag = TAG,
-    params(
-        ("query" = String, Query, description = "Track search query")
-    ),
+    params(SearchQuery),
     responses(
         (status = 200, description = "Search results across all providers", body = Vec<SearchTrackResult>),
         (status = 503, description = "Provider search unavailable"),
@@ -54,16 +51,13 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
 )]
 /// Search Tracks
 async fn search_tracks(
-    State(_state): State<AppState>,
-    Query(query): Query<TrackSearchQuery>,
+    State(state): State<AppState>,
+    Query(query): Query<SearchQuery>,
 ) -> ApiResult<Vec<SearchTrackResult>> {
-    let trimmed = query.query.trim();
-    if trimmed.is_empty() {
-        return Ok(Json(Vec::new()));
-    }
-
-    // TODO: implement search across providers
-    Ok(Json(vec![]))
+    services::search::search_tracks(&state.db, &state.registry, &query)
+        .await
+        .map_err(app_error_response)
+        .map(Json)
 }
 
 #[utoipa::path(
@@ -77,9 +71,10 @@ async fn search_tracks(
 )]
 /// List Tracks
 async fn list_tracks(State(state): State<AppState>) -> ApiResult<Vec<LibraryTrack>> {
-    // TODO: implement once track entity has From<Model> for LibraryTrack
-    let _ = &state.db;
-    Ok(Json(vec![]))
+    services::track::list_library_tracks(&state)
+        .await
+        .map_err(app_error_response)
+        .map(Json)
 }
 
 #[utoipa::path(

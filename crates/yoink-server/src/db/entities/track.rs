@@ -54,8 +54,8 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }
 
-impl From<ModelEx> for TrackInfo {
-    fn from(value: ModelEx) -> Self {
+impl From<Model> for TrackInfo {
+    fn from(value: Model) -> Self {
         let acquired = value.file_path.is_some()
             || value.status == super::wanted_status::WantedStatus::Acquired;
 
@@ -74,5 +74,11 @@ impl From<ModelEx> for TrackInfo {
             quality_override: None,
             track_artist: None,
         }
+    }
+}
+
+impl From<ModelEx> for TrackInfo {
+    fn from(value: ModelEx) -> Self {
+        Model::from(value).into()
     }
 }

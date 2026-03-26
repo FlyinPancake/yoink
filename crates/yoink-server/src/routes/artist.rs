@@ -533,12 +533,13 @@ async fn unlink_artist_provider(
 /// Returns candidate artist images collected from the artist's linked
 /// providers.
 async fn get_artist_images(
-    State(_state): State<AppState>,
-    Path(_artist_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Path(artist_id): Path<Uuid>,
 ) -> ApiResult<Vec<ArtistImageOption>> {
-    // FIXME this currently just returns nothing
-    // fetch all provider links for the artist, then for each provider fetch candidate images and return them all
-    Ok(Json(vec![]))
+    services::artist::get_artist_images(&state, artist_id)
+        .await
+        .map_err(app_error_response)
+        .map(Json)
 }
 
 #[utoipa::path(

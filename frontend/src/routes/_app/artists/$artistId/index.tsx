@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
@@ -76,6 +76,7 @@ type Album = components["schemas"]["Album"] & {
 };
 type ProviderLink = components["schemas"]["ProviderLink"];
 type ArtistMatchSuggestion = components["schemas"]["ArtistMatchSuggestion"];
+type ArtistImageOption = components["schemas"]["ArtistImageOption"];
 type Quality = components["schemas"]["Quality"];
 
 export const Route = createFileRoute("/_app/artists/$artistId/")({
@@ -908,15 +909,60 @@ function EditArtistDialog({
   const [imageUrl, setImageUrl] = useState(artist.image_url ?? "");
   const updateArtist = useUpdateArtist();
   const fetchBio = useFetchArtistBio();
+  const { data: artistImages, isLoading: isLoadingArtistImages, isError: isArtistImagesError } =
+    $api.useQuery(
+      "get",
+      "/api/artist/{artist_id}/image",
+      {
+        params: { path: { artist_id: artist.id } },
+      },
+      {
+        enabled: open,
+        staleTime: 60_000,
+      },
+    );
+
+  useEffect(() => {
+    if (!open) return;
+    setName(artist.name);
+    setImageUrl(artist.image_url ?? "");
+  }, [artist.image_url, artist.name, open]);
+
+  const trimmedImageUrl = imageUrl.trim();
+  const imageOptions = artistImages ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit Artist</DialogTitle>
           <DialogDescription>Update the artist name and image.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
+          <div className="grid gap-3 rounded-xl border bg-muted/20 p-4 sm:grid-cols-[88px_minmax(0,1fr)]">
+            <div className="mx-auto size-22 overflow-hidden rounded-full border-2 border-blue-500/20 bg-muted sm:mx-0">
+              {trimmedImageUrl ? (
+                <img src={trimmedImageUrl} alt="" className="size-full object-cover" />
+              ) : (
+                <div className="flex size-full items-center justify-center text-3xl font-bold text-muted-foreground/40">
+                  {fallbackInitial(name)}
+                </div>
+              )}
+            </div>
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">Preview</p>
+              <p className="text-xs text-muted-foreground">
+                Pick a suggested provider image or paste a custom URL below.
+              </p>
+              {trimmedImageUrl && (
+                <div>
+                  <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setImageUrl("")}>
+                    Remove Image
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
           <div className="grid gap-1.5">
             <Label htmlFor="artist-name">Name</Label>
             <Input id="artist-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -929,6 +975,40 @@ function EditArtistDialog({
               onChange={(e) => setImageUrl(e.target.value)}
               placeholder="https://..."
             />
+          </div>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label>Suggested Images</Label>
+              {imageOptions.length > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {imageOptions.length} provider option{imageOptions.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+            {isLoadingArtistImages ? (
+              <div className="flex flex-wrap gap-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="w-24">
+                    <Skeleton className="aspect-square rounded-xl" />
+                    <Skeleton className="mt-2 h-3 w-16" />
+                  </div>
+                ))}
+              </div>
+            ) : isArtistImagesError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                Failed to load suggested artist images.
+              </p>
+            ) : imageOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No provider images are available for this artist yet.
+              </p>
+            ) : (
+              <ArtistImagePicker
+                imageOptions={imageOptions}
+                selectedImageUrl={trimmedImageUrl}
+                onSelectImage={setImageUrl}
+              />
+            )}
           </div>
         </div>
         <DialogFooter>
@@ -951,7 +1031,7 @@ function EditArtistDialog({
                   params: { path: { artist_id: artist.id } },
                   body: {
                     name,
-                    image_url: imageUrl || null,
+                    image_url: trimmedImageUrl || null,
                   },
                 },
                 {
@@ -965,5 +1045,55 @@ function EditArtistDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ArtistImagePicker({
+  imageOptions,
+  selectedImageUrl,
+  onSelectImage,
+}: {
+  imageOptions: Array<ArtistImageOption>;
+  selectedImageUrl: string;
+  onSelectImage: (imageUrl: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {imageOptions.map((option) => {
+        const isSelected = selectedImageUrl === option.image_url;
+
+        return (
+          <button
+            key={`${option.provider}-${option.image_url}`}
+            type="button"
+            aria-pressed={isSelected}
+            onClick={() => onSelectImage(option.image_url)}
+            className={`group overflow-hidden rounded-xl border text-left transition-colors ${
+              isSelected
+                ? "border-blue-500 bg-blue-500/5"
+                : "border-border hover:border-blue-500/40 hover:bg-muted/30"
+            }`}
+          >
+            <div className="aspect-square overflow-hidden bg-muted">
+              <img
+                src={option.image_url}
+                alt=""
+                className="size-full object-cover transition-transform group-hover:scale-[1.02]"
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2 p-2">
+              <span className="truncate text-xs font-medium">
+                {providerDisplayName(option.provider)}
+              </span>
+              {isSelected && (
+                <Badge variant="outline" className="border-blue-500/30 px-1.5 text-[10px] text-blue-500">
+                  Selected
+                </Badge>
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
   );
 }
