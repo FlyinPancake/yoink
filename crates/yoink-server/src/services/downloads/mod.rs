@@ -631,8 +631,6 @@ async fn prune_empty_parent_dirs(path: &Path, music_root: &Path) -> AppResult<()
 }
 
 /// Remove downloaded album files from disk.
-///
-/// TODO: rewrite to use SeaORM entities
 pub(crate) async fn remove_downloaded_album_files(
     state: &AppState,
     album: &db::album::Model,

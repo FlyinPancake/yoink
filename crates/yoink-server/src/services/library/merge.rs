@@ -12,8 +12,6 @@ use sea_orm::{
 };
 
 /// Merge a source album into a target album.
-///
-/// TODO: rewrite to use SeaORM entities
 pub(crate) async fn merge_albums(
     state: &AppState,
     target_album_id: Uuid,

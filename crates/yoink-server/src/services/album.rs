@@ -414,8 +414,6 @@ pub(crate) async fn add_album(
     // 4. Sync tracks from provider.
     super::sync_album_tracks(state, provider, &external_album_id, album_id).await?;
 
-    // TODO: enqueue download via SeaORM once download service is migrated
-
     info!(%album_id, %provider, %external_album_id, monitor_all, "Added album from search");
     state.notify_sse();
     Ok(())

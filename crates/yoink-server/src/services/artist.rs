@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use sea_orm::{ActiveModelTrait, ActiveValue::Set, EntityTrait, PaginatorTrait};
-use tracing::info;
+use tracing::{info, warn};
 use url::Url;
 use uuid::Uuid;
 use yoink_shared::ArtistImageOption;
@@ -68,7 +68,17 @@ pub(crate) async fn remove_artist(
 
         if artist_count <= 1 {
             if remove_files {
-                // TODO: remove downloaded files for this album
+                match db::album::Entity::find_by_id(aa.album_id)
+                    .one(&state.db)
+                    .await?
+                {
+                    Some(album) => {
+                        super::downloads::remove_downloaded_album_files(state, &album).await?;
+                    }
+                    None => {
+                        warn!(artist_id = %artist_id, album_id = %aa.album_id, "Album disappeared before files could be removed");
+                    }
+                }
             }
             db::album::Entity::delete_by_id(aa.album_id)
                 .exec(&state.db)
@@ -266,15 +276,20 @@ pub(crate) async fn unlink_artist_provider(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, path::PathBuf, sync::Arc};
+    use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
     use async_trait::async_trait;
+    use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait};
     use serde_json::Value;
+    use tokio::time::sleep;
 
     use super::*;
     use crate::{
         app_config::AuthConfig,
-        db::provider::Provider,
+        db::{
+            album, album_artist, album_type::AlbumType, provider::Provider, track,
+            wanted_status::WantedStatus,
+        },
         providers::{
             MetadataProvider, ProviderAlbum, ProviderArtist, ProviderError, ProviderTrack,
             registry::ProviderRegistry,
@@ -289,6 +304,29 @@ mod tests {
 
         AppState::new(
             PathBuf::from("./music"),
+            crate::db::quality::Quality::Lossless,
+            false,
+            1,
+            &db_path,
+            ProviderRegistry::new(),
+            AuthConfig {
+                enabled: false,
+                session_secret: String::new(),
+                init_admin_username: None,
+                init_admin_password: None,
+            },
+        )
+        .await
+    }
+
+    async fn test_state_with_music_root(music_root: PathBuf) -> AppState {
+        let db_path = format!(
+            "sqlite:/tmp/yoink-artist-remove-test-{}.db?mode=rwc",
+            uuid::Uuid::now_v7()
+        );
+
+        AppState::new(
+            music_root,
             crate::db::quality::Quality::Lossless,
             false,
             1,
@@ -356,6 +394,10 @@ mod tests {
         ) -> Option<String> {
             Some(format!("artist:{external_artist_id}"))
         }
+
+        async fn fetch_artist_bio(&self, external_artist_id: &str) -> Option<String> {
+            Some(format!("Bio for {external_artist_id}"))
+        }
     }
 
     async fn test_state_with_artist_image_provider() -> AppState {
@@ -415,5 +457,124 @@ mod tests {
             .expect_err("missing artist should error");
 
         assert!(matches!(err, AppError::NotFound { .. }));
+    }
+
+    #[tokio::test]
+    async fn fetch_artist_bio_persists_provider_bio() {
+        let state = test_state_with_artist_image_provider().await;
+
+        let artist_id = helpers::find_or_create_lightweight_artist(
+            &state,
+            Provider::Deezer,
+            "123",
+            "Test Artist",
+        )
+        .await
+        .expect("create artist");
+
+        super::fetch_artist_bio(&state, artist_id)
+            .await
+            .expect("request manual bio fetch");
+
+        let mut persisted_bio = None;
+        for _ in 0..20 {
+            persisted_bio = artist::Entity::find_by_id(artist_id)
+                .one(&state.db)
+                .await
+                .expect("reload artist")
+                .and_then(|artist| artist.bio);
+            if persisted_bio.is_some() {
+                break;
+            }
+            sleep(Duration::from_millis(25)).await;
+        }
+
+        assert_eq!(persisted_bio.as_deref(), Some("Bio for 123"));
+    }
+
+    #[tokio::test]
+    async fn remove_artist_with_remove_files_deletes_managed_album_files() {
+        let music_root = tempfile::tempdir().expect("create music root");
+        let state = test_state_with_music_root(music_root.path().to_path_buf()).await;
+
+        let artist = artist::ActiveModel {
+            name: Set("Test Artist".to_string()),
+            image_url: Set(None),
+            bio: Set(None),
+            monitored: Set(true),
+            ..artist::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert artist");
+
+        let album = album::ActiveModel {
+            title: Set("Test Album".to_string()),
+            album_type: Set(AlbumType::Album),
+            release_date: Set(None),
+            cover_url: Set(None),
+            explicit: Set(false),
+            wanted_status: Set(WantedStatus::Acquired),
+            requested_quality: Set(None),
+            ..album::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album");
+
+        album_artist::ActiveModel {
+            album_id: Set(album.id),
+            artist_id: Set(artist.id),
+            priority: Set(0),
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album artist");
+
+        let relative_path = "Test Artist/Test Album/01 - Track 1.flac".to_string();
+        let absolute_path = music_root.path().join(&relative_path);
+        std::fs::create_dir_all(absolute_path.parent().expect("parent dir")).expect("create dirs");
+        std::fs::write(&absolute_path, b"audio").expect("write track");
+
+        track::ActiveModel {
+            title: Set("Track 1".to_string()),
+            version: Set(None),
+            disc_number: Set(Some(1)),
+            track_number: Set(Some(1)),
+            duration: Set(Some(180)),
+            album_id: Set(album.id),
+            explicit: Set(false),
+            isrc: Set(None),
+            root_folder_id: Set(None),
+            status: Set(WantedStatus::Acquired),
+            file_path: Set(Some(relative_path)),
+            ..track::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert track");
+
+        super::remove_artist(&state, artist.id, true)
+            .await
+            .expect("remove artist");
+
+        assert!(
+            !absolute_path.exists(),
+            "expected managed album file to be removed"
+        );
+        assert!(
+            artist::Entity::find_by_id(artist.id)
+                .one(&state.db)
+                .await
+                .expect("reload artist")
+                .is_none()
+        );
+        assert!(
+            album::Entity::find_by_id(album.id)
+                .one(&state.db)
+                .await
+                .expect("reload album")
+                .is_none()
+        );
     }
 }

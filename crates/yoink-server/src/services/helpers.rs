@@ -2,7 +2,7 @@ use sea_orm::{
     ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
     QueryFilter,
 };
-use tracing::warn;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -46,89 +46,90 @@ pub(crate) fn parse_provider(s: &str) -> AppResult<Provider> {
 
 /// Fetch artist bio from linked metadata providers in background.
 pub(crate) fn spawn_fetch_artist_bio(state: &AppState, artist_id: Uuid) {
-    // TODO: re-enable this once i have time
+    let s = state.clone();
+    info!(%artist_id, "Spawning background bio fetch");
+    tokio::spawn(async move {
+        let artist = match artist::Entity::find_by_id(artist_id).one(&s.db).await {
+            Ok(Some(artist)) => artist,
+            Ok(None) => {
+                info!(%artist_id, "Artist disappeared before bio fetch started");
+                return;
+            }
+            Err(err) => {
+                warn!(%artist_id, error = %err, "Failed to load artist for bio fetch");
+                return;
+            }
+        };
 
-    // let s = state.clone();
-    // info!(%artist_id, "Spawning background bio fetch");
-    // tokio::spawn(async move {
-    //     let links = match db::load_artist_provider_links(&s.sqlite, artist_id).await {
-    //         Ok(l) => l,
-    //         Err(e) => {
-    //             warn!(%artist_id, error = %e, "Failed to load provider links for bio fetch");
-    //             return;
-    //         }
-    //     };
+        let links = match artist_provider_link::Entity::find_by_artist(artist_id)
+            .all(&s.db)
+            .await
+        {
+            Ok(links) => links,
+            Err(err) => {
+                warn!(%artist_id, error = %err, "Failed to load provider links for bio fetch");
+                return;
+            }
+        };
 
-    //     if links.is_empty() {
-    //         info!(%artist_id, "No provider links found, skipping bio fetch");
-    //         return;
-    //     }
+        if links.is_empty() {
+            info!(%artist_id, "No provider links found, skipping bio fetch");
+            return;
+        }
 
-    //     info!(%artist_id, link_count = links.len(), "Attempting bio fetch from linked providers");
+        info!(%artist_id, link_count = links.len(), "Attempting bio fetch from linked providers");
 
-    //     for link in &links {
-    //         let provider_name = &link.provider;
-    //         let external_id = &link.external_id;
+        for link in links {
+            let Some(provider) = s.registry.metadata_provider(link.provider) else {
+                info!(%artist_id, provider = %link.provider, "Provider not available as metadata source, skipping");
+                continue;
+            };
 
-    //         let Some(provider) = s.registry.metadata_provider(provider_name) else {
-    //             info!(
-    //                 %artist_id,
-    //                 provider = %provider_name,
-    //                 "Provider not available as metadata source, skipping"
-    //             );
-    //             continue;
-    //         };
+            info!(
+                %artist_id,
+                provider = %link.provider,
+                external_id = %link.external_id,
+                "Fetching bio from provider"
+            );
 
-    //         info!(
-    //             %artist_id,
-    //             provider = %provider_name,
-    //             %external_id,
-    //             "Fetching bio from provider"
-    //         );
+            match provider.fetch_artist_bio(&link.external_id).await {
+                Some(bio) if !bio.trim().is_empty() => {
+                    let bio_len = bio.len();
+                    let mut model: artist::ActiveModel = artist.clone().into();
+                    model.bio = Set(Some(bio));
 
-    //         match provider.fetch_artist_bio(external_id).await {
-    //             Some(bio) => {
-    //                 let bio_len = bio.len();
-    //                 if let Err(e) = db::update_artist_bio(&s.sqlite, artist_id, Some(&bio)).await {
-    //                     warn!(
-    //                         %artist_id,
-    //                         provider = %provider_name,
-    //                         error = %e,
-    //                         "Failed to persist fetched bio to database"
-    //                     );
-    //                     return;
-    //                 }
-    //                 {
-    //                     let mut artists = s.monitored_artists.write().await;
-    //                     if let Some(a) = artists.iter_mut().find(|a| a.id == artist_id) {
-    //                         a.bio = Some(bio);
-    //                     }
-    //                 }
-    //                 info!(
-    //                     %artist_id,
-    //                     provider = %provider_name,
-    //                     bio_len,
-    //                     "Successfully fetched and saved artist bio"
-    //                 );
-    //                 s.notify_sse();
-    //                 return;
-    //             }
-    //             None => {
-    //                 info!(
-    //                     %artist_id,
-    //                     provider = %provider_name,
-    //                     %external_id,
-    //                     "Provider returned no bio"
-    //                 );
-    //             }
-    //         }
-    //     }
+                    if let Err(err) = model.update(&s.db).await {
+                        warn!(
+                            %artist_id,
+                            provider = %link.provider,
+                            error = %err,
+                            "Failed to persist fetched bio"
+                        );
+                        return;
+                    }
 
-    //     info!(
-    //         %artist_id,
-    //         "No provider returned a bio for this artist"
-    //     );
-    // });
+                    info!(
+                        %artist_id,
+                        provider = %link.provider,
+                        bio_len,
+                        "Successfully fetched and saved artist bio"
+                    );
+                    s.notify_sse();
+                    return;
+                }
+                Some(_) | None => {
+                    info!(
+                        %artist_id,
+                        provider = %link.provider,
+                        external_id = %link.external_id,
+                        "Provider returned no bio"
+                    );
+                }
+            }
+        }
+
+        info!(%artist_id, "No provider returned a bio for this artist");
+    });
 }
 
 pub(crate) fn spawn_recompute_artist_match_suggestions(state: &AppState, artist_id: Uuid) {
