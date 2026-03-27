@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityLoaderTrait, EntityTrait,
-    IntoActiveModel, PaginatorTrait, QueryFilter, TransactionTrait,
+    ActiveValue::Set, ColumnTrait, EntityLoaderTrait, EntityTrait, IntoActiveModel,
+    PaginatorTrait, QueryFilter, TransactionTrait,
 };
 use tracing::{info, warn};
 use url::Url;

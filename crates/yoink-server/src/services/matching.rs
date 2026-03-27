@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use chrono::Datelike;
 use sea_orm::{
-    ActiveEnum, ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait, ModelTrait,
+    ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait, ModelTrait,
 };
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -24,11 +24,11 @@ const ALBUM_SEARCH_SCORE_MIN: f64 = 0.65;
 pub(crate) struct ArtistMatchSuggestion {
     pub id: Uuid,
     pub artist_id: Uuid,
-    pub left_provider: String,
+    pub left_provider: Provider,
     pub left_external_id: String,
-    pub right_provider: String,
+    pub right_provider: Provider,
     pub right_external_id: String,
-    pub match_kind: String,
+    pub match_kind: MatchKind,
     pub confidence: u8,
     pub explanation: Option<String>,
     pub external_name: Option<String>,
@@ -46,11 +46,11 @@ pub(crate) struct ArtistMatchSuggestion {
 pub(crate) struct AlbumMatchSuggestion {
     pub id: Uuid,
     pub album_id: Uuid,
-    pub left_provider: String,
+    pub left_provider: Provider,
     pub left_external_id: String,
-    pub right_provider: String,
+    pub right_provider: Provider,
     pub right_external_id: String,
-    pub match_kind: String,
+    pub match_kind: MatchKind,
     pub confidence: u8,
     pub explanation: Option<String>,
     pub external_name: Option<String>,
@@ -80,11 +80,11 @@ impl From<db::artist_match_suggestion::Model> for ArtistMatchSuggestion {
         Self {
             id: value.id,
             artist_id: value.artist_id,
-            left_provider: value.left_provider.to_value(),
+            left_provider: value.left_provider,
             left_external_id: value.left_external_id,
-            right_provider: value.right_provider.to_value(),
+            right_provider: value.right_provider,
             right_external_id: value.right_external_id,
-            match_kind: value.match_kind.to_value(),
+            match_kind: value.match_kind,
             confidence: value.confidence.clamp(0, 100) as u8,
             explanation: value.explanation,
             external_name: value.external_name,
@@ -111,11 +111,11 @@ impl From<db::album_match_suggestion::Model> for AlbumMatchSuggestion {
         Self {
             id: value.id,
             album_id: value.album_id,
-            left_provider: value.left_provider.to_value(),
+            left_provider: value.left_provider,
             left_external_id: value.left_external_id,
-            right_provider: value.right_provider.to_value(),
+            right_provider: value.right_provider,
             right_external_id: value.right_external_id,
-            match_kind: value.match_kind.to_value(),
+            match_kind: value.match_kind,
             confidence: value.confidence.clamp(0, 100) as u8,
             explanation: value.explanation,
             external_name: value.external_name,

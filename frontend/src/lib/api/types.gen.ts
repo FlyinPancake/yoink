@@ -1016,12 +1016,12 @@ export interface components {
             id: string;
             image_url?: string | null;
             left_external_id: string;
-            left_provider: string;
-            match_kind: string;
+            left_provider: components["schemas"]["Provider"];
+            match_kind: components["schemas"]["MatchKind"];
             /** Format: int32 */
             popularity?: number | null;
             right_external_id: string;
-            right_provider: string;
+            right_provider: components["schemas"]["Provider"];
             status: components["schemas"]["MatchStatus"];
             tags: string[];
         };
@@ -1053,12 +1053,12 @@ export interface components {
             id: string;
             image_url?: string | null;
             left_external_id: string;
-            left_provider: string;
-            match_kind: string;
+            left_provider: components["schemas"]["Provider"];
+            match_kind: components["schemas"]["MatchKind"];
             /** Format: int32 */
             popularity?: number | null;
             right_external_id: string;
-            right_provider: string;
+            right_provider: components["schemas"]["Provider"];
             status: components["schemas"]["MatchStatus"];
             tags: string[];
         };
@@ -1250,6 +1250,8 @@ export interface components {
          * @enum {string}
          */
         ManualImportMode: "copy" | "hardlink";
+        /** @enum {string} */
+        MatchKind: "fuzzy" | "isrc_exact";
         /** @enum {string} */
         MatchStatus: "pending" | "accepted" | "dismissed";
         MergeAlbumsRequest: {
