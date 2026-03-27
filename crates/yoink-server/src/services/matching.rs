@@ -39,7 +39,7 @@ pub(crate) struct ArtistMatchSuggestion {
     pub country: Option<String>,
     pub tags: Vec<String>,
     pub popularity: Option<u8>,
-    pub status: String,
+    pub status: MatchStatus,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -58,7 +58,7 @@ pub(crate) struct AlbumMatchSuggestion {
     pub image_url: Option<String>,
     pub tags: Vec<String>,
     pub popularity: Option<u8>,
-    pub status: String,
+    pub status: MatchStatus,
 }
 
 fn parse_tags(tags_json: Option<&str>) -> Vec<String> {
@@ -95,7 +95,7 @@ impl From<db::artist_match_suggestion::Model> for ArtistMatchSuggestion {
             country: value.country,
             tags: parse_tags(value.tags_json.as_deref()),
             popularity: value.popularity.map(|value| value.clamp(0, 100) as u8),
-            status: value.status.to_value(),
+            status: value.status,
         }
     }
 }
@@ -123,7 +123,7 @@ impl From<db::album_match_suggestion::Model> for AlbumMatchSuggestion {
             image_url: value.image_url,
             tags: parse_tags(value.tags_json.as_deref()),
             popularity: value.popularity.map(|value| value.clamp(0, 100) as u8),
-            status: value.status.to_value(),
+            status: value.status,
         }
     }
 }

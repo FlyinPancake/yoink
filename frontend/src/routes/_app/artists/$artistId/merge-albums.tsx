@@ -4,6 +4,7 @@ import { ArrowLeftIcon, GitMergeIcon, XIcon } from "lucide-react";
 
 import type { components } from "@/lib/api/types.gen";
 import { $api } from "@/lib/api";
+import { isPendingMatchSuggestion } from "@/lib/matching";
 import { isAlbumAcquired, isAlbumWanted } from "@/lib/music";
 import { useDismissMatchSuggestion, useMergeAlbums } from "@/lib/api/mutations";
 
@@ -108,7 +109,7 @@ function MergeAlbumsContent({
     const albumMap = new Map(albums.map((a) => [a.id, a]));
     const results: Array<MergeCandidate> = [];
 
-    const pending = matchSuggestions.filter((m) => m.status === "pending");
+    const pending = matchSuggestions.filter((m) => isPendingMatchSuggestion(m.status));
 
     for (const suggestion of pending) {
       const left = albumMap.get(suggestion.left_external_id);

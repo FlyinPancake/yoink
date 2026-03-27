@@ -1022,7 +1022,7 @@ export interface components {
             popularity?: number | null;
             right_external_id: string;
             right_provider: string;
-            status: string;
+            status: components["schemas"]["MatchStatus"];
             tags: string[];
         };
         ArtistDetailResponse: {
@@ -1059,7 +1059,7 @@ export interface components {
             popularity?: number | null;
             right_external_id: string;
             right_provider: string;
-            status: string;
+            status: components["schemas"]["MatchStatus"];
             tags: string[];
         };
         ArtistWithPriority: components["schemas"]["MonitoredArtist"] & {
@@ -1250,6 +1250,8 @@ export interface components {
          * @enum {string}
          */
         ManualImportMode: "copy" | "hardlink";
+        /** @enum {string} */
+        MatchStatus: "pending" | "accepted" | "dismissed";
         MergeAlbumsRequest: {
             result_cover_url?: string | null;
             result_title?: string | null;
