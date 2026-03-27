@@ -1,6 +1,7 @@
 import type { components } from "@/lib/api/types.gen";
 
 type Provider = components["schemas"]["Provider"];
+type DownloadStatus = components["schemas"]["DownloadStatus"];
 type WantedStatus = components["schemas"]["WantedStatus"];
 
 export function formatDurationSeconds(totalSeconds: number): string {
@@ -29,6 +30,18 @@ export function isAlbumWantedLike(status: WantedStatus): boolean {
 
 export function isAlbumInProgress(status: WantedStatus): boolean {
   return status === "in_progress";
+}
+
+export function isDownloadActive(status: DownloadStatus): boolean {
+  return status === "queued" || status === "resolving" || status === "downloading";
+}
+
+export function isDownloadHistory(status: DownloadStatus): boolean {
+  return status === "completed" || status === "failed";
+}
+
+export function canCancelDownload(status: DownloadStatus): boolean {
+  return status === "queued";
 }
 
 export function normalizeProvider(provider: string): Provider | null {

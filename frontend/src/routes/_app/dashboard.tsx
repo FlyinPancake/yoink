@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { DiscAlbumIcon, DownloadIcon, HeartIcon, LibraryIcon, MicIcon } from "lucide-react";
 import { $api } from "@/lib/api";
 import type { components } from "@/lib/api/types.gen";
-import { isAlbumAcquired, isAlbumWantedLike } from "@/lib/music";
+import { isAlbumAcquired, isAlbumWantedLike, isDownloadActive } from "@/lib/music";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type DownloadJob = components["schemas"]["DownloadJob"];
@@ -99,9 +99,7 @@ function DashboardPage() {
   const totalAlbums = albums.length;
   const wantedAlbums = albums.filter((a) => isAlbumWantedLike(a.wanted_status)).length;
   const acquiredAlbums = albums.filter((a) => isAlbumAcquired(a.wanted_status)).length;
-  const activeDownloads = jobs.filter((j) =>
-    ["queued", "resolving", "downloading"].includes(j.status),
-  ).length;
+  const activeDownloads = jobs.filter((j) => isDownloadActive(j.status)).length;
   const recentDownloads = jobs.slice(0, 3);
   const wantedAlbumsList = albums.filter((a) => isAlbumWantedLike(a.wanted_status)).slice(0, 5);
 

@@ -16,6 +16,7 @@ import {
   isAlbumAcquired,
   isAlbumInProgress,
   isAlbumWanted,
+  isDownloadActive,
   providerDisplayName,
 } from "@/lib/music";
 import {
@@ -228,8 +229,7 @@ function AlbumDetailContent({
     .filter((j) => j.album_id === album.id)
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0] as DownloadJob | undefined;
 
-  const hasActiveJob =
-    latestJob && ["queued", "resolving", "downloading"].includes(latestJob.status);
+  const hasActiveJob = latestJob && isDownloadActive(latestJob.status);
   const canDownload =
     isAlbumWanted(album.wanted_status) && !isAlbumAcquired(album.wanted_status) && !hasActiveJob;
   const canRetry = latestJob?.status === "failed";

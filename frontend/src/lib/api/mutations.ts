@@ -10,6 +10,7 @@
  */
 
 import { useQueryClient } from "@tanstack/react-query";
+import { isDownloadActive } from "@/lib/music";
 import { $api } from "./client";
 import { getCollections, addedItemKey } from "./collections";
 import { queryKeys } from "./queries";
@@ -146,7 +147,7 @@ function upsertAlbumJob(jobs: Array<DownloadJob>, job: DownloadJob): Array<Downl
       !(
         existing.album_id === job.album_id &&
         existing.kind === "album" &&
-        ["queued", "resolving", "downloading"].includes(existing.status)
+        isDownloadActive(existing.status)
       ),
   );
 

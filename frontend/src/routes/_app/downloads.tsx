@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { $api } from "@/lib/api";
 import { useCancelJob, useClearCompletedJobs } from "@/lib/api/mutations";
+import { canCancelDownload, isDownloadActive, isDownloadHistory } from "@/lib/music";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import type { components } from "@/lib/api/types.gen";
@@ -79,8 +80,8 @@ function DownloadsPage() {
     );
   }
 
-  const active = jobs.filter((d) => ["queued", "resolving", "downloading"].includes(d.status));
-  const history = jobs.filter((d) => ["completed", "failed"].includes(d.status));
+  const active = jobs.filter((d) => isDownloadActive(d.status));
+  const history = jobs.filter((d) => isDownloadHistory(d.status));
 
   return (
     <div className="space-y-8">
@@ -192,7 +193,7 @@ function DownloadRow({
             </p>
             <p className="text-xs text-muted-foreground">{progress}%</p>
           </div>
-          {onCancel && dl.status === "queued" && (
+          {onCancel && canCancelDownload(dl.status) && (
             <Button
               variant="ghost"
               size="sm"
