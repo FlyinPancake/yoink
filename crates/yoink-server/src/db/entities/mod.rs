@@ -10,6 +10,8 @@ pub(crate) mod auth_session;
 pub(crate) mod auth_settings;
 pub(crate) mod download_job;
 pub(crate) mod download_status;
+pub(crate) mod match_kind;
+pub(crate) mod match_status;
 pub(crate) mod provider;
 pub(crate) mod quality;
 pub(crate) mod root_folder;

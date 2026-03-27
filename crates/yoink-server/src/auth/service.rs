@@ -178,11 +178,10 @@ impl AuthService {
 
         settings.admin_username = Set(trimmed_username.to_string());
         settings.admin_password_hash = Set(password_hash.clone());
+        settings.must_change_password = Set(false);
         let settings = settings.save(&tx).await?.try_into_model()?;
 
-        db::auth_session::Entity::delete_many()
-            .exec(&self.db)
-            .await?;
+        db::auth_session::Entity::delete_many().exec(&tx).await?;
 
         session.insert(&tx).await?;
 
@@ -225,6 +224,7 @@ impl AuthService {
                 settings.admin_password_hash = Set(hash_password(&random_token(18))?);
             }
             settings.save(&tx).await?;
+            tx.commit().await?;
 
             return Ok(());
         }
@@ -323,4 +323,101 @@ fn hex_encode(bytes: &[u8]) -> String {
         output.push(HEX[(byte & 0x0f) as usize] as char);
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use sea_orm::{Database, EntityTrait};
+
+    use super::AuthService;
+    use crate::{app_config::AuthConfig, db};
+
+    async fn test_db() -> sea_orm::DatabaseConnection {
+        let db_path = format!(
+            "sqlite:/tmp/yoink-auth-test-{}.db?mode=rwc",
+            uuid::Uuid::now_v7()
+        );
+        let conn = Database::connect(&db_path).await.expect("connect test db");
+        conn.get_schema_registry("yoink_server::db::entities::*")
+            .sync(&conn)
+            .await
+            .expect("sync auth test schema");
+        conn
+    }
+
+    fn auth_config() -> AuthConfig {
+        AuthConfig {
+            enabled: true,
+            session_secret: "test-secret".to_string(),
+            init_admin_username: Some("admin".to_string()),
+            init_admin_password: Some("bootstrap-pass".to_string()),
+        }
+    }
+
+    #[tokio::test]
+    async fn bootstrap_persists_initial_password() {
+        let db = test_db().await;
+        let service = AuthService::new(auth_config(), db)
+            .await
+            .expect("create auth service");
+
+        let login = service
+            .login("admin", "bootstrap-pass")
+            .await
+            .expect("login request");
+
+        assert!(login.is_some());
+    }
+
+    #[tokio::test]
+    async fn update_credentials_revokes_old_sessions_and_returns_new_one() {
+        let db = test_db().await;
+        let service = AuthService::new(auth_config(), db.clone())
+            .await
+            .expect("create auth service");
+
+        let old_session = service
+            .login("admin", "bootstrap-pass")
+            .await
+            .expect("login request")
+            .expect("session");
+
+        let new_session = service
+            .update_credentials("new-admin", "new-password")
+            .await
+            .expect("update credentials");
+
+        let old_auth = service
+            .authenticate_request(Some(&old_session.cookie_value), false)
+            .await
+            .expect("authenticate old session");
+        let new_auth = service
+            .authenticate_request(Some(&new_session.cookie_value), false)
+            .await
+            .expect("authenticate new session");
+
+        assert!(old_auth.is_none());
+        let new_auth = new_auth.expect("new session should authenticate");
+        assert_eq!(new_auth.username, "new-admin");
+        assert!(!new_auth.must_change_password);
+
+        let session_count = db::auth_session::Entity::find()
+            .all(&db)
+            .await
+            .expect("load sessions")
+            .len();
+        assert_eq!(session_count, 1);
+
+        let old_login = service
+            .login("admin", "bootstrap-pass")
+            .await
+            .expect("old login request");
+        let new_login = service
+            .login("new-admin", "new-password")
+            .await
+            .expect("new login request");
+
+        assert!(old_login.is_none());
+        assert!(new_login.is_some());
+    }
 }

@@ -141,36 +141,9 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::{
-        DownloadJob, DownloadJobKind, DownloadStatus, MonitoredArtist, TrackInfo, WantedStatus,
-    };
+    use crate::{DownloadJob, DownloadJobKind, DownloadStatus};
 
     // ── Helper factories ────────────────────────────────────────
-
-    fn make_artist(name: &str) -> MonitoredArtist {
-        MonitoredArtist {
-            id: Uuid::now_v7(),
-            name: name.to_string(),
-            image_url: None,
-            bio: None,
-            monitored: true,
-            created_at: Utc::now(),
-        }
-    }
-
-    fn make_album(_artist_id: Uuid, title: &str, release_date: Option<&str>) -> Album {
-        Album {
-            id: Uuid::now_v7(),
-            title: title.to_string(),
-            album_type: None,
-            release_date: release_date.map(|s| s.to_string()),
-            cover_url: None,
-            explicit: false,
-            monitored: false,
-            wanted_status: WantedStatus::Unwanted,
-            created_at: Utc::now(),
-        }
-    }
 
     fn make_job(album_id: Uuid, updated_at: chrono::DateTime<Utc>) -> DownloadJob {
         DownloadJob {
@@ -189,24 +162,6 @@ mod tests {
             error: None,
             created_at: updated_at,
             updated_at,
-        }
-    }
-
-    fn make_track(title: &str, monitored: bool, acquired: bool) -> TrackInfo {
-        TrackInfo {
-            id: Uuid::now_v7(),
-            title: title.to_string(),
-            version: None,
-            disc_number: 1,
-            track_number: 1,
-            duration_secs: 200,
-            isrc: None,
-            explicit: false,
-            quality_override: None,
-            track_artist: None,
-            file_path: None,
-            monitored,
-            acquired,
         }
     }
 

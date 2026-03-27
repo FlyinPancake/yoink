@@ -7,7 +7,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
-    db::{self, provider::Provider},
+    db::{self, match_status::MatchStatus, provider::Provider},
     error::{AppError, AppResult},
     services,
     state::AppState,
@@ -50,7 +50,7 @@ pub(crate) async fn dismiss_match_suggestion(
         .await?
     {
         let mut model: db::artist_match_suggestion::ActiveModel = suggestion.into();
-        model.status = Set("dismissed".to_string());
+        model.status = Set(MatchStatus::Dismissed);
         model.update(&state.db).await?;
         state.notify_sse();
         return Ok(());
@@ -62,7 +62,7 @@ pub(crate) async fn dismiss_match_suggestion(
     {
         let album_id = suggestion.album_id;
         let mut model: db::album_match_suggestion::ActiveModel = suggestion.into();
-        model.status = Set("dismissed".to_string());
+        model.status = Set(MatchStatus::Dismissed);
         model.update(&state.db).await?;
 
         if let Some(artist_id) =
@@ -136,7 +136,7 @@ async fn accept_artist_match_suggestion(
     }
 
     let mut model: db::artist_match_suggestion::ActiveModel = suggestion.into();
-    model.status = Set("accepted".to_string());
+    model.status = Set(MatchStatus::Accepted);
     model.update(&state.db).await?;
 
     let state = state.clone();
@@ -195,7 +195,7 @@ async fn accept_album_match_suggestion(
 
     let album_id = suggestion.album_id;
     let mut model: db::album_match_suggestion::ActiveModel = suggestion.into();
-    model.status = Set("accepted".to_string());
+    model.status = Set(MatchStatus::Accepted);
     model.update(&state.db).await?;
 
     if let Some(artist_id) =

@@ -9,14 +9,13 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    db::{self, provider::Provider},
+    db::{self, match_kind::MatchKind, match_status::MatchStatus, provider::Provider},
     error::{AppError, AppResult},
     providers::{ProviderAlbum, ProviderArtist, ProviderTrack, provider_image_url},
     state::AppState,
     util::{normalize, provider_priority},
 };
 
-const STATUS_PENDING: &str = "pending";
 const ARTIST_CONFIDENCE_MIN: u8 = 86;
 const ALBUM_CONFIDENCE_MIN: u8 = 82;
 const ALBUM_SEARCH_SCORE_MIN: f64 = 0.65;
@@ -85,7 +84,7 @@ impl From<db::artist_match_suggestion::Model> for ArtistMatchSuggestion {
             left_external_id: value.left_external_id,
             right_provider: value.right_provider.to_value(),
             right_external_id: value.right_external_id,
-            match_kind: value.match_kind,
+            match_kind: value.match_kind.to_value(),
             confidence: value.confidence.clamp(0, 100) as u8,
             explanation: value.explanation,
             external_name: value.external_name,
@@ -96,7 +95,7 @@ impl From<db::artist_match_suggestion::Model> for ArtistMatchSuggestion {
             country: value.country,
             tags: parse_tags(value.tags_json.as_deref()),
             popularity: value.popularity.map(|value| value.clamp(0, 100) as u8),
-            status: value.status,
+            status: value.status.to_value(),
         }
     }
 }
@@ -116,7 +115,7 @@ impl From<db::album_match_suggestion::Model> for AlbumMatchSuggestion {
             left_external_id: value.left_external_id,
             right_provider: value.right_provider.to_value(),
             right_external_id: value.right_external_id,
-            match_kind: value.match_kind,
+            match_kind: value.match_kind.to_value(),
             confidence: value.confidence.clamp(0, 100) as u8,
             explanation: value.explanation,
             external_name: value.external_name,
@@ -124,7 +123,7 @@ impl From<db::album_match_suggestion::Model> for AlbumMatchSuggestion {
             image_url: value.image_url,
             tags: parse_tags(value.tags_json.as_deref()),
             popularity: value.popularity.map(|value| value.clamp(0, 100) as u8),
-            status: value.status,
+            status: value.status.to_value(),
         }
     }
 }
@@ -207,7 +206,7 @@ async fn recompute_artist_level_suggestions(
             left_external_id: Set(reference.external_id.clone()),
             right_provider: Set(provider_id),
             right_external_id: Set(candidate.external_id.clone()),
-            match_kind: Set("fuzzy".to_string()),
+            match_kind: Set(MatchKind::Fuzzy),
             confidence: Set(i32::from(confidence)),
             explanation: Set(Some(format!("Artist name fuzzy {:.0}%", score * 100.0))),
             external_name: Set(Some(candidate.name)),
@@ -221,7 +220,7 @@ async fn recompute_artist_level_suggestions(
             country: Set(candidate.country),
             tags_json: Set(serialize_tags(&candidate.tags)),
             popularity: Set(candidate.popularity.map(i32::from)),
-            status: Set(STATUS_PENDING.to_string()),
+            status: Set(MatchStatus::Pending),
             ..db::artist_match_suggestion::ActiveModel::new()
         };
         suggestion.insert(&state.db).await?;
@@ -304,7 +303,7 @@ async fn recompute_album_match_suggestions(
         let (match_kind, confidence, explanation) = if isrc_overlap > 0 {
             let confidence = (90 + (isrc_overlap as u8).saturating_mul(3)).min(100);
             (
-                "isrc_exact".to_string(),
+                MatchKind::IsrcExact,
                 confidence,
                 Some(format!("ISRC overlap: {isrc_overlap} track(s)")),
             )
@@ -315,7 +314,7 @@ async fn recompute_album_match_suggestions(
                 continue;
             }
             (
-                "fuzzy".to_string(),
+                MatchKind::Fuzzy,
                 confidence,
                 Some(format!(
                     "Fuzzy match album={:.0}% track={:.0}%",
@@ -342,7 +341,7 @@ async fn recompute_album_match_suggestions(
                 .map(|image_ref| provider_image_url(provider_id, image_ref, 160))),
             tags_json: Set(None),
             popularity: Set(None),
-            status: Set(STATUS_PENDING.to_string()),
+            status: Set(MatchStatus::Pending),
             ..db::album_match_suggestion::ActiveModel::new()
         };
         suggestion.insert(&state.db).await?;

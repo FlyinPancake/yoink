@@ -1,4 +1,4 @@
-use sea_orm::entity::prelude::*;
+use sea_orm::{QueryFilter, QueryOrder, entity::prelude::*};
 use uuid::Uuid;
 
 #[sea_orm::model]
@@ -27,9 +27,20 @@ impl Entity {
 
     /// Find all junction records for an album, ordered by priority.
     pub fn find_by_album_ordered(album_id: Uuid) -> Select<Entity> {
-        use sea_orm::QueryOrder;
         Entity::find()
             .filter(Column::AlbumId.eq(album_id))
+            .order_by_asc(Column::Priority)
+    }
+
+    /// Find all junction records for a set of albums, ordered by album then priority.
+    pub fn find_by_album_ids_ordered<I>(album_ids: I) -> Select<Entity>
+    where
+        I: IntoIterator<Item = Uuid>,
+    {
+        let album_ids: Vec<Uuid> = album_ids.into_iter().collect();
+        Entity::find()
+            .filter(Column::AlbumId.is_in(album_ids))
+            .order_by_asc(Column::AlbumId)
             .order_by_asc(Column::Priority)
     }
 

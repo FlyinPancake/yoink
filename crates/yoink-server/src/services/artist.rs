@@ -1,6 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, EntityTrait, PaginatorTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
 use tracing::{info, warn};
 use url::Url;
 use uuid::Uuid;
@@ -60,30 +60,57 @@ pub(crate) async fn remove_artist(
     let album_artists = album_artist::Entity::find_by_artist(artist_id)
         .all(&state.db)
         .await?;
-
-    for aa in &album_artists {
-        let artist_count = album_artist::Entity::find_by_album_ordered(aa.album_id)
-            .count(&state.db)
+    let album_ids: Vec<Uuid> = album_artists.iter().map(|aa| aa.album_id).collect();
+    let related_album_artists =
+        album_artist::Entity::find_by_album_ids_ordered(album_ids.iter().copied())
+            .all(&state.db)
             .await?;
+    let mut artist_counts_by_album = HashMap::new();
+    for junction in related_album_artists {
+        *artist_counts_by_album
+            .entry(junction.album_id)
+            .or_insert(0usize) += 1;
+    }
 
-        if artist_count <= 1 {
-            if remove_files {
-                match db::album::Entity::find_by_id(aa.album_id)
-                    .one(&state.db)
-                    .await?
-                {
-                    Some(album) => {
-                        super::downloads::remove_downloaded_album_files(state, &album).await?;
-                    }
-                    None => {
-                        warn!(artist_id = %artist_id, album_id = %aa.album_id, "Album disappeared before files could be removed");
-                    }
+    let albums_to_delete: Vec<Uuid> = album_artists
+        .iter()
+        .filter_map(|aa| {
+            (artist_counts_by_album
+                .get(&aa.album_id)
+                .copied()
+                .unwrap_or_default()
+                <= 1)
+                .then_some(aa.album_id)
+        })
+        .collect();
+
+    let albums_by_id: HashMap<Uuid, db::album::Model> =
+        if remove_files && !albums_to_delete.is_empty() {
+            db::album::Entity::find()
+                .filter(db::album::Column::Id.is_in(albums_to_delete.iter().copied()))
+                .all(&state.db)
+                .await?
+                .into_iter()
+                .map(|album| (album.id, album))
+                .collect()
+        } else {
+            HashMap::new()
+        };
+
+    for album_id in albums_to_delete {
+        if remove_files {
+            match albums_by_id.get(&album_id) {
+                Some(album) => {
+                    super::downloads::remove_downloaded_album_files(state, album).await?;
                 }
-            }
-            db::album::Entity::delete_by_id(aa.album_id)
-                .exec(&state.db)
-                .await?;
+                None => {
+                    warn!(artist_id = %artist_id, album_id = %album_id, "Album disappeared before files could be removed");
+                }
+            };
         }
+        db::album::Entity::delete_by_id(album_id)
+            .exec(&state.db)
+            .await?;
     }
 
     // Cascade deletes provider links, match suggestions, album junctions,

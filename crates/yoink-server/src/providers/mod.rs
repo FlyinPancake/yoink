@@ -469,8 +469,6 @@ mod tests {
         assert_eq!(info.duration_secs, 210);
         assert_eq!(info.isrc.as_deref(), Some("USRC12345678"));
         assert!(info.explicit);
-        // Provider artists used as fallback when override is None
-        assert_eq!(info.track_artist.as_deref(), Some("Artist A feat. B"));
         assert!(info.file_path.is_none());
         assert!(!info.monitored);
         assert!(!info.acquired);
@@ -494,7 +492,6 @@ mod tests {
         assert_eq!(info.disc_number, 5);
         assert_eq!(info.track_number, 99);
         assert!(!info.explicit);
-        assert_eq!(info.track_artist.as_deref(), Some("Override Artist"));
         assert_eq!(info.file_path.as_deref(), Some("/music/file.flac"));
         assert!(info.monitored);
         assert!(info.acquired);

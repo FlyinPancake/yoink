@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sea_orm::{ActiveValue::Set, entity::prelude::*};
+use sea_orm::{ActiveValue::Set, QueryFilter, QueryOrder, entity::prelude::*};
 use yoink_shared::TrackInfo;
 
 #[sea_orm::model]
@@ -80,5 +80,20 @@ impl From<Model> for TrackInfo {
 impl From<ModelEx> for TrackInfo {
     fn from(value: ModelEx) -> Self {
         Model::from(value).into()
+    }
+}
+
+impl Entity {
+    pub fn find_by_album_ids_ordered<I>(album_ids: I) -> Select<Entity>
+    where
+        I: IntoIterator<Item = Uuid>,
+    {
+        let album_ids: Vec<Uuid> = album_ids.into_iter().collect();
+        Entity::find()
+            .filter(Column::AlbumId.is_in(album_ids))
+            .order_by_asc(Column::AlbumId)
+            .order_by_asc(Column::DiscNumber)
+            .order_by_asc(Column::TrackNumber)
+            .order_by_asc(Column::Title)
     }
 }

@@ -10,7 +10,7 @@ pub struct Model {
     pub admin_username: String,
     #[sea_orm(default_value = "")]
     pub admin_password_hash: String,
-    #[sea_orm(default_value = "true")]
+    #[sea_orm(default_value_t = true)]
     pub must_change_password: bool,
     pub created_at: DateTimeUtc,
     pub modified_at: DateTimeUtc,
@@ -71,6 +71,9 @@ impl Entity {
             None => {
                 // If there are no settings, we need to create the default settings row
                 let new_settings = ActiveModel {
+                    admin_username: Set("admin".to_string()),
+                    admin_password_hash: Set(String::new()),
+                    must_change_password: Set(true),
                     ..Default::default()
                 };
                 let new_settings = new_settings.insert(db).await?;

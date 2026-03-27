@@ -1,7 +1,7 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use axum::{Json, extract::State};
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Serialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -47,6 +47,53 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new().routes(routes!(get_wanted))
 }
 
+async fn primary_artist_ids_by_album(
+    state: &AppState,
+    album_ids: &[Uuid],
+) -> Result<HashMap<Uuid, Uuid>, ApiErrorResponse> {
+    let mut primary_artist_ids = HashMap::new();
+    if album_ids.is_empty() {
+        return Ok(primary_artist_ids);
+    }
+
+    let junctions = db::album_artist::Entity::find_by_album_ids_ordered(album_ids.iter().copied())
+        .all(&state.db)
+        .await
+        .map_err(|err| app_error_response(err.into()))?;
+
+    for junction in junctions {
+        primary_artist_ids
+            .entry(junction.album_id)
+            .or_insert(junction.artist_id);
+    }
+
+    Ok(primary_artist_ids)
+}
+
+async fn tracks_by_album(
+    state: &AppState,
+    album_ids: &[Uuid],
+) -> Result<HashMap<Uuid, Vec<TrackInfo>>, ApiErrorResponse> {
+    let mut tracks_by_album = HashMap::new();
+    if album_ids.is_empty() {
+        return Ok(tracks_by_album);
+    }
+
+    let tracks = db::track::Entity::find_by_album_ids_ordered(album_ids.iter().copied())
+        .all(&state.db)
+        .await
+        .map_err(|err| app_error_response(err.into()))?;
+
+    for track in tracks {
+        tracks_by_album
+            .entry(track.album_id)
+            .or_insert_with(Vec::new)
+            .push(track.into_ex().into());
+    }
+
+    Ok(tracks_by_album)
+}
+
 /// Get Wanted
 ///
 /// Returns wanted and partially wanted albums together with their tracks, artists, and jobs.
@@ -89,17 +136,15 @@ async fn get_wanted(State(state): State<AppState>) -> ApiResult<WantedData> {
             .map_err(|err| app_error_response(err.into()))?
     };
 
+    let album_ids: Vec<Uuid> = raw_albums.iter().map(|album| album.id).collect();
+    let primary_artist_ids = primary_artist_ids_by_album(&state, &album_ids).await?;
+    let tracks_by_album = tracks_by_album(&state, &album_ids).await?;
+
     let mut wanted_albums = Vec::with_capacity(raw_albums.len());
     let mut artist_ids = HashSet::new();
 
     for album in raw_albums {
-        let primary_artist_id = db::album_artist::Entity::find()
-            .filter(db::album_artist::Column::AlbumId.eq(album.id))
-            .order_by_asc(db::album_artist::Column::Priority)
-            .one(&state.db)
-            .await
-            .map_err(|err| app_error_response(err.into()))?
-            .map(|junction| junction.artist_id);
+        let primary_artist_id = primary_artist_ids.get(&album.id).copied();
 
         if let Some(artist_id) = primary_artist_id {
             artist_ids.insert(artist_id);
@@ -110,9 +155,7 @@ async fn get_wanted(State(state): State<AppState>) -> ApiResult<WantedData> {
                 artist_id: primary_artist_id,
                 album: album.clone().into(),
             },
-            tracks: services::album::get_album_tracks(&state.db, album.id)
-                .await
-                .map_err(app_error_response)?,
+            tracks: tracks_by_album.get(&album.id).cloned().unwrap_or_default(),
         });
     }
 

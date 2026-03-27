@@ -1,7 +1,7 @@
 use sea_orm::{ActiveValue::Set, DeleteMany, QueryOrder, entity::prelude::*};
 use uuid::Uuid;
 
-use crate::db::provider::Provider;
+use crate::db::{match_kind::MatchKind, match_status::MatchStatus, provider::Provider};
 
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
@@ -16,7 +16,7 @@ pub struct Model {
     pub left_external_id: String,
     pub right_provider: Provider,
     pub right_external_id: String,
-    pub match_kind: String,
+    pub match_kind: MatchKind,
     pub confidence: i32,
     pub explanation: Option<String>,
     pub external_name: Option<String>,
@@ -27,7 +27,7 @@ pub struct Model {
     pub country: Option<String>,
     pub tags_json: Option<String>,
     pub popularity: Option<i32>,
-    pub status: String,
+    pub status: MatchStatus,
     pub created_at: DateTimeUtc,
     pub modified_at: DateTimeUtc,
 }
@@ -66,6 +66,6 @@ impl Entity {
     pub fn delete_pending_for_artist(artist_id: Uuid) -> DeleteMany<Entity> {
         Entity::delete_many()
             .filter(Column::ArtistId.eq(artist_id))
-            .filter(Column::Status.eq("pending"))
+            .filter(Column::Status.eq(MatchStatus::Pending))
     }
 }

@@ -6,7 +6,7 @@ mod worker;
 pub(crate) use io::sanitize_path_component;
 pub(crate) use metadata::{TrackMetadata, write_audio_metadata};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::{Component, Path, PathBuf},
 };
 
@@ -68,22 +68,67 @@ where
         .unwrap_or(Provider::Tidal)
 }
 
-async fn serialize_job(state: &AppState, job: download_job::ModelEx) -> AppResult<DownloadJob> {
+async fn primary_artist_names_by_album_ids(
+    state: &AppState,
+    album_ids: impl IntoIterator<Item = Uuid>,
+) -> AppResult<HashMap<Uuid, String>> {
+    let album_ids: Vec<Uuid> = album_ids.into_iter().collect();
+    if album_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let primary_junctions = db::album_artist::Entity::find_by_album_ids_ordered(album_ids)
+        .all(&state.db)
+        .await?;
+    let mut album_to_artist_id = HashMap::new();
+    let mut artist_ids = HashSet::new();
+
+    for junction in primary_junctions {
+        if album_to_artist_id
+            .insert(junction.album_id, junction.artist_id)
+            .is_none()
+        {
+            artist_ids.insert(junction.artist_id);
+        }
+    }
+
+    if artist_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let artist_names: HashMap<Uuid, String> = db::artist::Entity::find()
+        .filter(db::artist::Column::Id.is_in(artist_ids))
+        .all(&state.db)
+        .await?
+        .into_iter()
+        .map(|artist| (artist.id, artist.name))
+        .collect();
+
+    Ok(album_to_artist_id
+        .into_iter()
+        .filter_map(|(album_id, artist_id)| {
+            artist_names
+                .get(&artist_id)
+                .cloned()
+                .map(|artist_name| (album_id, artist_name))
+        })
+        .collect())
+}
+
+async fn serialize_job(
+    job: download_job::ModelEx,
+    artist_names_by_album: &HashMap<Uuid, String>,
+) -> AppResult<DownloadJob> {
     let album_title = job
         .album
         .as_ref()
         .map(|album| album.title.clone())
         .unwrap_or_default();
     let track_title = job.track.as_ref().map(|track| track.title.clone());
-    let artist_name = if let Some(album) = job.album.as_ref() {
-        album
-            .fetch_primary_artist(&state.db)
-            .await?
-            .map(|artist| artist.name)
-            .unwrap_or_default()
-    } else {
-        String::new()
-    };
+    let artist_name = artist_names_by_album
+        .get(&job.album_id)
+        .cloned()
+        .unwrap_or_default();
 
     Ok(DownloadJob {
         id: job.id,
@@ -109,12 +154,12 @@ async fn serialize_job(state: &AppState, job: download_job::ModelEx) -> AppResul
 }
 
 async fn serialize_jobs(
-    state: &AppState,
     jobs: Vec<download_job::ModelEx>,
+    artist_names_by_album: &HashMap<Uuid, String>,
 ) -> AppResult<Vec<DownloadJob>> {
     let mut out = Vec::with_capacity(jobs.len());
     for job in jobs {
-        out.push(serialize_job(state, job).await?);
+        out.push(serialize_job(job, artist_names_by_album).await?);
     }
     Ok(out)
 }
@@ -122,13 +167,15 @@ async fn serialize_jobs(
 pub(crate) async fn list_jobs(state: &AppState) -> AppResult<Vec<DownloadJob>> {
     let jobs = download_job::Entity::load()
         .with(db::album::Entity)
-        .with((db::album::Entity, db::album_provider_link::Entity))
         .with(db::track::Entity)
         .order_by_desc(download_job::Column::ModifiedAt)
         .all(&state.db)
         .await?;
 
-    serialize_jobs(state, jobs).await
+    let artist_names_by_album =
+        primary_artist_names_by_album_ids(state, jobs.iter().map(|job| job.album_id)).await?;
+
+    serialize_jobs(jobs, &artist_names_by_album).await
 }
 
 pub(crate) async fn list_album_jobs(
@@ -137,14 +184,16 @@ pub(crate) async fn list_album_jobs(
 ) -> AppResult<Vec<DownloadJob>> {
     let jobs = download_job::Entity::load()
         .with(db::album::Entity)
-        .with((db::album::Entity, db::album_provider_link::Entity))
         .with(db::track::Entity)
         .filter(download_job::Column::AlbumId.eq(album_id))
         .order_by_desc(download_job::Column::ModifiedAt)
         .all(&state.db)
         .await?;
 
-    serialize_jobs(state, jobs).await
+    let artist_names_by_album =
+        primary_artist_names_by_album_ids(state, jobs.iter().map(|job| job.album_id)).await?;
+
+    serialize_jobs(jobs, &artist_names_by_album).await
 }
 
 pub(crate) async fn sync_album_wanted_status_from_tracks(
