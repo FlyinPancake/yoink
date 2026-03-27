@@ -78,6 +78,3 @@ utoipa-axum = "0.2.0"
 utoipa-scalar = { version = "0.3.0", features = ["axum"] }
 rust-embed = { version = "8", features = ["mime-guess"] }
 mime_guess = "2"
-
-# ── Internal crates ─────────────────────────────────────────
-yoink-shared = { path = "crates/yoink-shared" }

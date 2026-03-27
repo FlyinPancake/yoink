@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
-use yoink_shared::{Album, ProviderLink, SearchAlbumResult, TrackInfo};
+use crate::api::{Album, ProviderLink, SearchAlbumResult, TrackInfo};
 
 use crate::{
     db::{self, provider::Provider, quality::Quality},
@@ -766,11 +766,11 @@ mod tests {
         assert_eq!(payload[0].artist_name.as_deref(), Some("Primary Artist"));
         assert_eq!(
             payload[0].album.quality_override,
-            Some(yoink_shared::Quality::Lossless)
+            Some(crate::api::Quality::Lossless)
         );
         assert_eq!(
             payload[0].album.wanted_status,
-            yoink_shared::WantedStatus::Wanted
+            crate::api::WantedStatus::Wanted
         );
     }
 
@@ -844,7 +844,7 @@ mod tests {
         assert_eq!(payload[0].artist_name.as_deref(), Some("First Artist"));
         assert_eq!(
             payload[0].album.wanted_status,
-            yoink_shared::WantedStatus::Acquired
+            crate::api::WantedStatus::Acquired
         );
     }
 
@@ -885,7 +885,7 @@ mod tests {
         assert_eq!(payload[0].artist_name, None);
         assert_eq!(
             payload[0].album.wanted_status,
-            yoink_shared::WantedStatus::Unwanted
+            crate::api::WantedStatus::Unwanted
         );
     }
 }

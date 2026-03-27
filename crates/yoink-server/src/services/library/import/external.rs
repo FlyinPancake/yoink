@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use yoink_shared::{ImportConfirmation, ImportPreviewItem, ImportResultSummary, ManualImportMode};
+use crate::api::{ImportConfirmation, ImportPreviewItem, ImportResultSummary, ManualImportMode};
 
 use crate::{error::AppResult, state::AppState};
 

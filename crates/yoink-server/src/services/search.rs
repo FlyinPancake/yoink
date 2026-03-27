@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
+use crate::api::{SearchAlbumResult, SearchArtistResult, SearchTrackResult};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
-use yoink_shared::{SearchAlbumResult, SearchArtistResult, SearchTrackResult};
 
 use crate::{
     db::{self, wanted_status::WantedStatus},

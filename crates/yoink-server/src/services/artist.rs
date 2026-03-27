@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::api::ArtistImageOption;
 use sea_orm::{
-    ActiveValue::Set, ColumnTrait, EntityLoaderTrait, EntityTrait, IntoActiveModel,
-    PaginatorTrait, QueryFilter, TransactionTrait,
+    ActiveValue::Set, ColumnTrait, EntityLoaderTrait, EntityTrait, IntoActiveModel, PaginatorTrait,
+    QueryFilter, TransactionTrait,
 };
 use tracing::{info, warn};
 use url::Url;
 use uuid::Uuid;
-use yoink_shared::ArtistImageOption;
 
 use crate::{
     db::{self, album_artist, artist, artist_provider_link, provider::Provider},

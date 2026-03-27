@@ -7,7 +7,7 @@ use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
-use yoink_shared::{Album, DownloadJob, MonitoredArtist, TrackInfo};
+use crate::api::{Album, DownloadJob, MonitoredArtist, TrackInfo};
 
 use crate::{
     db::{self, wanted_status::WantedStatus},

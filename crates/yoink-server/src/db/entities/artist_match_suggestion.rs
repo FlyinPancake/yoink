@@ -1,4 +1,4 @@
-use sea_orm::{ActiveValue::Set, DeleteMany, QueryOrder, entity::prelude::*};
+use sea_orm::{ActiveValue::Set, DeleteMany, entity::prelude::*};
 use uuid::Uuid;
 
 use crate::db::{match_kind::MatchKind, match_status::MatchStatus, provider::Provider};
@@ -55,14 +55,6 @@ impl ActiveModelBehavior for ActiveModel {
 }
 
 impl Entity {
-    pub fn find_by_artist(artist_id: Uuid) -> Select<Entity> {
-        Entity::find()
-            .filter(Column::ArtistId.eq(artist_id))
-            .order_by_asc(Column::Status)
-            .order_by_desc(Column::Confidence)
-            .order_by_desc(Column::CreatedAt)
-    }
-
     pub fn delete_pending_for_artist(artist_id: Uuid) -> DeleteMany<Entity> {
         Entity::delete_many()
             .filter(Column::ArtistId.eq(artist_id))

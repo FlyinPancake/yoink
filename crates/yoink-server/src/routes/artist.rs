@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
-use yoink_shared::{Album, ArtistImageOption, MonitoredArtist, ProviderLink, SearchArtistResult};
+use crate::api::{Album, ArtistImageOption, MonitoredArtist, ProviderLink, SearchArtistResult};
 
 use crate::{
     db::{self, provider::Provider, quality::Quality},

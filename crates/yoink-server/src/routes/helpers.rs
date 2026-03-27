@@ -6,10 +6,9 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 use crate::{
-    error::AppError,
+    error::{ApiError, AppError},
     redirects::{percent_encode_component, sanitize_relative_target},
 };
-use yoink_shared::YoinkError;
 
 // ── Shared JSON error envelope ──────────────────────────────────────
 
@@ -42,12 +41,12 @@ impl IntoResponse for ApiErrorResponse {
 
 /// Convert an [`AppError`] into a JSON [`ApiErrorResponse`].
 pub(super) fn app_error_response(err: AppError) -> ApiErrorResponse {
-    let yoink: YoinkError = err.into();
-    yoink_error_response(yoink)
+    let api_error: ApiError = err.into();
+    api_error_response(api_error)
 }
 
-/// Convert a [`YoinkError`] into a JSON [`ApiErrorResponse`].
-pub(super) fn yoink_error_response(err: YoinkError) -> ApiErrorResponse {
+/// Convert an [`ApiError`] into a JSON [`ApiErrorResponse`].
+pub(super) fn api_error_response(err: ApiError) -> ApiErrorResponse {
     ApiErrorResponse {
         error: err.to_string(),
         detail: None,

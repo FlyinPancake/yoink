@@ -7,7 +7,7 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use yoink_shared::{LibraryTrack, SearchTrackResult};
+use crate::api::{LibraryTrack, SearchTrackResult};
 
 use crate::{
     db::provider::Provider,

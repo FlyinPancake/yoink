@@ -1,4 +1,4 @@
-use yoink_shared::{ImportConfirmation, ImportPreviewItem, ImportResultSummary};
+use crate::api::{ImportConfirmation, ImportPreviewItem, ImportResultSummary};
 
 use crate::{error::AppResult, state::AppState};
 

@@ -168,11 +168,11 @@ pub(crate) struct ProviderTrack {
 
 #[cfg(test)]
 /// Local-state overrides applied when converting a [`ProviderTrack`] into
-/// a [`yoink_shared::TrackInfo`].  Fields default to sensible "fresh track"
+/// a [`crate::api::TrackInfo`].  Fields default to sensible "fresh track"
 /// values so callers only need to set what differs.
 pub(crate) struct LocalTrackOverrides {
     pub id: uuid::Uuid,
-    pub quality_override: Option<yoink_shared::Quality>,
+    pub quality_override: Option<crate::api::Quality>,
     pub file_path: Option<String>,
     pub monitored: bool,
     pub acquired: bool,
@@ -209,9 +209,9 @@ impl Default for LocalTrackOverrides {
 impl ProviderTrack {
     /// Convert this provider track into a [`TrackInfo`], applying
     /// local-state overrides for fields that differ by call site.
-    pub(crate) fn into_track_info(self, overrides: LocalTrackOverrides) -> yoink_shared::TrackInfo {
+    pub(crate) fn into_track_info(self, overrides: LocalTrackOverrides) -> crate::api::TrackInfo {
         let secs = self.duration_secs;
-        yoink_shared::TrackInfo {
+        crate::api::TrackInfo {
             id: overrides.id,
             title: self.title,
             version: self.version,
@@ -230,9 +230,9 @@ impl ProviderTrack {
 
     /// Borrowing variant of [`into_track_info`](Self::into_track_info)
     /// for call sites that continue using the `ProviderTrack` afterward.
-    pub(crate) fn to_track_info(&self, overrides: LocalTrackOverrides) -> yoink_shared::TrackInfo {
+    pub(crate) fn to_track_info(&self, overrides: LocalTrackOverrides) -> crate::api::TrackInfo {
         let secs = self.duration_secs;
-        yoink_shared::TrackInfo {
+        crate::api::TrackInfo {
             id: overrides.id,
             title: self.title.clone(),
             version: self.version.clone(),
@@ -486,7 +486,7 @@ mod tests {
             file_path: Some("/music/file.flac".to_string()),
             monitored: true,
             acquired: true,
-            quality_override: Some(yoink_shared::Quality::Lossless),
+            quality_override: Some(crate::api::Quality::Lossless),
         });
 
         assert_eq!(info.disc_number, 5);
@@ -495,7 +495,7 @@ mod tests {
         assert_eq!(info.file_path.as_deref(), Some("/music/file.flac"));
         assert!(info.monitored);
         assert!(info.acquired);
-        assert_eq!(info.quality_override, Some(yoink_shared::Quality::Lossless));
+        assert_eq!(info.quality_override, Some(crate::api::Quality::Lossless));
     }
 
     #[test]

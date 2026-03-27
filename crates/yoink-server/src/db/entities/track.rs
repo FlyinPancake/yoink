@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use sea_orm::{ActiveValue::Set, QueryFilter, QueryOrder, entity::prelude::*};
-use yoink_shared::TrackInfo;
 
 use crate::db::quality::Quality;
 
@@ -54,35 +53,6 @@ impl ActiveModelBehavior for ActiveModel {
             self.created_at = Set(now);
         }
         Ok(self)
-    }
-}
-
-impl From<Model> for TrackInfo {
-    fn from(value: Model) -> Self {
-        let acquired = value.file_path.is_some()
-            || value.status == super::wanted_status::WantedStatus::Acquired;
-
-        TrackInfo {
-            id: value.id,
-            title: value.title,
-            version: value.version,
-            disc_number: value.disc_number.unwrap_or(1),
-            track_number: value.track_number.unwrap_or(1),
-            duration_secs: value.duration.unwrap_or_default(),
-            isrc: value.isrc,
-            explicit: value.explicit,
-            file_path: value.file_path,
-            monitored: value.status != super::wanted_status::WantedStatus::Unmonitored,
-            acquired,
-            quality_override: value.quality_override.map(Into::into),
-            track_artist: None,
-        }
-    }
-}
-
-impl From<ModelEx> for TrackInfo {
-    fn from(value: ModelEx) -> Self {
-        Model::from(value).into()
     }
 }
 

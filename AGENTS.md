@@ -8,7 +8,6 @@ Guidance for coding agents working in `yoink`.
 - The frontend is built separately and embedded into the server binary via `rust-embed`.
 - Workspace crates:
   - `crates/yoink-server`: API server, auth, providers, services, DB entities, background workers.
-  - `crates/yoink-shared`: shared models, actions, errors, and helpers used by server and frontend-generated API types.
 
 ## Repo-Specific Rule Files
 - Checked for Cursor rules in `.cursor/rules/` and `.cursorrules`: none found.
@@ -39,7 +38,6 @@ Guidance for coding agents working in `yoink`.
 - Format check: `cargo fmt --check`
 - Lint: `cargo clippy --package yoink-server -- -D warnings`
 - Server tests: `cargo test -p yoink-server`
-- Shared crate tests: `cargo test -p yoink-shared`
 - Whole workspace tests: `cargo test --workspace`
 - List backend tests: `cargo test -p yoink-server -- --list`
 - Run tests matching a name substring: `cargo test -p yoink-server list_jobs_returns_album_and_track_jobs`
@@ -64,7 +62,6 @@ Guidance for coding agents working in `yoink`.
 
 ## Validation Guidance
 - Small Rust change: `cargo fmt --check && cargo test -p yoink-server`
-- Shared model change: `cargo fmt --check && cargo test -p yoink-shared`
 - Frontend change: run `bun run lint && bun run fmt:check && bun run test` in `frontend/`
 - API contract change: also run `mise run gen-frontend-types`
 - Release-oriented change: run `bun run build` in `frontend/` before `cargo build -p yoink-server --release`
@@ -93,7 +90,7 @@ Guidance for coding agents working in `yoink`.
 - Add doc comments for public or non-obvious behavior, not for obvious plumbing.
 
 ### Types and Data Modeling
-- Shared API/domain types live in `crates/yoink-shared`.
+- Server-owned API/OpenAPI DTOs live in `crates/yoink-server/src/api/`.
 - Shared models usually derive `Serialize`, `Deserialize`, and `ToSchema`.
 - Use `Uuid::now_v7()` for new persistent IDs; SeaORM active models commonly set this in `ActiveModelBehavior::new()`.
 - Prefer enums over raw strings for domain state such as quality, wanted status, or download status.
@@ -109,7 +106,7 @@ Guidance for coding agents working in `yoink`.
 
 ### Error Handling
 - Backend code uses `AppResult<T>` and `AppError` from `crates/yoink-server/src/error.rs`.
-- Shared API errors use `YoinkError` in `crates/yoink-shared`.
+- API errors use `ApiError` in `crates/yoink-server/src/error.rs`.
 - Prefer contextual error variants carrying fields like `operation`, `resource`, `reason`, `service`, or `path`.
 - Prefer helper constructors such as `AppError::not_found(...)` instead of rebuilding strings at call sites.
 - Use `?` for propagation.

@@ -6,9 +6,7 @@ use axum::{
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
-use yoink_shared::DownloadJob;
-
-use crate::state::AppState;
+use crate::{api::DownloadJob, state::AppState};
 
 use super::helpers::{ApiErrorResponse, app_error_response};
 

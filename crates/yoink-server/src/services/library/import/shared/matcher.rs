@@ -4,9 +4,9 @@ use std::{
 };
 
 use sea_orm::{ActiveEnum, ColumnTrait, EntityTrait, QueryFilter};
-use yoink_shared::ImportAlbumCandidate;
 
 use crate::{
+    api::ImportAlbumCandidate,
     db::{album, album_artist, artist, track, wanted_status::WantedStatus},
     error::AppResult,
     state::AppState,

@@ -51,40 +51,6 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }
 
-impl From<Model> for yoink_shared::Album {
-    fn from(value: Model) -> Self {
-        Self {
-            id: value.id,
-            title: value.title,
-            album_type: Some(value.album_type.to_value()),
-            release_date: value.release_date.map(|d| d.to_string()),
-            cover_url: value.cover_url.map(|u| u.to_string()),
-            explicit: value.explicit,
-            monitored: value.wanted_status != WantedStatus::Unmonitored,
-            wanted_status: value.wanted_status.into(),
-            quality_override: value.requested_quality.map(Into::into),
-            created_at: value.created_at,
-        }
-    }
-}
-
-impl From<ModelEx> for yoink_shared::Album {
-    fn from(value: ModelEx) -> Self {
-        Model::from(value).into()
-    }
-}
-
-impl From<WantedStatus> for yoink_shared::WantedStatus {
-    fn from(value: WantedStatus) -> Self {
-        match value {
-            WantedStatus::Unmonitored => Self::Unwanted,
-            WantedStatus::Wanted => Self::Wanted,
-            WantedStatus::InProgress => Self::InProgress,
-            WantedStatus::Acquired => Self::Acquired,
-        }
-    }
-}
-
 impl ModelEx {
     pub async fn fetch_primary_artist<C>(
         &self,

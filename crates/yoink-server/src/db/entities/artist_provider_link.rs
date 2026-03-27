@@ -80,20 +80,3 @@ impl Entity {
             .filter(Column::ExternalId.eq(external_id.to_string()))
     }
 }
-
-impl From<Model> for yoink_shared::ProviderLink {
-    fn from(value: Model) -> Self {
-        Self {
-            provider: value.provider.to_value(),
-            external_id: value.external_id,
-            external_url: value.external_url,
-            external_name: value.external_name,
-        }
-    }
-}
-
-impl From<ModelEx> for yoink_shared::ProviderLink {
-    fn from(value: ModelEx) -> Self {
-        Model::from(value).into()
-    }
-}

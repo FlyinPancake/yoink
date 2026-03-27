@@ -1072,15 +1072,10 @@ export interface components {
             must_change_password: boolean;
             username?: string | null;
         };
-        /** @description A single entry returned by the server-side path browser. */
         BrowseEntry: {
-            /** @description `true` when the entry is a recognised audio file. */
             is_audio: boolean;
-            /** @description `true` when the entry is a directory. */
             is_dir: boolean;
-            /** @description Display name (file or directory name, not full path). */
             name: string;
-            /** @description Absolute path on the server. */
             path: string;
         };
         BrowsePathRequest: {
@@ -1151,19 +1146,11 @@ export interface components {
         DownloadJobKind: "album" | "track";
         /** @enum {string} */
         DownloadStatus: "queued" | "resolving" | "downloading" | "completed" | "failed";
-        /**
-         * @description User-confirmed external import: which source to import, how, and the
-         *     individual album-level confirmations.
-         */
         ExternalImportConfirmation: {
-            /** @description Per-album confirmations (same structure as the library-scan import). */
             items: components["schemas"]["ImportConfirmation"][];
-            /** @description Copy or hardlink. */
             mode: components["schemas"]["ManualImportMode"];
-            /** @description Absolute path on the server that was scanned. */
             source_path: string;
         };
-        /** @description A candidate album match for a discovered local folder. */
         ImportAlbumCandidate: {
             acquired: boolean;
             /** Format: uuid */
@@ -1180,7 +1167,6 @@ export interface components {
             monitored: boolean;
             release_date?: string | null;
         };
-        /** @description User-confirmed import selection for a single item. */
         ImportConfirmation: {
             /** Format: uuid */
             album_id?: string | null;
@@ -1191,12 +1177,8 @@ export interface components {
             preview_id: string;
             year?: string | null;
         };
-        /**
-         * @description Match quality for a discovered local album during import preview.
-         * @enum {string}
-         */
+        /** @enum {string} */
         ImportMatchStatus: "matched" | "partial" | "unmatched";
-        /** @description A discovered local album directory with match candidates. */
         ImportPreviewItem: {
             already_imported: boolean;
             audio_file_count: number;
@@ -1209,7 +1191,6 @@ export interface components {
             relative_path: string;
             selected_candidate?: number | null;
         };
-        /** @description Summary of a confirmed import run. */
         ImportResultSummary: {
             artists_added: number;
             errors: string[];
@@ -1293,14 +1274,8 @@ export interface components {
         /** @description An album search result from a metadata provider. */
         SearchAlbumResult: {
             album_type?: string | null;
-            /**
-             * @description `Some(true)` when the album is already in the library.
-             *     Only populated by server-side search handlers; defaults to `None`.
-             */
             already_added?: boolean | null;
-            /** @description Provider-specific external ID for the primary artist. */
             artist_external_id: string;
-            /** @description Primary artist name for display. */
             artist_name: string;
             cover_url?: string | null;
             explicit: boolean;
@@ -1317,10 +1292,6 @@ export interface components {
         };
         /** @description A search result from a metadata provider. */
         SearchArtistResult: {
-            /**
-             * @description `Some(true)` when the artist is already in the library.
-             *     Only populated by server-side search handlers; defaults to `None`.
-             */
             already_monitored?: boolean | null;
             artist_type?: string | null;
             country?: string | null;
@@ -1338,15 +1309,9 @@ export interface components {
         SearchTrackResult: {
             album_cover_url?: string | null;
             album_external_id: string;
-            /** @description Album info for context. */
             album_title: string;
-            /**
-             * @description `Some(true)` when the track is already in the library.
-             *     Only populated by server-side search handlers; defaults to `None`.
-             */
             already_added?: boolean | null;
             artist_external_id: string;
-            /** @description Display-ready track artist string. */
             artist_name: string;
             /** Format: int32 */
             duration_secs: number;

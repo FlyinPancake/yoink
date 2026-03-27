@@ -1,10 +1,13 @@
 use std::{collections::HashMap, path::Path};
 
-use yoink_shared::{
-    ImportConfirmation, ImportMatchStatus, ImportPreviewItem, ImportResultSummary, ManualImportMode,
+use crate::{
+    api::{
+        ImportConfirmation, ImportMatchStatus, ImportPreviewItem, ImportResultSummary,
+        ManualImportMode,
+    },
+    error::AppResult,
+    state::AppState,
 };
-
-use crate::{error::AppResult, state::AppState};
 
 mod discover;
 mod matcher;
@@ -257,7 +260,7 @@ mod tests {
             &state,
             music_root.path(),
             None,
-            vec![yoink_shared::ImportConfirmation {
+            vec![crate::api::ImportConfirmation {
                 preview_id: preview[0].id.clone(),
                 artist_name: preview[0].discovered_artist.clone(),
                 album_title: preview[0].discovered_album.clone(),
@@ -318,8 +321,8 @@ mod tests {
         let summary = confirm_source(
             &state,
             source_root.path(),
-            Some(yoink_shared::ManualImportMode::Copy),
-            vec![yoink_shared::ImportConfirmation {
+            Some(crate::api::ManualImportMode::Copy),
+            vec![crate::api::ImportConfirmation {
                 preview_id: preview[0].id.clone(),
                 artist_name: preview[0].discovered_artist.clone(),
                 album_title: preview[0].discovered_album.clone(),

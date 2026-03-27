@@ -16,9 +16,9 @@ use sea_orm::{
 };
 use tokio::fs;
 use uuid::Uuid;
-use yoink_shared::{DownloadJob, DownloadJobKind};
 
 use crate::{
+    api::{DownloadJob, DownloadJobKind},
     db::{
         self, download_job, download_status::DownloadStatus, provider::Provider,
         wanted_status::WantedStatus,
@@ -731,11 +731,11 @@ pub(crate) async fn remove_downloaded_album_files(
 mod tests {
     use std::path::PathBuf;
 
+    use crate::api::DownloadJobKind;
     use sea_orm::{
         ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
         IntoActiveModel, QueryFilter,
     };
-    use yoink_shared::DownloadJobKind;
 
     use super::{
         cancel_job, clear_completed_jobs, enqueue_album_download, enqueue_track_download,

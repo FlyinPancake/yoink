@@ -4665,21 +4665,6 @@ dependencies = [
  "utoipa-scalar",
  "uuid",
  "veil",
- "yoink-shared",
-]
-
-[[package]]
-name = "yoink-shared"
-version = "0.1.2"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "url",
- "utoipa",
- "uuid",
 ]
 
 [[package]]

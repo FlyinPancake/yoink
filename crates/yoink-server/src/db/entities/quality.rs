@@ -34,28 +34,6 @@ impl FromStr for Quality {
     }
 }
 
-impl From<Quality> for yoink_shared::Quality {
-    fn from(value: Quality) -> Self {
-        match value {
-            Quality::Low => Self::Low,
-            Quality::High => Self::High,
-            Quality::Lossless => Self::Lossless,
-            Quality::HiRes => Self::HiRes,
-        }
-    }
-}
-
-impl From<yoink_shared::Quality> for Quality {
-    fn from(value: yoink_shared::Quality) -> Self {
-        match value {
-            yoink_shared::Quality::Low => Self::Low,
-            yoink_shared::Quality::High => Self::High,
-            yoink_shared::Quality::Lossless => Self::Lossless,
-            yoink_shared::Quality::HiRes => Self::HiRes,
-        }
-    }
-}
-
 impl Quality {
     pub fn as_str(&self) -> &str {
         match self {

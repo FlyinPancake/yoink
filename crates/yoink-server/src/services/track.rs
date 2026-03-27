@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::api::LibraryTrack;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
     QueryOrder,
 };
 use tracing::{info, warn};
 use uuid::Uuid;
-use yoink_shared::LibraryTrack;
 
 use crate::{
     db::{

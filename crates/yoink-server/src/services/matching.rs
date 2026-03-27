@@ -1,9 +1,7 @@
 use std::collections::HashSet;
 
 use chrono::Datelike;
-use sea_orm::{
-    ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait, ModelTrait,
-};
+use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait, ModelTrait};
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;

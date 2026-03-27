@@ -1,3 +1,13 @@
+use crate::{
+    api::{Album, DownloadJob, MonitoredArtist, ProviderLink, TrackInfo},
+    db::{
+        self, album, album_artist, download_job, download_status::DownloadStatus,
+        provider::Provider, quality::Quality, wanted_status::WantedStatus,
+    },
+    error::{AppError, AppResult},
+    services,
+    state::AppState,
+};
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
@@ -8,17 +18,6 @@ use serde::Serialize;
 use tracing::info;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use yoink_shared::{Album, DownloadJob, MonitoredArtist, ProviderLink, TrackInfo};
-
-use crate::{
-    db::{
-        self, album, album_artist, download_job, download_status::DownloadStatus,
-        provider::Provider, quality::Quality, wanted_status::WantedStatus,
-    },
-    error::{AppError, AppResult},
-    services,
-    state::AppState,
-};
 
 use super::helpers;
 use super::matching::AlbumMatchSuggestion;

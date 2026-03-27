@@ -63,7 +63,7 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
     path = "/api/auth/status",
     tag = TAG,
     responses(
-        (status = 200, description = "Authentication status retrieved successfully", body = yoink_shared::AuthStatus),
+        (status = 200, description = "Authentication status retrieved successfully", body = crate::api::AuthStatus),
         (status = 401, description = "User is not authenticated"),
         (status = 500, description = "Failed to retrieve authentication status"),
     )
@@ -75,7 +75,7 @@ pub(super) async fn auth_status(
     if !state.auth.enabled() {
         return (
             StatusCode::OK,
-            Json(yoink_shared::AuthStatus {
+            Json(crate::api::AuthStatus {
                 auth_enabled: false,
                 authenticated: true,
                 username: None,
@@ -93,7 +93,7 @@ pub(super) async fn auth_status(
     {
         Ok(Some(session)) => (
             StatusCode::OK,
-            Json(yoink_shared::AuthStatus {
+            Json(crate::api::AuthStatus {
                 auth_enabled: true,
                 authenticated: true,
                 username: Some(session.username),

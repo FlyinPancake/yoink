@@ -44,22 +44,3 @@ impl ActiveModelBehavior for ActiveModel {
         Ok(self)
     }
 }
-
-impl From<Model> for yoink_shared::MonitoredArtist {
-    fn from(value: Model) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            image_url: value.image_url,
-            bio: value.bio,
-            monitored: value.monitored,
-            created_at: value.created_at,
-        }
-    }
-}
-
-impl From<ModelEx> for yoink_shared::MonitoredArtist {
-    fn from(value: ModelEx) -> Self {
-        Model::from(value).into()
-    }
-}

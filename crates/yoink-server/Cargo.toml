@@ -7,8 +7,6 @@ edition.workspace = true
 name = "yoink-server"
 
 [dependencies]
-yoink-shared = { workspace = true, features = ["ssr"] }
-
 async-trait.workspace = true
 argon2.workspace = true
 axum.workspace = true

@@ -1,8 +1,6 @@
 use sea_orm::{ActiveValue::Set, entity::prelude::*};
 
 use crate::db::provider::Provider;
-use crate::services::helpers::default_provider_album_url;
-
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "album_provider_links")]
@@ -40,18 +38,5 @@ impl ActiveModelBehavior for ActiveModel {
             self.created_at = Set(now);
         }
         Ok(self)
-    }
-}
-
-impl From<Model> for yoink_shared::ProviderLink {
-    fn from(value: Model) -> Self {
-        Self {
-            provider: value.provider.to_value(),
-            external_url: value.external_url.or_else(|| {
-                default_provider_album_url(&value.provider.to_value(), &value.provider_album_id)
-            }),
-            external_name: value.external_name,
-            external_id: value.provider_album_id,
-        }
     }
 }

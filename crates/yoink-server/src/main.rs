@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 
 mod actions;
+mod api;
 mod app_config;
 mod auth;
 mod config;

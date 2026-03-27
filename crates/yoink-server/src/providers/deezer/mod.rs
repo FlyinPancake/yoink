@@ -547,7 +547,7 @@ impl MetadataProvider for DeezerProvider {
                 let (artist_name, artist_external_id) = a
                     .artist
                     .map(|ar| (ar.name, ar.id.to_string()))
-                    .unwrap_or_else(|| (yoink_shared::UNKNOWN_ARTIST.to_string(), String::new()));
+                    .unwrap_or_else(|| (crate::api::UNKNOWN_ARTIST.to_string(), String::new()));
 
                 let album_type = a
                     .record_type
@@ -584,13 +584,13 @@ impl MetadataProvider for DeezerProvider {
                 let (artist_name, artist_external_id) = t
                     .artist
                     .map(|ar| (ar.name, ar.id.to_string()))
-                    .unwrap_or_else(|| (yoink_shared::UNKNOWN_ARTIST.to_string(), String::new()));
+                    .unwrap_or_else(|| (crate::api::UNKNOWN_ARTIST.to_string(), String::new()));
 
                 let (album_title, album_external_id, album_cover_ref) = t
                     .album
                     .map(|al| (al.title, al.id.to_string(), al.md5_image))
                     .unwrap_or_else(|| {
-                        (yoink_shared::UNKNOWN_ALBUM.to_string(), String::new(), None)
+                        (crate::api::UNKNOWN_ALBUM.to_string(), String::new(), None)
                     });
 
                 ProviderSearchTrack {

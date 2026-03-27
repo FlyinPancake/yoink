@@ -1,8 +1,7 @@
 use tokio::fs;
 
-use yoink_shared::BrowseEntry;
-
 use crate::{
+    api::BrowseEntry,
     error::{AppError, AppResult},
     util::is_audio_extension,
 };

@@ -9,9 +9,9 @@ use sea_orm::{
     EntityTrait, IntoActiveModel, QueryFilter, TransactionTrait,
 };
 use tokio::fs;
-use yoink_shared::{ImportConfirmation, ManualImportMode};
 
 use crate::{
+    api::{ImportConfirmation, ManualImportMode},
     db::{
         album, album_artist, album_type::AlbumType, artist, track, track_artist,
         wanted_status::WantedStatus,
