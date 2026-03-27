@@ -32,8 +32,6 @@ pub(crate) enum AppError {
     Metadata { operation: String, reason: String },
     #[error("Download pipeline error at {stage}: {reason}")]
     DownloadPipeline { stage: String, reason: String },
-    #[error("Background task join error: {reason}")]
-    TaskJoin { reason: String },
     #[error("Not found: {resource}")]
     NotFound {
         resource: String,
@@ -110,12 +108,6 @@ impl AppError {
             reason: reason.into(),
         }
     }
-
-    pub(crate) fn task_join(reason: impl Into<String>) -> Self {
-        Self::TaskJoin {
-            reason: reason.into(),
-        }
-    }
 }
 
 impl From<AppError> for YoinkError {
@@ -157,9 +149,6 @@ impl From<AppError> for YoinkError {
             },
             AppError::DownloadPipeline { stage, reason } => YoinkError::Internal {
                 message: format!("download:{stage}: {reason}"),
-            },
-            AppError::TaskJoin { reason } => YoinkError::Internal {
-                message: format!("task_join: {reason}"),
             },
         }
     }

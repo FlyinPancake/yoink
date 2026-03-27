@@ -14,36 +14,6 @@ use thiserror::Error;
 
 use crate::db::{provider::Provider, quality::Quality};
 
-// ── Shared helpers ──────────────────────────────────────────────────
-
-/// Extract a display-ready artist string from a provider extra map.
-/// Looks for "artists" or "artist" keys containing arrays of objects with "name".
-pub(crate) fn extract_artist_display(extra: &HashMap<String, Value>) -> Option<String> {
-    for key in ["artists", "artist"] {
-        match extra.get(key) {
-            Some(Value::Array(items)) if !items.is_empty() => {
-                let names: Vec<&str> = items
-                    .iter()
-                    .filter_map(|v| match v {
-                        Value::String(s) => Some(s.as_str()),
-                        Value::Object(obj) => obj
-                            .get("name")
-                            .or_else(|| obj.get("title"))
-                            .and_then(|n| n.as_str()),
-                        _ => None,
-                    })
-                    .collect();
-                if !names.is_empty() {
-                    return Some(names.join("; "));
-                }
-            }
-            Some(Value::String(s)) if !s.is_empty() => return Some(s.clone()),
-            _ => {}
-        }
-    }
-    None
-}
-
 // ── Provider error ──────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Error)]
@@ -176,8 +146,6 @@ pub(crate) struct ProviderAlbum {
     pub cover_ref: Option<String>,
     pub url: Option<String>,
     pub explicit: bool,
-    /// Artists credited on this album (may be empty if provider doesn't supply them).
-    pub artists: Vec<ProviderAlbumArtist>,
 }
 
 /// A track returned by a metadata provider.
@@ -190,21 +158,21 @@ pub(crate) struct ProviderTrack {
     pub disc_number: Option<i32>,
     pub duration_secs: i32,
     pub isrc: Option<String>,
-    /// Display-ready track artist string (e.g. "Artist A feat. Artist B").
-    pub artists: Option<String>,
     /// Whether the track is marked explicit.
     pub explicit: bool,
     /// Provider-specific extra metadata (for tagging).
     pub extra: HashMap<String, Value>,
 }
 
+// TODO: remove impl, and convert the tests
+
+#[cfg(test)]
 /// Local-state overrides applied when converting a [`ProviderTrack`] into
 /// a [`yoink_shared::TrackInfo`].  Fields default to sensible "fresh track"
 /// values so callers only need to set what differs.
 pub(crate) struct LocalTrackOverrides {
     pub id: uuid::Uuid,
     pub quality_override: Option<yoink_shared::Quality>,
-    pub track_artist: Option<String>,
     pub file_path: Option<String>,
     pub monitored: bool,
     pub acquired: bool,
@@ -215,27 +183,29 @@ pub(crate) struct LocalTrackOverrides {
     pub track_number: Option<i32>,
     /// Override explicit flag. `None` uses the provider value.
     pub explicit: Option<bool>,
-    /// Override duration display. `None` uses `format_duration(secs)`.
-    pub duration_display: Option<String>,
 }
 
+// TODO: remove impl, and convert the tests
+
+#[cfg(test)]
 impl Default for LocalTrackOverrides {
     fn default() -> Self {
         Self {
             id: uuid::Uuid::now_v7(),
             quality_override: None,
-            track_artist: None,
             file_path: None,
             monitored: false,
             acquired: false,
             disc_number: None,
             track_number: None,
             explicit: None,
-            duration_display: None,
         }
     }
 }
 
+// TODO: remove impl, and convert the tests
+
+#[cfg(test)]
 impl ProviderTrack {
     /// Convert this provider track into a [`TrackInfo`], applying
     /// local-state overrides for fields that differ by call site.
@@ -251,7 +221,7 @@ impl ProviderTrack {
             isrc: self.isrc,
             explicit: overrides.explicit.unwrap_or(self.explicit),
             quality_override: overrides.quality_override,
-            track_artist: overrides.track_artist.or(self.artists),
+            track_artist: None,
             file_path: overrides.file_path,
             monitored: overrides.monitored,
             acquired: overrides.acquired,
@@ -272,7 +242,7 @@ impl ProviderTrack {
             isrc: self.isrc.clone(),
             explicit: overrides.explicit.unwrap_or(self.explicit),
             quality_override: overrides.quality_override,
-            track_artist: overrides.track_artist.or_else(|| self.artists.clone()),
+            track_artist: None,
             file_path: overrides.file_path,
             monitored: overrides.monitored,
             acquired: overrides.acquired,
@@ -441,89 +411,7 @@ pub fn provider_image_url(provider: Provider, image_ref: &str, size: u16) -> Str
 mod tests {
     use std::collections::HashMap;
 
-    use serde_json::json;
-
     use super::*;
-
-    // ── extract_artist_display ──────────────────────────────────
-
-    #[test]
-    fn extract_artist_display_array_of_objects_with_name() {
-        let mut extra = HashMap::new();
-        extra.insert(
-            "artists".to_string(),
-            json!([{"name": "Artist A"}, {"name": "Artist B"}]),
-        );
-        assert_eq!(
-            extract_artist_display(&extra),
-            Some("Artist A; Artist B".to_string())
-        );
-    }
-
-    #[test]
-    fn extract_artist_display_array_of_objects_with_title() {
-        let mut extra = HashMap::new();
-        extra.insert(
-            "artists".to_string(),
-            json!([{"title": "Artist Via Title"}]),
-        );
-        assert_eq!(
-            extract_artist_display(&extra),
-            Some("Artist Via Title".to_string())
-        );
-    }
-
-    #[test]
-    fn extract_artist_display_array_of_strings() {
-        let mut extra = HashMap::new();
-        extra.insert("artists".to_string(), json!(["Artist X", "Artist Y"]));
-        assert_eq!(
-            extract_artist_display(&extra),
-            Some("Artist X; Artist Y".to_string())
-        );
-    }
-
-    #[test]
-    fn extract_artist_display_single_string() {
-        let mut extra = HashMap::new();
-        extra.insert("artist".to_string(), json!("Solo Artist"));
-        assert_eq!(
-            extract_artist_display(&extra),
-            Some("Solo Artist".to_string())
-        );
-    }
-
-    #[test]
-    fn extract_artist_display_empty_map() {
-        let extra = HashMap::new();
-        assert_eq!(extract_artist_display(&extra), None);
-    }
-
-    #[test]
-    fn extract_artist_display_empty_array() {
-        let mut extra = HashMap::new();
-        extra.insert("artists".to_string(), json!([]));
-        assert_eq!(extract_artist_display(&extra), None);
-    }
-
-    #[test]
-    fn extract_artist_display_empty_string() {
-        let mut extra = HashMap::new();
-        extra.insert("artist".to_string(), json!(""));
-        assert_eq!(extract_artist_display(&extra), None);
-    }
-
-    #[test]
-    fn extract_artist_display_prefers_artists_over_artist() {
-        let mut extra = HashMap::new();
-        extra.insert("artists".to_string(), json!([{"name": "From Artists Key"}]));
-        extra.insert("artist".to_string(), json!("From Artist Key"));
-        // "artists" is checked first
-        assert_eq!(
-            extract_artist_display(&extra),
-            Some("From Artists Key".to_string())
-        );
-    }
 
     // ── ProviderError ───────────────────────────────────────────
 
@@ -559,7 +447,6 @@ mod tests {
             disc_number: Some(2),
             duration_secs: 210,
             isrc: Some("USRC12345678".to_string()),
-            artists: Some("Artist A feat. B".to_string()),
             explicit: true,
             extra: HashMap::new(),
         }
@@ -598,8 +485,6 @@ mod tests {
             disc_number: Some(5),
             track_number: Some(99),
             explicit: Some(false),
-            track_artist: Some("Override Artist".to_string()),
-            duration_display: Some("custom".to_string()),
             file_path: Some("/music/file.flac".to_string()),
             monitored: true,
             acquired: true,
@@ -628,31 +513,18 @@ mod tests {
     }
 
     #[test]
-    fn into_track_info_track_artist_none_when_both_none() {
-        let mut pt = base_provider_track();
-        pt.artists = None;
-        let info = pt.into_track_info(LocalTrackOverrides {
-            track_artist: None,
-            ..Default::default()
-        });
-        assert!(info.track_artist.is_none());
-    }
-
-    #[test]
     fn to_track_info_matches_into_semantics() {
         let pt = base_provider_track();
         let id = uuid::Uuid::now_v7();
 
         let overrides_a = LocalTrackOverrides {
             id,
-            track_artist: Some("Override".to_string()),
             disc_number: Some(7),
             explicit: Some(false),
             ..Default::default()
         };
         let overrides_b = LocalTrackOverrides {
             id,
-            track_artist: Some("Override".to_string()),
             disc_number: Some(7),
             explicit: Some(false),
             ..Default::default()

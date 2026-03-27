@@ -123,16 +123,15 @@ pub(crate) async fn add_track(
         .one(&state.db)
         .await?;
 
-    if let Some(link) = target_link {
-        if let Some(found) = track::Entity::find_by_id(link.track_id)
+    if let Some(link) = target_link
+        && let Some(found) = track::Entity::find_by_id(link.track_id)
             .one(&state.db)
             .await?
-        {
-            let mut model: track::ActiveModel = found.into();
-            model.status = Set(WantedStatus::Wanted);
-            model.update(&state.db).await?;
-            services::downloads::enqueue_track_download(state, link.track_id).await?;
-        }
+    {
+        let mut model: track::ActiveModel = found.into();
+        model.status = Set(WantedStatus::Wanted);
+        model.update(&state.db).await?;
+        services::downloads::enqueue_track_download(state, link.track_id).await?;
     }
 
     info!(%album_id, %provider, %external_track_id, "Added track from search");

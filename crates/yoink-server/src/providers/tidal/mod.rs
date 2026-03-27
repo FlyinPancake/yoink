@@ -13,7 +13,6 @@ pub(crate) mod models;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use tokio::sync::RwLock;
 use tracing::warn;
 
@@ -145,7 +144,7 @@ impl MetadataProvider for TidalProvider {
             .items
             .into_iter()
             .map(|a| {
-                let release_date = a.release_date.map(|d| d.parse().ok()).flatten();
+                let release_date = a.release_date.and_then(|d| d.parse().ok());
 
                 ProviderAlbum {
                     external_id: a.id.to_string(),
@@ -155,14 +154,6 @@ impl MetadataProvider for TidalProvider {
                     cover_ref: a.cover,
                     url: a.url,
                     explicit: a.explicit.unwrap_or(false),
-                    artists: a
-                        .artists
-                        .into_iter()
-                        .map(|ar| super::ProviderAlbumArtist {
-                            external_id: ar.id.to_string(),
-                            name: ar.name,
-                        })
-                        .collect(),
                 }
             })
             .collect())
@@ -190,7 +181,6 @@ impl MetadataProvider for TidalProvider {
                     HifiAlbumItem::Item { item } => item,
                     HifiAlbumItem::Track(t) => t,
                 };
-                let artists = super::extract_artist_display(&track.extra);
                 let explicit = track
                     .extra
                     .get("explicit")
@@ -204,7 +194,6 @@ impl MetadataProvider for TidalProvider {
                     disc_number: None, // extracted later from extra
                     duration_secs: track.duration.unwrap_or(0),
                     isrc: None,
-                    artists,
                     explicit,
                     extra: track.extra,
                 }

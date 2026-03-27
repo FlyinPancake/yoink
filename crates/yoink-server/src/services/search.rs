@@ -6,7 +6,7 @@ use utoipa::{IntoParams, ToSchema};
 use yoink_shared::{SearchAlbumResult, SearchArtistResult, SearchTrackResult};
 
 use crate::{
-    db::{self, provider::Provider, wanted_status::WantedStatus},
+    db::{self, wanted_status::WantedStatus},
     error::AppResult,
     providers::{provider_image_url, registry::ProviderRegistry},
 };

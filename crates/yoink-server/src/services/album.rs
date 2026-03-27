@@ -199,25 +199,6 @@ async fn unmonitor_all_tracks(
     Ok(result)
 }
 
-pub(crate) async fn bulk_monitor(
-    state: &AppState,
-    artist_id: Uuid,
-    monitored: bool,
-) -> AppResult<()> {
-    let album_ids: Vec<Uuid> = album_artist::Entity::find_by_artist(artist_id)
-        .all(&state.db)
-        .await?
-        .into_iter()
-        .map(|aa| aa.album_id)
-        .collect();
-
-    for album_id in album_ids {
-        toggle_album_monitor(state, album_id, monitored).await?;
-    }
-
-    Ok(())
-}
-
 pub(crate) async fn set_album_quality(
     state: &AppState,
     album_id: Uuid,

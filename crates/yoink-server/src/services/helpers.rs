@@ -178,6 +178,7 @@ pub(crate) async fn upsert_artist_provider_link(
     Ok(())
 }
 
+#[expect(clippy::too_many_arguments)]
 pub(crate) async fn find_or_create_artist_with_provider_link(
     state: &AppState,
     provider: Provider,
@@ -306,7 +307,6 @@ pub(crate) async fn ensure_local_album(
         album_id: Set(album_id),
         artist_id: Set(artist_id),
         priority: Set(0),
-        ..Default::default()
     };
     junction.insert(&state.db).await?;
 

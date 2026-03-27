@@ -538,15 +538,6 @@ pub(crate) async fn download_worker_loop(state: AppState) -> AppResult<()> {
     }
 }
 
-/// Retag existing audio files with updated metadata.
-///
-/// TODO: rewrite to use SeaORM entities
-pub(crate) async fn retag_existing_files(state: &AppState) -> AppResult<(usize, usize, usize)> {
-    tracing::warn!("retag_existing_files is currently stubbed out");
-    let _ = state;
-    Ok((0, 0, 0))
-}
-
 fn has_parent_dir_component(path: &Path) -> bool {
     path.components()
         .any(|component| matches!(component, Component::ParentDir))
@@ -765,7 +756,6 @@ mod tests {
             album_id: Set(album.id),
             artist_id: Set(artist.id),
             priority: Set(0),
-            ..Default::default()
         }
         .insert(&state.db)
         .await

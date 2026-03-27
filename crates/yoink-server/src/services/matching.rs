@@ -500,7 +500,6 @@ mod tests {
             disc_number: Some(1),
             duration_secs: 180,
             isrc: isrc.map(str::to_string),
-            artists: None,
             explicit: false,
             extra: HashMap::<String, Value>::new(),
         }

@@ -193,19 +193,6 @@ pub(crate) fn sanitize_path_component(input: &str) -> String {
     }
 }
 
-pub(crate) fn parse_track_number_from_path(path: &Path) -> Option<u32> {
-    let stem = path.file_stem()?.to_str()?.trim();
-    let digits = stem
-        .chars()
-        .take_while(|c| c.is_ascii_digit())
-        .collect::<String>();
-    if digits.is_empty() {
-        None
-    } else {
-        digits.parse::<u32>().ok()
-    }
-}
-
 pub(crate) fn extract_year(release_date: &str) -> String {
     let year = release_date.chars().take(4).collect::<String>();
     if year.len() == 4 && year.chars().all(|c| c.is_ascii_digit()) {
@@ -217,8 +204,6 @@ pub(crate) fn extract_year(release_date: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use super::*;
 
     // ── sanitize_path_component ─────────────────────────────────
@@ -277,44 +262,6 @@ mod tests {
     fn sanitize_unicode_preserved() {
         assert_eq!(sanitize_path_component("Bjork"), "Bjork");
         assert_eq!(sanitize_path_component("Sigur Ros"), "Sigur Ros");
-    }
-
-    // ── parse_track_number_from_path ────────────────────────────
-
-    #[test]
-    fn parse_track_number_leading_digits() {
-        assert_eq!(
-            parse_track_number_from_path(Path::new("01 Song Title.flac")),
-            Some(1)
-        );
-        assert_eq!(
-            parse_track_number_from_path(Path::new("12 Another Song.m4a")),
-            Some(12)
-        );
-    }
-
-    #[test]
-    fn parse_track_number_three_digits() {
-        assert_eq!(
-            parse_track_number_from_path(Path::new("101 Long Album.flac")),
-            Some(101)
-        );
-    }
-
-    #[test]
-    fn parse_track_number_no_digits() {
-        assert_eq!(
-            parse_track_number_from_path(Path::new("Song Title.flac")),
-            None
-        );
-    }
-
-    #[test]
-    fn parse_track_number_in_subdirectory() {
-        assert_eq!(
-            parse_track_number_from_path(Path::new("/music/artist/album/03 Track.flac")),
-            Some(3)
-        );
     }
 
     // ── extract_year ────────────────────────────────────────────

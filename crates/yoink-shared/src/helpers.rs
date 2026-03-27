@@ -141,7 +141,9 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::{DownloadJob, DownloadStatus, MonitoredArtist, TrackInfo};
+    use crate::{
+        DownloadJob, DownloadJobKind, DownloadStatus, MonitoredArtist, TrackInfo, WantedStatus,
+    };
 
     // ── Helper factories ────────────────────────────────────────
 
@@ -156,7 +158,7 @@ mod tests {
         }
     }
 
-    fn make_album(artist_id: Uuid, title: &str, release_date: Option<&str>) -> Album {
+    fn make_album(_artist_id: Uuid, title: &str, release_date: Option<&str>) -> Album {
         Album {
             id: Uuid::now_v7(),
             title: title.to_string(),
@@ -165,17 +167,20 @@ mod tests {
             cover_url: None,
             explicit: false,
             monitored: false,
-            wanted_status: todo!(),
-            created_at: todo!(),
+            wanted_status: WantedStatus::Unwanted,
+            created_at: Utc::now(),
         }
     }
 
     fn make_job(album_id: Uuid, updated_at: chrono::DateTime<Utc>) -> DownloadJob {
         DownloadJob {
             id: Uuid::now_v7(),
+            kind: DownloadJobKind::Album,
             album_id,
+            track_id: None,
             source: "tidal".to_string(),
             album_title: "Test Album".to_string(),
+            track_title: None,
             artist_name: "Test Artist".to_string(),
             status: DownloadStatus::Completed,
             quality: crate::Quality::Lossless,

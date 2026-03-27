@@ -433,8 +433,7 @@ impl MetadataProvider for MusicBrainzProvider {
                     .map(|pt| primary_type_str(pt).to_string());
                 let release_date = rg
                     .first_release_date
-                    .map(|d| d.into_naive_date(1980, 1, 1).ok())
-                    .flatten();
+                    .and_then(|d| d.into_naive_date(1980, 1, 1).ok());
                 // Use release group MBID as cover art ref (for Cover Art Archive)
                 let cover_ref = Some(rg.id.clone());
                 let url = Some(format!("https://musicbrainz.org/release-group/{}", &rg.id));
@@ -447,7 +446,6 @@ impl MetadataProvider for MusicBrainzProvider {
                     cover_ref,
                     url,
                     explicit: false, // MusicBrainz doesn't track explicit content
-                    artists: Vec::new(),
                 }
             })
             .collect())
@@ -502,28 +500,6 @@ impl MetadataProvider for MusicBrainzProvider {
                             extra.insert("isrc".to_string(), Value::String(isrc_val.clone()));
                         }
 
-                        // Build display-ready artist string from credits (prefer track, fall back to recording)
-                        let artists = track
-                            .artist_credit
-                            .as_ref()
-                            .or_else(|| {
-                                track
-                                    .recording
-                                    .as_ref()
-                                    .and_then(|r| r.artist_credit.as_ref())
-                            })
-                            .map(|credits| {
-                                let mut s = String::new();
-                                for ac in credits {
-                                    s.push_str(&ac.name);
-                                    if let Some(ref jp) = ac.joinphrase {
-                                        s.push_str(jp);
-                                    }
-                                }
-                                s.trim().to_string()
-                            })
-                            .filter(|s| !s.is_empty());
-
                         tracks.push(ProviderTrack {
                             external_id: track.id.clone(),
                             title: track.title.clone(),
@@ -532,7 +508,6 @@ impl MetadataProvider for MusicBrainzProvider {
                             disc_number: Some(disc_number.try_into().unwrap_or(0)),
                             duration_secs: duration_secs.try_into().unwrap_or(0),
                             isrc,
-                            artists,
                             explicit: false,
                             extra,
                         });

@@ -1,6 +1,5 @@
 [tools]
 "cargo:cargo-tarpaulin" = "latest"
-"cargo:sqlx-cli" = { version = "latest", features = "sqlite" }
 "github:tursodatabase/turso" = "latest"
 
 [tasks.lint-server]

@@ -5,8 +5,8 @@ use argon2::{
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{Duration, Utc};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait,
-    IntoActiveModel, QueryFilter, TransactionTrait, TryIntoModel,
+    ActiveModelTrait, ActiveValue::Set, DatabaseConnection, EntityTrait, IntoActiveModel,
+    TransactionTrait, TryIntoModel,
 };
 use sha2::{Digest, Sha256};
 use tracing::warn;
@@ -172,19 +172,19 @@ impl AuthService {
 
         let password_hash = hash_password(new_password)?;
         let (session, outcome) = self.build_login_session(false);
-        let mut tx = self.db.begin().await?;
+        let tx = self.db.begin().await?;
 
         let mut settings = settings.into_active_model();
 
         settings.admin_username = Set(trimmed_username.to_string());
         settings.admin_password_hash = Set(password_hash.clone());
-        let settings = settings.save(&mut tx).await?.try_into_model()?;
+        let settings = settings.save(&tx).await?.try_into_model()?;
 
         db::auth_session::Entity::delete_many()
             .exec(&self.db)
             .await?;
 
-        session.insert(&mut tx).await?;
+        session.insert(&tx).await?;
 
         tx.commit().await?;
 
@@ -210,7 +210,7 @@ impl AuthService {
             SettingsResult::Existing(model) => model,
             SettingsResult::Bootstrapped(model) => {
                 let mut model = model.into_active_model();
-                if let Some(user) = config.init_admin_password.as_deref() {
+                if let Some(user) = config.init_admin_username.as_deref() {
                     model.admin_username = Set(user.to_string());
                 }
                 model.save(&tx).await?.try_into_model()?

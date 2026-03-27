@@ -3,8 +3,7 @@ use std::sync::Arc;
 use crate::db::provider::Provider;
 
 use super::{
-    DownloadSource, MetadataProvider, ProviderArtist, ProviderError, ProviderSearchAlbum,
-    ProviderSearchTrack,
+    DownloadSource, MetadataProvider, ProviderArtist, ProviderSearchAlbum, ProviderSearchTrack,
 };
 
 /// Central registry that holds all enabled providers and dispatches operations.
@@ -134,17 +133,5 @@ impl ProviderRegistry {
     /// List all enabled download sources.
     pub fn download_sources(&self) -> Vec<Arc<dyn DownloadSource>> {
         self.download.clone()
-    }
-
-    /// Search artists using a specific metadata provider.
-    pub async fn search_artists(
-        &self,
-        provider_id: Provider,
-        query: &str,
-    ) -> Result<Vec<ProviderArtist>, ProviderError> {
-        let provider = self.metadata_provider(provider_id).ok_or_else(|| {
-            ProviderError::not_found("registry", format!("metadata provider '{provider_id}'"))
-        })?;
-        provider.search_artists(query).await
     }
 }

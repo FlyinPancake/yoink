@@ -213,7 +213,19 @@ fn build_registry(app_config: &AppConfig) -> ProviderRegistry {
 fn spawn_background_tasks(state: &AppState) {
     let worker_state = state.clone();
     tokio::spawn(async move {
-        download_worker_loop(worker_state).await;
+        loop {
+            let worker_state = worker_state.clone();
+            match download_worker_loop(worker_state).await {
+                Err(err) => {
+                    error!(error = %err, "Download worker loop encountered an error, restarting");
+                    continue;
+                }
+                _ => {
+                    debug!("Download worker loop exited gracefully, restarting");
+                    continue;
+                }
+            }
+        }
     });
 
     let reconcile_state = state.clone();

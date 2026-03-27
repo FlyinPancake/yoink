@@ -81,12 +81,6 @@ pub(crate) async fn dismiss_match_suggestion(
     ))
 }
 
-pub(crate) async fn refresh_match_suggestions(state: &AppState, artist_id: Uuid) -> AppResult<()> {
-    crate::services::recompute_artist_match_suggestions(state, artist_id).await?;
-    state.notify_sse();
-    Ok(())
-}
-
 async fn accept_artist_match_suggestion(
     state: &AppState,
     suggestion: db::artist_match_suggestion::Model,

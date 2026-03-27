@@ -92,13 +92,6 @@ struct DeezerTrack {
     disk_number: Option<i32>,
     #[serde(default)]
     explicit_lyrics: bool,
-    #[serde(default)]
-    artist: Option<DeezerTrackArtist>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct DeezerTrackArtist {
-    name: String,
 }
 
 /// An album returned by `/search/album` — includes embedded artist info.
@@ -414,10 +407,7 @@ impl MetadataProvider for DeezerProvider {
                             Err(_) => None,
                         }
                     } else if d.len() >= 10 && &d[4..5] == "-" && &d[7..8] == "-" {
-                        match NaiveDate::parse_from_str(&d[..10], "%Y-%m-%d") {
-                            Ok(date) => Some(date),
-                            Err(_) => None,
-                        }
+                        NaiveDate::parse_from_str(&d[..10], "%Y-%m-%d").ok()
                     } else {
                         None
                     }
@@ -431,7 +421,6 @@ impl MetadataProvider for DeezerProvider {
                     cover_ref: a.md5_image,
                     url,
                     explicit: a.explicit_lyrics,
-                    artists: Vec::new(),
                 }
             })
             .collect())
@@ -459,7 +448,6 @@ impl MetadataProvider for DeezerProvider {
                     disc_number: t.disk_number,
                     duration_secs: t.duration,
                     isrc: t.isrc.filter(|s| !s.is_empty()),
-                    artists: t.artist.map(|a| a.name),
                     explicit: t.explicit_lyrics,
                     extra,
                 }
