@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use sea_orm::{
-    ActiveValue::Set, ColumnTrait, EntityLoaderTrait, EntityTrait, IntoActiveModel, QueryFilter,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityLoaderTrait, EntityTrait,
+    IntoActiveModel, PaginatorTrait, QueryFilter, TransactionTrait,
 };
 use tracing::{info, warn};
 use url::Url;
@@ -286,14 +287,41 @@ pub(crate) async fn unlink_artist_provider(
     external_id: String,
 ) -> AppResult<()> {
     let provider_enum = helpers::parse_provider(&provider)?;
+    let tx = state.db.begin().await?;
 
-    artist_provider_link::Entity::delete_by_artist_provider_external(
+    let artist = artist::Entity::load()
+        .filter_by_id(artist_id)
+        .one(&tx)
+        .await?
+        .ok_or_else(|| AppError::not_found("artist", Some(artist_id.to_string())))?;
+
+    let provider_link_count = artist_provider_link::Entity::find_by_artist(artist_id)
+        .count(&tx)
+        .await?;
+
+    let result = artist_provider_link::Entity::delete_by_artist_provider_external(
         artist_id,
         provider_enum,
         &external_id,
     )
-    .exec(&state.db)
+    .exec(&tx)
     .await?;
+
+    if result.rows_affected == 0 {
+        return Err(AppError::not_found(
+            "artist provider link",
+            Some(format!("{artist_id}:{provider}:{external_id}")),
+        ));
+    }
+
+    if artist.monitored && provider_link_count == 1 {
+        let mut model = artist.into_active_model();
+        model.monitored = Set(false);
+        model.update(&tx).await?;
+        info!(%artist_id, provider = %provider, %external_id, "Auto-unmonitored artist after unlinking last provider");
+    }
+
+    tx.commit().await?;
 
     helpers::spawn_recompute_artist_match_suggestions(state, artist_id);
     state.notify_sse();
@@ -516,6 +544,51 @@ mod tests {
         }
 
         assert_eq!(persisted_bio.as_deref(), Some("Bio for 123"));
+    }
+
+    #[tokio::test]
+    async fn unlinking_last_provider_auto_unmonitors_artist() {
+        let state = test_state().await;
+
+        let artist = artist::ActiveModel {
+            name: Set("Test Artist".to_string()),
+            image_url: Set(None),
+            bio: Set(None),
+            monitored: Set(true),
+            ..artist::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert artist");
+
+        artist_provider_link::ActiveModel {
+            artist_id: Set(artist.id),
+            provider: Set(Provider::Deezer),
+            external_id: Set("123".to_string()),
+            external_url: Set(None),
+            external_name: Set(None),
+            ..artist_provider_link::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert provider link");
+
+        unlink_artist_provider(&state, artist.id, "deezer".to_string(), "123".to_string())
+            .await
+            .expect("unlink final provider");
+
+        let reloaded_artist = artist::Entity::find_by_id(artist.id)
+            .one(&state.db)
+            .await
+            .expect("reload artist")
+            .expect("artist exists");
+        assert!(!reloaded_artist.monitored);
+
+        let links = artist_provider_link::Entity::find_by_artist(artist.id)
+            .all(&state.db)
+            .await
+            .expect("reload links");
+        assert!(links.is_empty());
     }
 
     #[tokio::test]
