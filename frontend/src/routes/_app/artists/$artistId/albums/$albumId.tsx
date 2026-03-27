@@ -44,9 +44,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type Album = components["schemas"]["Album"] & {
-  quality_override?: components["schemas"]["Quality"] | null;
-};
+type Album = components["schemas"]["Album"];
 type TrackInfo = components["schemas"]["TrackInfo"];
 type ProviderLink = components["schemas"]["ProviderLink"];
 type AlbumMatchSuggestion = components["schemas"]["AlbumMatchSuggestion"];

@@ -138,6 +138,8 @@ pub struct Album {
     pub explicit: bool,
     pub monitored: bool,
     pub wanted_status: WantedStatus,
+    #[serde(default)]
+    pub quality_override: Option<Quality>,
     pub created_at: DateTime<Utc>,
 }
 

@@ -62,6 +62,7 @@ impl From<Model> for yoink_shared::Album {
             explicit: value.explicit,
             monitored: value.wanted_status != WantedStatus::Unmonitored,
             wanted_status: value.wanted_status.into(),
+            quality_override: value.requested_quality.map(Into::into),
             created_at: value.created_at,
         }
     }

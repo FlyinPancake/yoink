@@ -1,7 +1,8 @@
 use sea_orm::{
     ActiveModelTrait,
     ActiveValue::{NotSet, Set},
-    ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter,
+    ColumnTrait, DatabaseConnection, EntityLoaderTrait, EntityTrait, IntoActiveModel, ModelTrait,
+    QueryFilter,
 };
 use serde::Serialize;
 use tracing::info;
@@ -204,37 +205,34 @@ pub(crate) async fn set_album_quality(
     album_id: Uuid,
     quality: Option<Quality>,
 ) -> AppResult<()> {
-    album::Entity::find_by_id(album_id)
+    let album = album::Entity::load()
+        .filter_by_id(album_id)
+        .with(download_job::Entity)
         .one(&state.db)
         .await?
-        .ok_or_else(|| AppError::not_found("album", Some(album_id.to_string())))?;
+        .ok_or_else(|| AppError::not_found("album", Some(album_id.to_string())))?
+        .into_active_model();
 
-    album::Entity::update_many()
-        .set(album::ActiveModel {
-            id: NotSet,
-            requested_quality: Set(quality),
-            ..Default::default()
-        })
-        .filter(album::Column::Id.eq(album_id))
-        .exec(&state.db)
+    album
+        .set_requested_quality(quality)
+        .update(&state.db)
         .await?;
 
     // Update quality on queued/failed download jobs for this album
     if let Some(quality) = quality {
-        let jobs = download_job::Entity::find()
+        download_job::Entity::update_many()
             .filter(download_job::Column::AlbumId.eq(album_id))
             .filter(
                 download_job::Column::Status
                     .is_in([DownloadStatus::Queued, DownloadStatus::Failed]),
             )
-            .all(&state.db)
+            .set(download_job::ActiveModel {
+                id: NotSet,
+                quality: Set(quality),
+                ..Default::default()
+            })
+            .exec(&state.db)
             .await?;
-
-        for job in jobs {
-            let mut job_model: download_job::ActiveModel = job.into();
-            job_model.quality = Set(quality);
-            job_model.update(&state.db).await?;
-        }
     }
 
     info!(%album_id, ?quality, "Updated album quality override");

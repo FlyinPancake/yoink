@@ -45,7 +45,7 @@ function WantedPage() {
     );
   }
 
-  const wantedAlbums = data.albums as WantedAlbumWithTracks[];
+  const wantedAlbums: WantedAlbumWithTracks[] = data.albums;
   const { artists } = data;
 
   // Build a map for quick artist name lookup

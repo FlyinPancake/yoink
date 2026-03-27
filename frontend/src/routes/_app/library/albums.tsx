@@ -2,10 +2,15 @@ import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
 import { $api } from "@/lib/api";
-import type { components } from "@/lib/api/types.gen";
 import { useSleeveGlow } from "@/hooks/use-sleeve-glow";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { isAlbumAcquired, isAlbumInProgress, isAlbumWanted } from "@/lib/music";
+import {
+  canLinkLibraryAlbum,
+  filterLibraryAlbums,
+  getLibraryAlbumArtistName,
+  sortLibraryAlbums,
+} from "@/lib/library/albums";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -15,11 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-
-type AlbumListItem = components["schemas"]["Album"] & {
-  artist_credits?: Array<{ name: string }>;
-  artist_id?: string;
-};
+import type { AlbumSort, LibraryAlbumSummary as AlbumListItem } from "@/lib/library/albums";
 
 export const Route = createFileRoute("/_app/library/albums")({
   component: AlbumsPage,
@@ -68,70 +69,23 @@ function albumTypeRank(albumType: string | null | undefined): number {
 
 function AlbumsPage() {
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useLocalStorage<"added" | "artist" | "az" | "newest" | "oldest" | "za">(
-    "albums-sort",
-    "newest",
-  );
+  const [sort, setSort] = useLocalStorage<AlbumSort>("albums-sort", "newest");
 
   const { data: albums, isLoading, isError } = $api.useQuery("get", "/api/album");
 
-  // Also load artists so we can resolve artist names
-  const { data: artists } = $api.useQuery("get", "/api/artist");
-
-  const artistMap = useMemo(() => new Map((artists ?? []).map((a) => [a.id, a.name])), [artists]);
-
   /** Resolve the display name for an album's primary artist. */
-  const artistName = (album: AlbumListItem): string =>
-    album.artist_credits?.[0]?.name ??
-    (album.artist_id ? artistMap.get(album.artist_id) : undefined) ??
-    "Unknown Artist";
+  const artistName = (album: AlbumListItem): string => getLibraryAlbumArtistName(album);
 
   /** Apply search filter then sort within each group. */
   const sortList = (list: AlbumListItem[]): AlbumListItem[] => {
-    const sorted = [...list];
-    switch (sort) {
-      case "az":
-        sorted.sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
-        break;
-      case "za":
-        sorted.sort((a, b) => b.title.toLowerCase().localeCompare(a.title.toLowerCase()));
-        break;
-      case "artist":
-        sorted.sort((a, b) =>
-          artistName(a).toLowerCase().localeCompare(artistName(b).toLowerCase()),
-        );
-        break;
-      case "newest":
-        sorted.sort(
-          (a, b) =>
-            (b.release_date ?? "").localeCompare(a.release_date ?? "") ||
-            a.title.localeCompare(b.title),
-        );
-        break;
-      case "oldest":
-        sorted.sort(
-          (a, b) =>
-            (a.release_date ?? "").localeCompare(b.release_date ?? "") ||
-            a.title.localeCompare(b.title),
-        );
-        break;
-      case "added":
-        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        break;
-    }
-    return sorted;
+    return sortLibraryAlbums(list, sort);
   };
 
   /** Grouped albums: array of { type, label, albums } ordered by type rank. */
   const groups = useMemo(() => {
     if (!albums) return [];
 
-    const q = search.trim().toLowerCase();
-    const list = q
-      ? albums.filter(
-          (a) => a.title.toLowerCase().includes(q) || artistName(a).toLowerCase().includes(q),
-        )
-      : albums;
+    const list = filterLibraryAlbums(albums, search);
 
     // Bucket by album type
     const buckets = new Map<string, AlbumListItem[]>();
@@ -153,7 +107,7 @@ function AlbumsPage() {
         label: ALBUM_TYPE_LABELS[type] ?? type,
         albums: sortList(items),
       }));
-  }, [albums, artistMap, search, sort]);
+  }, [albums, search, sort]);
 
   const totalFiltered = groups.reduce((n, g) => n + g.albums.length, 0);
 
@@ -331,11 +285,11 @@ function AlbumGroup({
 
           return (
             <div key={album.id} className="sleeve group">
-              {album.artist_id ? (
+              {canLinkLibraryAlbum(album) ? (
                 <Link
                   to="/artists/$artistId/albums/$albumId"
                   params={{
-                    artistId: album.artist_id,
+                    artistId: album.artist_id!,
                     albumId: album.id,
                   }}
                   className="block"

@@ -17,7 +17,7 @@ import type { AddedItem } from "./collections";
 import type { components } from "./types.gen";
 
 type MonitoredArtist = components["schemas"]["MonitoredArtist"];
-type Album = components["schemas"]["Album"];
+type LibraryAlbumSummary = components["schemas"]["LibraryAlbumSummary"];
 type TrackInfo = components["schemas"]["TrackInfo"];
 type ArtistDetailResponse = components["schemas"]["ArtistDetailResponse"];
 type AlbumDetailResponse = components["schemas"]["AlbumDetailResponse"];
@@ -61,16 +61,18 @@ function patchAlbumMonitorCaches(
   albumId: string,
   monitored: boolean,
 ) {
-  queryClient.setQueryData<Array<Album> | undefined>(["get", "/api/album"], (current) =>
-    current?.map((album) =>
-      album.id === albumId
-        ? {
-            ...album,
-            monitored,
-            wanted_status: deriveWantedStatus(album.wanted_status, monitored),
-          }
-        : album,
-    ),
+  queryClient.setQueryData<Array<LibraryAlbumSummary> | undefined>(
+    ["get", "/api/album"],
+    (current) =>
+      current?.map((album) =>
+        album.id === albumId
+          ? {
+              ...album,
+              monitored,
+              wanted_status: deriveWantedStatus(album.wanted_status, monitored),
+            }
+          : album,
+      ),
   );
 
   queryClient.setQueriesData<ArtistDetailResponse | undefined>(
@@ -209,16 +211,18 @@ function patchAlbumDownloadCaches(queryClient: ReturnType<typeof useQueryClient>
         },
   );
 
-  queryClient.setQueryData<Array<Album> | undefined>(queryKeys.albums.list().queryKey, (current) =>
-    current?.map((album) =>
-      album.id === albumId
-        ? {
-            ...album,
-            monitored: true,
-            wanted_status: nextDownloadWantedStatus(album.wanted_status),
-          }
-        : album,
-    ),
+  queryClient.setQueryData<Array<LibraryAlbumSummary> | undefined>(
+    queryKeys.albums.list().queryKey,
+    (current) =>
+      current?.map((album) =>
+        album.id === albumId
+          ? {
+              ...album,
+              monitored: true,
+              wanted_status: nextDownloadWantedStatus(album.wanted_status),
+            }
+          : album,
+      ),
   );
 
   queryClient.setQueriesData<ArtistDetailResponse | undefined>(
@@ -524,12 +528,10 @@ export function useSetAlbumQuality() {
   return $api.useMutation("patch", "/api/album/{album_id}/quality", {
     onSuccess: (_data, variables) => {
       void qc.invalidateQueries({
-        queryKey: [
-          "get",
-          "/api/album/{album_id}",
-          { params: { path: { album_id: variables.params.path.album_id } } },
-        ],
+        queryKey: queryKeys.albums.detail(variables.params.path.album_id).queryKey,
       });
+      void qc.invalidateQueries({ queryKey: queryKeys.albums.list().queryKey });
+      void qc.invalidateQueries({ queryKey: ["get", "/api/artist/{artist_id}"] });
     },
   });
 }

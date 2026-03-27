@@ -71,9 +71,7 @@ import {
 } from "@/components/ui/select";
 
 type MonitoredArtist = components["schemas"]["MonitoredArtist"];
-type Album = components["schemas"]["Album"] & {
-  quality_override?: components["schemas"]["Quality"] | null;
-};
+type Album = components["schemas"]["Album"];
 type ProviderLink = components["schemas"]["ProviderLink"];
 type ArtistMatchSuggestion = components["schemas"]["ArtistMatchSuggestion"];
 type ArtistImageOption = components["schemas"]["ArtistImageOption"];
@@ -909,18 +907,21 @@ function EditArtistDialog({
   const [imageUrl, setImageUrl] = useState(artist.image_url ?? "");
   const updateArtist = useUpdateArtist();
   const fetchBio = useFetchArtistBio();
-  const { data: artistImages, isLoading: isLoadingArtistImages, isError: isArtistImagesError } =
-    $api.useQuery(
-      "get",
-      "/api/artist/{artist_id}/image",
-      {
-        params: { path: { artist_id: artist.id } },
-      },
-      {
-        enabled: open,
-        staleTime: 60_000,
-      },
-    );
+  const {
+    data: artistImages,
+    isLoading: isLoadingArtistImages,
+    isError: isArtistImagesError,
+  } = $api.useQuery(
+    "get",
+    "/api/artist/{artist_id}/image",
+    {
+      params: { path: { artist_id: artist.id } },
+    },
+    {
+      enabled: open,
+      staleTime: 60_000,
+    },
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -956,7 +957,12 @@ function EditArtistDialog({
               </p>
               {trimmedImageUrl && (
                 <div>
-                  <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setImageUrl("")}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setImageUrl("")}
+                  >
                     Remove Image
                   </Button>
                 </div>
@@ -1086,7 +1092,10 @@ function ArtistImagePicker({
                 {providerDisplayName(option.provider)}
               </span>
               {isSelected && (
-                <Badge variant="outline" className="border-blue-500/30 px-1.5 text-[10px] text-blue-500">
+                <Badge
+                  variant="outline"
+                  className="border-blue-500/30 px-1.5 text-[10px] text-blue-500"
+                >
                   Selected
                 </Badge>
               )}

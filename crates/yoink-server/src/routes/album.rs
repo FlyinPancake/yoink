@@ -5,6 +5,7 @@ use axum::{
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Deserialize;
+use serde::Serialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
@@ -76,6 +77,14 @@ struct MergeAlbumsRequest {
     result_title: Option<String>,
     #[serde(default)]
     result_cover_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+struct LibraryAlbumSummary {
+    #[serde(flatten)]
+    album: Album,
+    artist_id: Option<Uuid>,
+    artist_name: Option<String>,
 }
 
 pub(super) fn router() -> OpenApiRouter<AppState> {
@@ -169,16 +178,60 @@ async fn search_albums(
     path = "/",
     tag = TAG,
     responses(
-        (status = 200, description = "All local albums", body = Vec<Album>),
+        (status = 200, description = "All local albums", body = Vec<LibraryAlbumSummary>),
         (status = 500, description = "Failed to load albums"),
     )
 )]
-async fn list_albums(State(state): State<AppState>) -> ApiResult<Vec<Album>> {
-    let albums: Vec<Album> = db::album::Entity::find()
+async fn list_albums(State(state): State<AppState>) -> ApiResult<Vec<LibraryAlbumSummary>> {
+    let raw_albums = db::album::Entity::find()
         .all(&state.db)
         .await
-        .map(|models| models.into_iter().map(Into::into).collect())
         .map_err(|e| app_error_response(e.into()))?;
+
+    let album_ids: Vec<Uuid> = raw_albums.iter().map(|album| album.id).collect();
+    let album_artists =
+        db::album_artist::Entity::find_by_album_ids_ordered(album_ids.iter().copied())
+            .all(&state.db)
+            .await
+            .map_err(|e| app_error_response(e.into()))?;
+
+    let mut primary_artist_ids = std::collections::HashMap::new();
+    for junction in album_artists {
+        primary_artist_ids
+            .entry(junction.album_id)
+            .or_insert(junction.artist_id);
+    }
+
+    let artist_ids: Vec<Uuid> = primary_artist_ids.values().copied().collect();
+    let artists_by_id: std::collections::HashMap<Uuid, db::artist::Model> = if artist_ids.is_empty()
+    {
+        std::collections::HashMap::new()
+    } else {
+        db::artist::Entity::find()
+            .filter(db::artist::Column::Id.is_in(artist_ids.iter().copied()))
+            .all(&state.db)
+            .await
+            .map_err(|e| app_error_response(e.into()))?
+            .into_iter()
+            .map(|artist| (artist.id, artist))
+            .collect()
+    };
+
+    let albums = raw_albums
+        .into_iter()
+        .map(|album| {
+            let artist_id = primary_artist_ids.get(&album.id).copied();
+            let artist_name =
+                artist_id.and_then(|id| artists_by_id.get(&id).map(|artist| artist.name.clone()));
+
+            LibraryAlbumSummary {
+                album: album.into(),
+                artist_id,
+                artist_name,
+            }
+        })
+        .collect();
+
     Ok(Json(albums))
 }
 
@@ -619,4 +672,220 @@ async fn remove_album_artist(
         .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use sea_orm::{ActiveModelTrait, ActiveValue::Set};
+    use tower::ServiceExt as _;
+
+    use crate::{
+        app_config::AuthConfig, providers::registry::ProviderRegistry, routes::build_router,
+        state::AppState,
+    };
+
+    use super::*;
+
+    async fn test_state() -> AppState {
+        let db_path = format!(
+            "sqlite:/tmp/yoink-album-route-test-{}.db?mode=rwc",
+            uuid::Uuid::now_v7()
+        );
+
+        AppState::new(
+            std::path::PathBuf::from("./music"),
+            crate::db::quality::Quality::Lossless,
+            false,
+            1,
+            &db_path,
+            ProviderRegistry::new(),
+            AuthConfig {
+                enabled: false,
+                session_secret: String::new(),
+                init_admin_username: None,
+                init_admin_password: None,
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn list_albums_returns_primary_artist_context() {
+        let state = test_state().await;
+        let artist = db::artist::ActiveModel {
+            name: Set("Primary Artist".to_string()),
+            monitored: Set(true),
+            ..Default::default()
+        }
+        .insert(&state.db)
+        .await
+        .expect("artist");
+        let album = db::album::ActiveModel {
+            title: Set("Album One".to_string()),
+            album_type: Set(db::album_type::AlbumType::Album),
+            explicit: Set(false),
+            wanted_status: Set(db::wanted_status::WantedStatus::Wanted),
+            requested_quality: Set(Some(Quality::Lossless)),
+            ..Default::default()
+        }
+        .insert(&state.db)
+        .await
+        .expect("album");
+        db::album_artist::ActiveModel {
+            album_id: Set(album.id),
+            artist_id: Set(artist.id),
+            priority: Set(0),
+        }
+        .insert(&state.db)
+        .await
+        .expect("album artist");
+
+        let app = build_router(state).split_for_parts().0;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/album")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let payload: Vec<LibraryAlbumSummary> = serde_json::from_slice(&body).expect("json");
+
+        assert_eq!(payload.len(), 1);
+        assert_eq!(payload[0].artist_id, Some(artist.id));
+        assert_eq!(payload[0].artist_name.as_deref(), Some("Primary Artist"));
+        assert_eq!(
+            payload[0].album.quality_override,
+            Some(yoink_shared::Quality::Lossless)
+        );
+        assert_eq!(
+            payload[0].album.wanted_status,
+            yoink_shared::WantedStatus::Wanted
+        );
+    }
+
+    #[tokio::test]
+    async fn list_albums_uses_first_ordered_artist_when_multiple_artists_exist() {
+        let state = test_state().await;
+        let first_artist = db::artist::ActiveModel {
+            name: Set("First Artist".to_string()),
+            monitored: Set(true),
+            ..Default::default()
+        }
+        .insert(&state.db)
+        .await
+        .expect("first artist");
+        let second_artist = db::artist::ActiveModel {
+            name: Set("Second Artist".to_string()),
+            monitored: Set(true),
+            ..Default::default()
+        }
+        .insert(&state.db)
+        .await
+        .expect("second artist");
+        let album = db::album::ActiveModel {
+            title: Set("Album Two".to_string()),
+            album_type: Set(db::album_type::AlbumType::Album),
+            explicit: Set(false),
+            wanted_status: Set(db::wanted_status::WantedStatus::Acquired),
+            requested_quality: Set(None),
+            ..Default::default()
+        }
+        .insert(&state.db)
+        .await
+        .expect("album");
+
+        db::album_artist::ActiveModel {
+            album_id: Set(album.id),
+            artist_id: Set(first_artist.id),
+            priority: Set(0),
+        }
+        .insert(&state.db)
+        .await
+        .expect("primary junction");
+        db::album_artist::ActiveModel {
+            album_id: Set(album.id),
+            artist_id: Set(second_artist.id),
+            priority: Set(1),
+        }
+        .insert(&state.db)
+        .await
+        .expect("secondary junction");
+
+        let app = build_router(state).split_for_parts().0;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/album")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let payload: Vec<LibraryAlbumSummary> = serde_json::from_slice(&body).expect("json");
+
+        assert_eq!(payload.len(), 1);
+        assert_eq!(payload[0].artist_id, Some(first_artist.id));
+        assert_eq!(payload[0].artist_name.as_deref(), Some("First Artist"));
+        assert_eq!(
+            payload[0].album.wanted_status,
+            yoink_shared::WantedStatus::Acquired
+        );
+    }
+
+    #[tokio::test]
+    async fn list_albums_returns_none_artist_fields_when_album_has_no_artists() {
+        let state = test_state().await;
+        db::album::ActiveModel {
+            title: Set("Orphan Album".to_string()),
+            album_type: Set(db::album_type::AlbumType::Album),
+            explicit: Set(false),
+            wanted_status: Set(db::wanted_status::WantedStatus::Unmonitored),
+            requested_quality: Set(None),
+            ..Default::default()
+        }
+        .insert(&state.db)
+        .await
+        .expect("album");
+
+        let app = build_router(state).split_for_parts().0;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/album")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let payload: Vec<LibraryAlbumSummary> = serde_json::from_slice(&body).expect("json");
+
+        assert_eq!(payload.len(), 1);
+        assert_eq!(payload[0].artist_id, None);
+        assert_eq!(payload[0].artist_name, None);
+        assert_eq!(
+            payload[0].album.wanted_status,
+            yoink_shared::WantedStatus::Unwanted
+        );
+    }
 }
