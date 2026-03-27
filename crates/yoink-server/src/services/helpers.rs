@@ -16,11 +16,11 @@ use crate::{
 };
 
 /// Generate a default external URL for an artist on a given provider.
-pub(crate) fn default_provider_artist_url(provider: &str, external_id: &str) -> Option<String> {
+pub(crate) fn default_provider_artist_url(provider: Provider, external_id: &str) -> Option<String> {
     match provider {
-        "tidal" => Some(format!("https://tidal.com/browse/artist/{external_id}")),
-        "deezer" => Some(format!("https://www.deezer.com/artist/{external_id}")),
-        "musicbrainz" => Some(format!("https://musicbrainz.org/artist/{external_id}")),
+        Provider::Tidal => Some(format!("https://tidal.com/browse/artist/{external_id}")),
+        Provider::Deezer => Some(format!("https://www.deezer.com/artist/{external_id}")),
+        Provider::MusicBrainz => Some(format!("https://musicbrainz.org/artist/{external_id}")),
         _ => None,
     }
 }
@@ -321,7 +321,7 @@ pub(crate) async fn find_or_create_lightweight_artist(
     artist_external_id: &str,
     artist_name: &str,
 ) -> AppResult<Uuid> {
-    let external_url = default_provider_artist_url(&provider.to_string(), artist_external_id);
+    let external_url = default_provider_artist_url(provider, artist_external_id);
     find_or_create_artist_with_provider_link(
         state,
         provider,
@@ -341,7 +341,10 @@ mod tests {
 
     use sea_orm::EntityTrait;
 
-    use crate::{app_config::AuthConfig, providers::registry::ProviderRegistry, state::AppState};
+    use crate::{
+        app_config::AuthConfig, db::provider::Provider, providers::registry::ProviderRegistry,
+        state::AppState,
+    };
 
     async fn test_state() -> AppState {
         let db_path = format!(
@@ -369,18 +372,18 @@ mod tests {
     #[test]
     fn default_provider_artist_url_known_providers() {
         assert_eq!(
-            super::default_provider_artist_url("tidal", "123"),
+            super::default_provider_artist_url(Provider::Tidal, "123"),
             Some("https://tidal.com/browse/artist/123".to_string())
         );
         assert_eq!(
-            super::default_provider_artist_url("deezer", "456"),
+            super::default_provider_artist_url(Provider::Deezer, "456"),
             Some("https://www.deezer.com/artist/456".to_string())
         );
         assert_eq!(
-            super::default_provider_artist_url("musicbrainz", "abc"),
+            super::default_provider_artist_url(Provider::MusicBrainz, "abc"),
             Some("https://musicbrainz.org/artist/abc".to_string())
         );
-        assert!(super::default_provider_artist_url("unknown", "x").is_none());
+        assert!(super::default_provider_artist_url(Provider::None, "x").is_none());
     }
 
     #[test]

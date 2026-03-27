@@ -16,6 +16,8 @@ pub struct Model {
     pub albums: HasMany<super::album::Entity>,
     #[sea_orm(has_many)]
     pub provider_links: HasMany<super::artist_provider_link::Entity>,
+    #[sea_orm(has_many)]
+    pub match_suggestions: HasMany<super::artist_match_suggestion::Entity>,
     pub created_at: DateTimeUtc,
     pub modified_at: DateTimeUtc,
 }

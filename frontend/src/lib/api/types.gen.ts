@@ -4,3250 +4,3250 @@
  */
 
 export interface paths {
-  "/api/album": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Albums
+         * @description Returns all locally stored albums from the library database.
+         */
+        get: operations["list_albums"];
+        put?: never;
+        /**
+         * Create Album
+         * @description Adds an album from provider metadata, persists the provider link, stores
+         *     tracks, and optionally marks the album fully monitored.
+         */
+        post: operations["create_album"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * List Albums
-     * @description Returns all locally stored albums from the library database.
-     */
-    get: operations["list_albums"];
-    put?: never;
-    /**
-     * Create Album
-     * @description Adds an album from provider metadata, persists the provider link, stores
-     *     tracks, and optionally marks the album fully monitored.
-     */
-    post: operations["create_album"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/album/merge": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Albums
+         * @description Merges a source album into a target album and optionally overrides the
+         *     surviving title and cover image.
+         */
+        post: operations["merge_albums"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Merge Albums
-     * @description Merges a source album into a target album and optionally overrides the
-     *     surviving title and cover image.
-     */
-    post: operations["merge_albums"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/album/search": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Albums
+         * @description Searches all registered metadata providers for albums matching the query
+         *     string and returns the aggregated results.
+         */
+        get: operations["search_albums"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Search Albums
-     * @description Searches all registered metadata providers for albums matching the query
-     *     string and returns the aggregated results.
-     */
-    get: operations["search_albums"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/album/{album_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Album
+         * @description Returns the local album, resolved artists, tracks, provider links, download
+         *     jobs, and match suggestions for a single album.
+         */
+        get: operations["get_album"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Get Album
-     * @description Returns the local album, resolved artists, tracks, provider links, download
-     *     jobs, and match suggestions for a single album.
-     */
-    get: operations["get_album"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/album/{album_id}/artist": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/artist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Album Artist
+         * @description Associates an existing local artist with a local album.
+         */
+        post: operations["add_album_artist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Add Album Artist
-     * @description Associates an existing local artist with a local album.
-     */
-    post: operations["add_album_artist"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/album/{album_id}/artist/{artist_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/artist/{artist_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Album Artist
+         * @description Removes an associated local artist from a local album.
+         */
+        delete: operations["remove_album_artist"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    /**
-     * Remove Album Artist
-     * @description Removes an associated local artist from a local album.
-     */
-    delete: operations["remove_album_artist"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/album/{album_id}/download/retry": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/download/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Download
+         * @description Requeues a failed album download or creates a new queued job if the album is
+         *     still wanted.
+         */
+        post: operations["retry_download"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Retry Download
-     * @description Requeues a failed album download or creates a new queued job if the album is
-     *     still wanted.
-     */
-    post: operations["retry_download"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/album/{album_id}/file": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Album Files
+         * @description Removes downloaded files for a local album and optionally unmonitors the
+         *     album afterwards.
+         */
+        delete: operations["remove_album_files"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    /**
-     * Remove Album Files
-     * @description Removes downloaded files for a local album and optionally unmonitors the
-     *     album afterwards.
-     */
-    delete: operations["remove_album_files"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/album/{album_id}/monitor": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Toggle Album Monitor
+         * @description Enables or disables album-level monitoring for a local album.
+         */
+        patch: operations["toggle_album_monitor"];
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /**
-     * Toggle Album Monitor
-     * @description Enables or disables album-level monitoring for a local album.
-     */
-    patch: operations["toggle_album_monitor"];
-    trace?: never;
-  };
-  "/api/album/{album_id}/provider": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/provider": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Album Providers
+         * @description Returns the provider links currently attached to a local album.
+         */
+        get: operations["list_album_providers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * List Album Providers
-     * @description Returns the provider links currently attached to a local album.
-     */
-    get: operations["list_album_providers"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/album/{album_id}/quality": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Album Quality
+         * @description Sets or clears the album-level quality override for a local album.
+         */
+        patch: operations["set_album_quality"];
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /**
-     * Set Album Quality
-     * @description Sets or clears the album-level quality override for a local album.
-     */
-    patch: operations["set_album_quality"];
-    trace?: never;
-  };
-  "/api/album/{album_id}/track": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/track": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Album Tracks
+         * @description Returns all tracks currently associated with a local album.
+         */
+        get: operations["list_album_tracks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * List Album Tracks
-     * @description Returns all tracks currently associated with a local album.
-     */
-    get: operations["list_album_tracks"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/album/{album_id}/track/monitor": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/track/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Bulk Toggle Track Monitor
+         * @description Enables or disables monitoring for every track on a local album.
+         */
+        patch: operations["bulk_toggle_track_monitor"];
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /**
-     * Bulk Toggle Track Monitor
-     * @description Enables or disables monitoring for every track on a local album.
-     */
-    patch: operations["bulk_toggle_track_monitor"];
-    trace?: never;
-  };
-  "/api/album/{album_id}/track/{track_id}/monitor": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/track/{track_id}/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Toggle Track Monitor
+         * @description Enables or disables monitoring for a single track belonging to a local
+         *     album.
+         */
+        patch: operations["toggle_track_monitor"];
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /**
-     * Toggle Track Monitor
-     * @description Enables or disables monitoring for a single track belonging to a local
-     *     album.
-     */
-    patch: operations["toggle_track_monitor"];
-    trace?: never;
-  };
-  "/api/album/{album_id}/track/{track_id}/quality": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/album/{album_id}/track/{track_id}/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Track Quality
+         * @description Sets or clears the quality override for a single track on a local album.
+         */
+        patch: operations["set_track_quality"];
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /**
-     * Set Track Quality
-     * @description Sets or clears the quality override for a single track on a local album.
-     */
-    patch: operations["set_track_quality"];
-    trace?: never;
-  };
-  "/api/artist": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/artist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Artists
+         * @description Returns all locally monitored artists from the library database.
+         */
+        get: operations["list_artists"];
+        put?: never;
+        /**
+         * Create Artist
+         * @description Adds an artist from provider metadata, persists the provider link, and
+         *     triggers the existing artist sync flow.
+         */
+        post: operations["create_artist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * List Artists
-     * @description Returns all locally monitored artists from the library database.
-     */
-    get: operations["list_artists"];
-    put?: never;
-    /**
-     * Create Artist
-     * @description Adds an artist from provider metadata, persists the provider link, and
-     *     triggers the existing artist sync flow.
-     */
-    post: operations["create_artist"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/artist/search": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/artist/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Artists
+         * @description Searches all registered metadata providers for artists matching the query
+         *     string and returns the aggregated results.
+         */
+        get: operations["search_artists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Search Artists
-     * @description Searches all registered metadata providers for artists matching the query
-     *     string and returns the aggregated results.
-     */
-    get: operations["search_artists"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/artist/{artist_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/artist/{artist_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Artist
+         * @description Returns the local artist, related albums, provider links, and match
+         *     suggestions for a single artist.
+         */
+        get: operations["get_artist"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Artist
+         * @description Removes an artist from the local library and optionally removes downloaded
+         *     files associated with that artist.
+         */
+        delete: operations["delete_artist"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Artist
+         * @description Updates editable local artist fields such as name and image URL.
+         */
+        patch: operations["update_artist"];
+        trace?: never;
     };
-    /**
-     * Get Artist
-     * @description Returns the local artist, related albums, provider links, and match
-     *     suggestions for a single artist.
-     */
-    get: operations["get_artist"];
-    put?: never;
-    post?: never;
-    /**
-     * Delete Artist
-     * @description Removes an artist from the local library and optionally removes downloaded
-     *     files associated with that artist.
-     */
-    delete: operations["delete_artist"];
-    options?: never;
-    head?: never;
-    /**
-     * Update Artist
-     * @description Updates editable local artist fields such as name and image URL.
-     */
-    patch: operations["update_artist"];
-    trace?: never;
-  };
-  "/api/artist/{artist_id}/fetch-bio": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/artist/{artist_id}/fetch-bio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fetch Artist Bio
+         * @description Starts a background refresh of the artist biography from linked providers.
+         */
+        post: operations["fetch_artist_bio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Fetch Artist Bio
-     * @description Starts a background refresh of the artist biography from linked providers.
-     */
-    post: operations["fetch_artist_bio"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/artist/{artist_id}/image": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/artist/{artist_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Artist Images
+         * @description Returns candidate artist images collected from the artist's linked
+         *     providers.
+         */
+        get: operations["get_artist_images"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Get Artist Images
-     * @description Returns candidate artist images collected from the artist's linked
-     *     providers.
-     */
-    get: operations["get_artist_images"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/artist/{artist_id}/match-suggestion/refresh": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/artist/{artist_id}/match-suggestion/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Match Suggestions
+         * @description Recomputes pending artist match suggestions for the specified artist.
+         */
+        post: operations["refresh_match_suggestions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Refresh Match Suggestions
-     * @description Recomputes pending artist match suggestions for the specified artist.
-     */
-    post: operations["refresh_match_suggestions"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/artist/{artist_id}/monitor": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/artist/{artist_id}/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Toggle Artist Monitor
+         * @description Enables or disables full monitoring for an artist.
+         */
+        patch: operations["toggle_artist_monitor"];
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /**
-     * Toggle Artist Monitor
-     * @description Enables or disables full monitoring for an artist.
-     */
-    patch: operations["toggle_artist_monitor"];
-    trace?: never;
-  };
-  "/api/artist/{artist_id}/provider": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/artist/{artist_id}/provider": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Artist Providers
+         * @description Returns the provider links currently attached to a local artist.
+         */
+        get: operations["list_artist_providers"];
+        put?: never;
+        /**
+         * Link Artist Provider
+         * @description Attaches a provider identity to an existing local artist.
+         */
+        post: operations["link_artist_provider"];
+        /**
+         * Unlink Artist Provider
+         * @description Removes a provider identity from an existing local artist.
+         */
+        delete: operations["unlink_artist_provider"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * List Artist Providers
-     * @description Returns the provider links currently attached to a local artist.
-     */
-    get: operations["list_artist_providers"];
-    put?: never;
-    /**
-     * Link Artist Provider
-     * @description Attaches a provider identity to an existing local artist.
-     */
-    post: operations["link_artist_provider"];
-    /**
-     * Unlink Artist Provider
-     * @description Removes a provider identity from an existing local artist.
-     */
-    delete: operations["unlink_artist_provider"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/artist/{artist_id}/sync": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/artist/{artist_id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Artist
+         * @description Triggers a discography sync for the specified artist using its linked
+         *     provider metadata.
+         */
+        post: operations["sync_artist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Sync Artist
-     * @description Triggers a discography sync for the specified artist using its linked
-     *     provider metadata.
-     */
-    post: operations["sync_artist"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/auth/status": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/auth/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Authentication status
+         * @description Returns the current authentication status of the user making the request.
+         *     If authentication is disabled, returns a default status indicating that authentication is not required.
+         *     If authentication is enabled, checks the session cookie and returns whether the user is authenticated, their username, and whether they must change their password.
+         */
+        get: operations["auth_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Authentication status
-     * @description Returns the current authentication status of the user making the request.
-     *     If authentication is disabled, returns a default status indicating that authentication is not required.
-     *     If authentication is enabled, checks the session cookie and returns whether the user is authenticated, their username, and whether they must change their password.
-     */
-    get: operations["auth_status"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/dashboard": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dashboard
+         * @description Returns the dashboard overview payload with local artists, albums, and download jobs.
+         */
+        get: operations["get_dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Get Dashboard
-     * @description Returns the dashboard overview payload with local artists, albums, and download jobs.
-     */
-    get: operations["get_dashboard"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/events": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server-Sent Events stream
+         * @description Subscribe to server-sent events for real-time updates
+         */
+        get: operations["sse_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Server-Sent Events stream
-     * @description Subscribe to server-sent events for real-time updates
-     */
-    get: operations["sse_events"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/image/{image_id}/{size}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/image/{image_id}/{size}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Tidal image
+         * @description Proxies an image from Tidal's CDN, validating the image ID and size parameters before fetching the image and returning it to the client.
+         */
+        get: operations["proxy_tidal_image"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Proxy Tidal image
-     * @description Proxies an image from Tidal's CDN, validating the image ID and size parameters before fetching the image and returning it to the client.
-     */
-    get: operations["proxy_tidal_image"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/image/{provider}/{image_id}/{size}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/image/{provider}/{image_id}/{size}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy provider image
+         * @description Proxies an image from a registered provider
+         */
+        get: operations["proxy_provider_image"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Proxy provider image
-     * @description Proxies an image from a registered provider
-     */
-    get: operations["proxy_provider_image"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/import/browse": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/import/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Browse Path */
+        post: operations["browse_path"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Browse Path */
-    post: operations["browse_path"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/import/confirm": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/import/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Import */
+        post: operations["confirm_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Confirm Import */
-    post: operations["confirm_import"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/import/external/confirm": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/import/external/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm External Import */
+        post: operations["confirm_external_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Confirm External Import */
-    post: operations["confirm_external_import"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/import/external/preview": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/import/external/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview External Import */
+        post: operations["preview_external_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Preview External Import */
-    post: operations["preview_external_import"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/import/preview": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Import */
+        get: operations["preview_import"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Preview Import */
-    get: operations["preview_import"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/import/scan": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/import/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan Import */
+        post: operations["scan_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Scan Import */
-    post: operations["scan_import"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/job": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Jobs */
+        get: operations["list_jobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** List Jobs */
-    get: operations["list_jobs"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/job/completed": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/job/completed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Clear Completed Jobs */
+        delete: operations["clear_completed_jobs"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    /** Clear Completed Jobs */
-    delete: operations["clear_completed_jobs"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/job/{job_id}/cancel": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/job/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Job */
+        post: operations["cancel_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Cancel Job */
-    post: operations["cancel_job"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/match-suggestion/{suggestion_id}/accept": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/match-suggestion/{suggestion_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept Match Suggestion */
+        post: operations["accept_match_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Accept Match Suggestion */
-    post: operations["accept_match_suggestion"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/match-suggestion/{suggestion_id}/dismiss": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/match-suggestion/{suggestion_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Match Suggestion */
+        post: operations["dismiss_match_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Dismiss Match Suggestion */
-    post: operations["dismiss_match_suggestion"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/provider": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/provider": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all enabled metadata providers
+         * @description Returns a list of provider IDs that are currently enabled in the system
+         */
+        get: operations["list_providers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * List all enabled metadata providers
-     * @description Returns a list of provider IDs that are currently enabled in the system
-     */
-    get: operations["list_providers"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/search": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search All
+         * @description Searches artists, albums, and tracks across all registered providers with a single query.
+         */
+        get: operations["search_all"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Search All
-     * @description Searches artists, albums, and tracks across all registered providers with a single query.
-     */
-    get: operations["search_all"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/track": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/track": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tracks */
+        get: operations["list_tracks"];
+        put?: never;
+        /** Create Track */
+        post: operations["create_track"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** List Tracks */
-    get: operations["list_tracks"];
-    put?: never;
-    /** Create Track */
-    post: operations["create_track"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/track/search": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/track/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search Tracks */
+        get: operations["search_tracks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Search Tracks */
-    get: operations["search_tracks"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/wanted": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/wanted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Wanted
+         * @description Returns wanted and partially wanted albums together with their tracks, artists, and jobs.
+         */
+        get: operations["get_wanted"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Get Wanted
-     * @description Returns wanted and partially wanted albums together with their tracks, artists, and jobs.
-     */
-    get: operations["get_wanted"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/auth/login": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login endpoint
+         * @description Expects form data with `username`, `password`, and optional `next` fields.
+         *     If authentication is successful, sets a session cookie and redirects the client to the URL specified in `next`
+         *     (or a default page if not provided). If authentication fails, redirects back to the login page with an error message.
+         */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Login endpoint
-     * @description Expects form data with `username`, `password`, and optional `next` fields.
-     *     If authentication is successful, sets a session cookie and redirects the client to the URL specified in `next`
-     *     (or a default page if not provided). If authentication fails, redirects back to the login page with an error message.
-     */
-    post: operations["login"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/auth/logout": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout endpoint
+         * @description Invalidates the user's session on the server and clears the session cookie on the client.
+         *     Redirects to the login page if authentication is enabled, or to the home page otherwise.
+         */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Logout endpoint
-     * @description Invalidates the user's session on the server and clears the session cookie on the client.
-     *     Redirects to the login page if authentication is enabled, or to the home page otherwise.
-     */
-    post: operations["logout"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/auth/update-credentials": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/auth/update-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update credentials
+         * @description Allows an authenticated user to update their username and/or password.
+         */
+        post: operations["update_credentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Update credentials
-     * @description Allows an authenticated user to update their username and/or password.
-     */
-    post: operations["update_credentials"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    /**
-     * @description Core album data as stored in the database.
-     *     Relation data (artists, tracks, provider links) is returned separately
-     *     in API responses — not embedded here.
-     */
-    Album: {
-      album_type?: string | null;
-      cover_url?: string | null;
-      /** Format: date-time */
-      created_at: string;
-      explicit: boolean;
-      /** Format: uuid */
-      id: string;
-      monitored: boolean;
-      quality_override?: null | components["schemas"]["Quality"];
-      release_date?: string | null;
-      title: string;
-      wanted_status: components["schemas"]["WantedStatus"];
+    schemas: {
+        /**
+         * @description Core album data as stored in the database.
+         *     Relation data (artists, tracks, provider links) is returned separately
+         *     in API responses — not embedded here.
+         */
+        Album: {
+            album_type?: string | null;
+            cover_url?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            explicit: boolean;
+            /** Format: uuid */
+            id: string;
+            monitored: boolean;
+            quality_override?: null | components["schemas"]["Quality"];
+            release_date?: string | null;
+            title: string;
+            wanted_status: components["schemas"]["WantedStatus"];
+        };
+        AlbumArtistRequest: {
+            /** Format: uuid */
+            artist_id: string;
+        };
+        AlbumDetailResponse: {
+            album: components["schemas"]["Album"];
+            album_artists: components["schemas"]["ArtistWithPriority"][];
+            album_match_suggestions: components["schemas"]["AlbumMatchSuggestion"][];
+            default_quality: components["schemas"]["Quality"];
+            jobs: components["schemas"]["DownloadJob"][];
+            provider_links: components["schemas"]["ProviderLink"][];
+            tracks: components["schemas"]["TrackInfo"][];
+        };
+        AlbumMatchSuggestion: {
+            /** Format: uuid */
+            album_id: string;
+            /** Format: int32 */
+            confidence: number;
+            explanation?: string | null;
+            external_name?: string | null;
+            external_url?: string | null;
+            /** Format: uuid */
+            id: string;
+            image_url?: string | null;
+            left_external_id: string;
+            left_provider: string;
+            match_kind: string;
+            /** Format: int32 */
+            popularity?: number | null;
+            right_external_id: string;
+            right_provider: string;
+            status: string;
+            tags: string[];
+        };
+        ArtistDetailResponse: {
+            album_match_suggestions: components["schemas"]["AlbumMatchSuggestion"][];
+            albums: components["schemas"]["Album"][];
+            artist: components["schemas"]["MonitoredArtist"];
+            artist_match_suggestions: components["schemas"]["ArtistMatchSuggestion"][];
+            default_quality: components["schemas"]["Quality"];
+            provider_links: components["schemas"]["ProviderLink"][];
+        };
+        /** @description An artist image option from a linked provider. */
+        ArtistImageOption: {
+            image_url: string;
+            provider: string;
+        };
+        ArtistMatchSuggestion: {
+            /** Format: uuid */
+            artist_id: string;
+            artist_type?: string | null;
+            /** Format: int32 */
+            confidence: number;
+            country?: string | null;
+            disambiguation?: string | null;
+            explanation?: string | null;
+            external_name?: string | null;
+            external_url?: string | null;
+            /** Format: uuid */
+            id: string;
+            image_url?: string | null;
+            left_external_id: string;
+            left_provider: string;
+            match_kind: string;
+            /** Format: int32 */
+            popularity?: number | null;
+            right_external_id: string;
+            right_provider: string;
+            status: string;
+            tags: string[];
+        };
+        ArtistWithPriority: components["schemas"]["MonitoredArtist"] & {
+            /** Format: int32 */
+            priority: number;
+        };
+        AuthStatus: {
+            auth_enabled: boolean;
+            authenticated: boolean;
+            must_change_password: boolean;
+            username?: string | null;
+        };
+        /** @description A single entry returned by the server-side path browser. */
+        BrowseEntry: {
+            /** @description `true` when the entry is a recognised audio file. */
+            is_audio: boolean;
+            /** @description `true` when the entry is a directory. */
+            is_dir: boolean;
+            /** @description Display name (file or directory name, not full path). */
+            name: string;
+            /** @description Absolute path on the server. */
+            path: string;
+        };
+        BrowsePathRequest: {
+            path: string;
+        };
+        CreateAlbumRequest: {
+            artist_external_id: string;
+            artist_name: string;
+            external_album_id: string;
+            monitor_all: boolean;
+            provider: components["schemas"]["Provider"];
+        };
+        CreateArtistRequest: {
+            external_id: string;
+            /** Format: uri */
+            external_url?: string | null;
+            image_url?: string | null;
+            name: string;
+            provider: components["schemas"]["Provider"];
+        };
+        CreateTrackRequest: {
+            artist_external_id: string;
+            artist_name: string;
+            external_album_id: string;
+            external_track_id: string;
+            provider: components["schemas"]["Provider"];
+        };
+        CredentialsForm: {
+            confirm_password: string;
+            current_password?: string | null;
+            new_password: string;
+            username: string;
+        };
+        DashboardAlbum: components["schemas"]["Album"] & {
+            /** Format: uuid */
+            artist_id?: string | null;
+        };
+        DashboardData: {
+            albums: components["schemas"]["DashboardAlbum"][];
+            artists: components["schemas"]["MonitoredArtist"][];
+            jobs: components["schemas"]["DownloadJob"][];
+        };
+        DownloadJob: {
+            /** Format: uuid */
+            album_id: string;
+            album_title: string;
+            artist_name: string;
+            /** Format: int32 */
+            completed_tracks: number;
+            /** Format: date-time */
+            created_at: string;
+            error?: string | null;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["DownloadJobKind"];
+            quality: components["schemas"]["Quality"];
+            source: string;
+            status: components["schemas"]["DownloadStatus"];
+            /** Format: int32 */
+            total_tracks: number;
+            /** Format: uuid */
+            track_id?: string | null;
+            track_title?: string | null;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @enum {string} */
+        DownloadJobKind: "album" | "track";
+        /** @enum {string} */
+        DownloadStatus: "queued" | "resolving" | "downloading" | "completed" | "failed";
+        /**
+         * @description User-confirmed external import: which source to import, how, and the
+         *     individual album-level confirmations.
+         */
+        ExternalImportConfirmation: {
+            /** @description Per-album confirmations (same structure as the library-scan import). */
+            items: components["schemas"]["ImportConfirmation"][];
+            /** @description Copy or hardlink. */
+            mode: components["schemas"]["ManualImportMode"];
+            /** @description Absolute path on the server that was scanned. */
+            source_path: string;
+        };
+        /** @description A candidate album match for a discovered local folder. */
+        ImportAlbumCandidate: {
+            acquired: boolean;
+            /** Format: uuid */
+            album_id?: string | null;
+            album_title: string;
+            album_type?: string | null;
+            /** Format: uuid */
+            artist_id: string;
+            artist_name: string;
+            /** Format: int32 */
+            confidence: number;
+            cover_url?: string | null;
+            explicit: boolean;
+            monitored: boolean;
+            release_date?: string | null;
+        };
+        /** @description User-confirmed import selection for a single item. */
+        ImportConfirmation: {
+            /** Format: uuid */
+            album_id?: string | null;
+            album_title: string;
+            /** Format: uuid */
+            artist_id?: string | null;
+            artist_name: string;
+            preview_id: string;
+            year?: string | null;
+        };
+        /**
+         * @description Match quality for a discovered local album during import preview.
+         * @enum {string}
+         */
+        ImportMatchStatus: "matched" | "partial" | "unmatched";
+        /** @description A discovered local album directory with match candidates. */
+        ImportPreviewItem: {
+            already_imported: boolean;
+            audio_file_count: number;
+            candidates: components["schemas"]["ImportAlbumCandidate"][];
+            discovered_album: string;
+            discovered_artist: string;
+            discovered_year?: string | null;
+            id: string;
+            match_status: components["schemas"]["ImportMatchStatus"];
+            relative_path: string;
+            selected_candidate?: number | null;
+        };
+        /** @description Summary of a confirmed import run. */
+        ImportResultSummary: {
+            artists_added: number;
+            errors: string[];
+            failed: number;
+            imported: number;
+            total_selected: number;
+        };
+        LibraryAlbumSummary: components["schemas"]["Album"] & {
+            /** Format: uuid */
+            artist_id?: string | null;
+            artist_name?: string | null;
+        };
+        /** @description A track with its parent album and artist context, for library-wide views. */
+        LibraryTrack: {
+            album_cover_url?: string | null;
+            /** Format: uuid */
+            album_id: string;
+            album_title: string;
+            /** Format: uuid */
+            artist_id: string;
+            artist_name: string;
+            track: components["schemas"]["TrackInfo"];
+        };
+        LinkArtistProviderRequest: {
+            external_id: string;
+            external_name?: string | null;
+            external_url?: string | null;
+            image_ref?: string | null;
+            provider: components["schemas"]["Provider"];
+        };
+        LoginForm: {
+            next?: string | null;
+            password: string;
+            username: string;
+        };
+        /**
+         * @description How files are integrated into the music library during an external import.
+         * @enum {string}
+         */
+        ManualImportMode: "copy" | "hardlink";
+        MergeAlbumsRequest: {
+            result_cover_url?: string | null;
+            result_title?: string | null;
+            /** Format: uuid */
+            source_album_id: string;
+            /** Format: uuid */
+            target_album_id: string;
+        };
+        MonitoredArtist: {
+            bio?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            image_url?: string | null;
+            /**
+             * @description Whether this artist is fully monitored (discography synced from providers).
+             *     `false` = lightweight artist (only explicitly-added albums, no auto-sync).
+             */
+            monitored: boolean;
+            name: string;
+        };
+        PreviewExternalImportRequest: {
+            source_path: string;
+        };
+        /** @enum {string} */
+        Provider: "tidal" | "deezer" | "music_brainz" | "soulseek" | "none";
+        /** @description Provider link info for the UI. */
+        ProviderLink: {
+            external_id: string;
+            external_name?: string | null;
+            external_url?: string | null;
+            provider: string;
+        };
+        /** @enum {string} */
+        Quality: "Low" | "High" | "Lossless" | "HiRes";
+        /** @description An album search result from a metadata provider. */
+        SearchAlbumResult: {
+            album_type?: string | null;
+            /**
+             * @description `Some(true)` when the album is already in the library.
+             *     Only populated by server-side search handlers; defaults to `None`.
+             */
+            already_added?: boolean | null;
+            /** @description Provider-specific external ID for the primary artist. */
+            artist_external_id: string;
+            /** @description Primary artist name for display. */
+            artist_name: string;
+            cover_url?: string | null;
+            explicit: boolean;
+            external_id: string;
+            provider: string;
+            release_date?: string | null;
+            title: string;
+            url?: string | null;
+        };
+        SearchAllResult: {
+            albums: components["schemas"]["SearchAlbumResult"][];
+            artists: components["schemas"]["SearchArtistResult"][];
+            tracks: components["schemas"]["SearchTrackResult"][];
+        };
+        /** @description A search result from a metadata provider. */
+        SearchArtistResult: {
+            /**
+             * @description `Some(true)` when the artist is already in the library.
+             *     Only populated by server-side search handlers; defaults to `None`.
+             */
+            already_monitored?: boolean | null;
+            artist_type?: string | null;
+            country?: string | null;
+            disambiguation?: string | null;
+            external_id: string;
+            image_url?: string | null;
+            name: string;
+            /** Format: int32 */
+            popularity?: number | null;
+            provider: string;
+            tags: string[];
+            url?: string | null;
+        };
+        /** @description A track search result from a metadata provider. */
+        SearchTrackResult: {
+            album_cover_url?: string | null;
+            album_external_id: string;
+            /** @description Album info for context. */
+            album_title: string;
+            /**
+             * @description `Some(true)` when the track is already in the library.
+             *     Only populated by server-side search handlers; defaults to `None`.
+             */
+            already_added?: boolean | null;
+            artist_external_id: string;
+            /** @description Display-ready track artist string. */
+            artist_name: string;
+            /** Format: int32 */
+            duration_secs: number;
+            explicit: boolean;
+            external_id: string;
+            isrc?: string | null;
+            provider: string;
+            title: string;
+            version?: string | null;
+        };
+        SetAlbumQualityRequest: {
+            quality?: null | components["schemas"]["Quality"];
+        };
+        SetTrackQualityRequest: {
+            quality?: null | components["schemas"]["Quality"];
+        };
+        ToggleAlbumMonitorRequest: {
+            monitored: boolean;
+        };
+        ToggleArtistMonitorRequest: {
+            monitored: boolean;
+        };
+        ToggleTrackMonitorRequest: {
+            monitored: boolean;
+        };
+        TrackInfo: {
+            /** @description Whether this track has been acquired (file exists on disk). */
+            acquired: boolean;
+            /** Format: int32 */
+            disc_number: number;
+            /** Format: int32 */
+            duration_secs: number;
+            explicit: boolean;
+            /** @description Local file path relative to the music root (populated for acquired albums). */
+            file_path?: string | null;
+            /** Format: uuid */
+            id: string;
+            isrc?: string | null;
+            /** @description Whether this individual track is monitored for download. */
+            monitored: boolean;
+            quality_override?: null | components["schemas"]["Quality"];
+            title: string;
+            /** @description Track-level artist string (may differ from album artist for features/collabs). */
+            track_artist?: string | null;
+            /** Format: int32 */
+            track_number: number;
+            version?: string | null;
+        };
+        UnlinkArtistProviderRequest: {
+            external_id: string;
+            provider: string;
+        };
+        UpdateArtistRequest: {
+            image_url?: string | null;
+            name?: string | null;
+        };
+        WantedAlbumSummary: components["schemas"]["Album"] & {
+            /** Format: uuid */
+            artist_id?: string | null;
+        };
+        WantedAlbumWithTracks: {
+            album: components["schemas"]["WantedAlbumSummary"];
+            tracks: components["schemas"]["TrackInfo"][];
+        };
+        WantedData: {
+            albums: components["schemas"]["WantedAlbumWithTracks"][];
+            artists: components["schemas"]["MonitoredArtist"][];
+            jobs: components["schemas"]["DownloadJob"][];
+        };
+        /**
+         * @description Album status indicating what the download system should do with it.
+         * @enum {string}
+         */
+        WantedStatus: "unwanted" | "wanted" | "in_progress" | "acquired";
     };
-    AlbumArtistRequest: {
-      /** Format: uuid */
-      artist_id: string;
-    };
-    AlbumDetailResponse: {
-      album: components["schemas"]["Album"];
-      album_artists: components["schemas"]["ArtistWithPriority"][];
-      album_match_suggestions: components["schemas"]["AlbumMatchSuggestion"][];
-      default_quality: components["schemas"]["Quality"];
-      jobs: components["schemas"]["DownloadJob"][];
-      provider_links: components["schemas"]["ProviderLink"][];
-      tracks: components["schemas"]["TrackInfo"][];
-    };
-    AlbumMatchSuggestion: {
-      /** Format: uuid */
-      album_id: string;
-      /** Format: int32 */
-      confidence: number;
-      explanation?: string | null;
-      external_name?: string | null;
-      external_url?: string | null;
-      /** Format: uuid */
-      id: string;
-      image_url?: string | null;
-      left_external_id: string;
-      left_provider: string;
-      match_kind: string;
-      /** Format: int32 */
-      popularity?: number | null;
-      right_external_id: string;
-      right_provider: string;
-      status: string;
-      tags: string[];
-    };
-    ArtistDetailResponse: {
-      album_match_suggestions: components["schemas"]["AlbumMatchSuggestion"][];
-      albums: components["schemas"]["Album"][];
-      artist: components["schemas"]["MonitoredArtist"];
-      artist_match_suggestions: components["schemas"]["ArtistMatchSuggestion"][];
-      default_quality: components["schemas"]["Quality"];
-      provider_links: components["schemas"]["ProviderLink"][];
-    };
-    /** @description An artist image option from a linked provider. */
-    ArtistImageOption: {
-      image_url: string;
-      provider: string;
-    };
-    ArtistMatchSuggestion: {
-      /** Format: uuid */
-      artist_id: string;
-      artist_type?: string | null;
-      /** Format: int32 */
-      confidence: number;
-      country?: string | null;
-      disambiguation?: string | null;
-      explanation?: string | null;
-      external_name?: string | null;
-      external_url?: string | null;
-      /** Format: uuid */
-      id: string;
-      image_url?: string | null;
-      left_external_id: string;
-      left_provider: string;
-      match_kind: string;
-      /** Format: int32 */
-      popularity?: number | null;
-      right_external_id: string;
-      right_provider: string;
-      status: string;
-      tags: string[];
-    };
-    ArtistWithPriority: components["schemas"]["MonitoredArtist"] & {
-      /** Format: int32 */
-      priority: number;
-    };
-    AuthStatus: {
-      auth_enabled: boolean;
-      authenticated: boolean;
-      must_change_password: boolean;
-      username?: string | null;
-    };
-    /** @description A single entry returned by the server-side path browser. */
-    BrowseEntry: {
-      /** @description `true` when the entry is a recognised audio file. */
-      is_audio: boolean;
-      /** @description `true` when the entry is a directory. */
-      is_dir: boolean;
-      /** @description Display name (file or directory name, not full path). */
-      name: string;
-      /** @description Absolute path on the server. */
-      path: string;
-    };
-    BrowsePathRequest: {
-      path: string;
-    };
-    CreateAlbumRequest: {
-      artist_external_id: string;
-      artist_name: string;
-      external_album_id: string;
-      monitor_all: boolean;
-      provider: components["schemas"]["Provider"];
-    };
-    CreateArtistRequest: {
-      external_id: string;
-      /** Format: uri */
-      external_url?: string | null;
-      image_url?: string | null;
-      name: string;
-      provider: string;
-    };
-    CreateTrackRequest: {
-      artist_external_id: string;
-      artist_name: string;
-      external_album_id: string;
-      external_track_id: string;
-      provider: components["schemas"]["Provider"];
-    };
-    CredentialsForm: {
-      confirm_password: string;
-      current_password?: string | null;
-      new_password: string;
-      username: string;
-    };
-    DashboardAlbum: components["schemas"]["Album"] & {
-      /** Format: uuid */
-      artist_id?: string | null;
-    };
-    DashboardData: {
-      albums: components["schemas"]["DashboardAlbum"][];
-      artists: components["schemas"]["MonitoredArtist"][];
-      jobs: components["schemas"]["DownloadJob"][];
-    };
-    DownloadJob: {
-      /** Format: uuid */
-      album_id: string;
-      album_title: string;
-      artist_name: string;
-      /** Format: int32 */
-      completed_tracks: number;
-      /** Format: date-time */
-      created_at: string;
-      error?: string | null;
-      /** Format: uuid */
-      id: string;
-      kind: components["schemas"]["DownloadJobKind"];
-      quality: components["schemas"]["Quality"];
-      source: string;
-      status: components["schemas"]["DownloadStatus"];
-      /** Format: int32 */
-      total_tracks: number;
-      /** Format: uuid */
-      track_id?: string | null;
-      track_title?: string | null;
-      /** Format: date-time */
-      updated_at: string;
-    };
-    /** @enum {string} */
-    DownloadJobKind: "album" | "track";
-    /** @enum {string} */
-    DownloadStatus: "queued" | "resolving" | "downloading" | "completed" | "failed";
-    /**
-     * @description User-confirmed external import: which source to import, how, and the
-     *     individual album-level confirmations.
-     */
-    ExternalImportConfirmation: {
-      /** @description Per-album confirmations (same structure as the library-scan import). */
-      items: components["schemas"]["ImportConfirmation"][];
-      /** @description Copy or hardlink. */
-      mode: components["schemas"]["ManualImportMode"];
-      /** @description Absolute path on the server that was scanned. */
-      source_path: string;
-    };
-    /** @description A candidate album match for a discovered local folder. */
-    ImportAlbumCandidate: {
-      acquired: boolean;
-      /** Format: uuid */
-      album_id?: string | null;
-      album_title: string;
-      album_type?: string | null;
-      /** Format: uuid */
-      artist_id: string;
-      artist_name: string;
-      /** Format: int32 */
-      confidence: number;
-      cover_url?: string | null;
-      explicit: boolean;
-      monitored: boolean;
-      release_date?: string | null;
-    };
-    /** @description User-confirmed import selection for a single item. */
-    ImportConfirmation: {
-      /** Format: uuid */
-      album_id?: string | null;
-      album_title: string;
-      /** Format: uuid */
-      artist_id?: string | null;
-      artist_name: string;
-      preview_id: string;
-      year?: string | null;
-    };
-    /**
-     * @description Match quality for a discovered local album during import preview.
-     * @enum {string}
-     */
-    ImportMatchStatus: "matched" | "partial" | "unmatched";
-    /** @description A discovered local album directory with match candidates. */
-    ImportPreviewItem: {
-      already_imported: boolean;
-      audio_file_count: number;
-      candidates: components["schemas"]["ImportAlbumCandidate"][];
-      discovered_album: string;
-      discovered_artist: string;
-      discovered_year?: string | null;
-      id: string;
-      match_status: components["schemas"]["ImportMatchStatus"];
-      relative_path: string;
-      selected_candidate?: number | null;
-    };
-    /** @description Summary of a confirmed import run. */
-    ImportResultSummary: {
-      artists_added: number;
-      errors: string[];
-      failed: number;
-      imported: number;
-      total_selected: number;
-    };
-    LibraryAlbumSummary: components["schemas"]["Album"] & {
-      /** Format: uuid */
-      artist_id?: string | null;
-      artist_name?: string | null;
-    };
-    /** @description A track with its parent album and artist context, for library-wide views. */
-    LibraryTrack: {
-      album_cover_url?: string | null;
-      /** Format: uuid */
-      album_id: string;
-      album_title: string;
-      /** Format: uuid */
-      artist_id: string;
-      artist_name: string;
-      track: components["schemas"]["TrackInfo"];
-    };
-    LinkArtistProviderRequest: {
-      external_id: string;
-      external_name?: string | null;
-      external_url?: string | null;
-      image_ref?: string | null;
-      provider: string;
-    };
-    LoginForm: {
-      next?: string | null;
-      password: string;
-      username: string;
-    };
-    /**
-     * @description How files are integrated into the music library during an external import.
-     * @enum {string}
-     */
-    ManualImportMode: "copy" | "hardlink";
-    MergeAlbumsRequest: {
-      result_cover_url?: string | null;
-      result_title?: string | null;
-      /** Format: uuid */
-      source_album_id: string;
-      /** Format: uuid */
-      target_album_id: string;
-    };
-    MonitoredArtist: {
-      bio?: string | null;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: uuid */
-      id: string;
-      image_url?: string | null;
-      /**
-       * @description Whether this artist is fully monitored (discography synced from providers).
-       *     `false` = lightweight artist (only explicitly-added albums, no auto-sync).
-       */
-      monitored: boolean;
-      name: string;
-    };
-    PreviewExternalImportRequest: {
-      source_path: string;
-    };
-    /** @enum {string} */
-    Provider: "tidal" | "deezer" | "music_brainz" | "soulseek" | "none";
-    /** @description Provider link info for the UI. */
-    ProviderLink: {
-      external_id: string;
-      external_name?: string | null;
-      external_url?: string | null;
-      provider: string;
-    };
-    /** @enum {string} */
-    Quality: "Low" | "High" | "Lossless" | "HiRes";
-    /** @description An album search result from a metadata provider. */
-    SearchAlbumResult: {
-      album_type?: string | null;
-      /**
-       * @description `Some(true)` when the album is already in the library.
-       *     Only populated by server-side search handlers; defaults to `None`.
-       */
-      already_added?: boolean | null;
-      /** @description Provider-specific external ID for the primary artist. */
-      artist_external_id: string;
-      /** @description Primary artist name for display. */
-      artist_name: string;
-      cover_url?: string | null;
-      explicit: boolean;
-      external_id: string;
-      provider: string;
-      release_date?: string | null;
-      title: string;
-      url?: string | null;
-    };
-    SearchAllResult: {
-      albums: components["schemas"]["SearchAlbumResult"][];
-      artists: components["schemas"]["SearchArtistResult"][];
-      tracks: components["schemas"]["SearchTrackResult"][];
-    };
-    /** @description A search result from a metadata provider. */
-    SearchArtistResult: {
-      /**
-       * @description `Some(true)` when the artist is already in the library.
-       *     Only populated by server-side search handlers; defaults to `None`.
-       */
-      already_monitored?: boolean | null;
-      artist_type?: string | null;
-      country?: string | null;
-      disambiguation?: string | null;
-      external_id: string;
-      image_url?: string | null;
-      name: string;
-      /** Format: int32 */
-      popularity?: number | null;
-      provider: string;
-      tags: string[];
-      url?: string | null;
-    };
-    /** @description A track search result from a metadata provider. */
-    SearchTrackResult: {
-      album_cover_url?: string | null;
-      album_external_id: string;
-      /** @description Album info for context. */
-      album_title: string;
-      /**
-       * @description `Some(true)` when the track is already in the library.
-       *     Only populated by server-side search handlers; defaults to `None`.
-       */
-      already_added?: boolean | null;
-      artist_external_id: string;
-      /** @description Display-ready track artist string. */
-      artist_name: string;
-      /** Format: int32 */
-      duration_secs: number;
-      explicit: boolean;
-      external_id: string;
-      isrc?: string | null;
-      provider: string;
-      title: string;
-      version?: string | null;
-    };
-    SetAlbumQualityRequest: {
-      quality?: null | components["schemas"]["Quality"];
-    };
-    SetTrackQualityRequest: {
-      quality?: null | components["schemas"]["Quality"];
-    };
-    ToggleAlbumMonitorRequest: {
-      monitored: boolean;
-    };
-    ToggleArtistMonitorRequest: {
-      monitored: boolean;
-    };
-    ToggleTrackMonitorRequest: {
-      monitored: boolean;
-    };
-    TrackInfo: {
-      /** @description Whether this track has been acquired (file exists on disk). */
-      acquired: boolean;
-      /** Format: int32 */
-      disc_number: number;
-      /** Format: int32 */
-      duration_secs: number;
-      explicit: boolean;
-      /** @description Local file path relative to the music root (populated for acquired albums). */
-      file_path?: string | null;
-      /** Format: uuid */
-      id: string;
-      isrc?: string | null;
-      /** @description Whether this individual track is monitored for download. */
-      monitored: boolean;
-      quality_override?: null | components["schemas"]["Quality"];
-      title: string;
-      /** @description Track-level artist string (may differ from album artist for features/collabs). */
-      track_artist?: string | null;
-      /** Format: int32 */
-      track_number: number;
-      version?: string | null;
-    };
-    UnlinkArtistProviderRequest: {
-      external_id: string;
-      provider: string;
-    };
-    UpdateArtistRequest: {
-      image_url?: string | null;
-      name?: string | null;
-    };
-    WantedAlbumSummary: components["schemas"]["Album"] & {
-      /** Format: uuid */
-      artist_id?: string | null;
-    };
-    WantedAlbumWithTracks: {
-      album: components["schemas"]["WantedAlbumSummary"];
-      tracks: components["schemas"]["TrackInfo"][];
-    };
-    WantedData: {
-      albums: components["schemas"]["WantedAlbumWithTracks"][];
-      artists: components["schemas"]["MonitoredArtist"][];
-      jobs: components["schemas"]["DownloadJob"][];
-    };
-    /**
-     * @description Album status indicating what the download system should do with it.
-     * @enum {string}
-     */
-    WantedStatus: "unwanted" | "wanted" | "in_progress" | "acquired";
-  };
-  responses: never;
-  parameters: never;
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  list_albums: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description All local albums */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["LibraryAlbumSummary"][];
-        };
-      };
-      /** @description Failed to load albums */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  create_album: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateAlbumRequest"];
-      };
-    };
-    responses: {
-      /** @description Album created */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Provider album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to create album */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  merge_albums: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["MergeAlbumsRequest"];
-      };
-    };
-    responses: {
-      /** @description Albums merged */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to merge albums */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  search_albums: {
-    parameters: {
-      query: {
-        /** @description Album search query */
-        query: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Search results across all providers */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["SearchAlbumResult"][];
-        };
-      };
-      /** @description Provider search unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  get_album: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Album detail payload */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["AlbumDetailResponse"];
-        };
-      };
-      /** @description Album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to load album detail */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  add_album_artist: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AlbumArtistRequest"];
-      };
-    };
-    responses: {
-      /** @description Artist added to album */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Album or artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to add artist to album */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  remove_album_artist: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Artist removed from album */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Album or artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Cannot remove the only artist from an album */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to remove artist from album */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  retry_download: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Album download queued */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to retry album download */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  remove_album_files: {
-    parameters: {
-      query?: {
-        /** @description Whether to unmonitor the album after file removal */
-        unmonitor?: boolean;
-      };
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Album files removed */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to remove album files */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  toggle_album_monitor: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ToggleAlbumMonitorRequest"];
-      };
-    };
-    responses: {
-      /** @description Album monitor flag updated */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to toggle album monitor */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  list_album_providers: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Provider links for the album */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ProviderLink"][];
-        };
-      };
-      /** @description Album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to load album providers */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  set_album_quality: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["SetAlbumQualityRequest"];
-      };
-    };
-    responses: {
-      /** @description Album quality updated */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to update album quality */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  list_album_tracks: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Tracks for the album */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TrackInfo"][];
-        };
-      };
-      /** @description Album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to load album tracks */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  bulk_toggle_track_monitor: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ToggleTrackMonitorRequest"];
-      };
-    };
-    responses: {
-      /** @description Track monitor flags updated */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to update track monitoring */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  toggle_track_monitor: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-        /** @description Track UUID */
-        track_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ToggleTrackMonitorRequest"];
-      };
-    };
-    responses: {
-      /** @description Track monitor flag updated */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Track not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to toggle track monitoring */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  set_track_quality: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Album UUID */
-        album_id: string;
-        /** @description Track UUID */
-        track_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["SetTrackQualityRequest"];
-      };
-    };
-    responses: {
-      /** @description Track quality updated */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Track not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to update track quality */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  list_artists: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description All local artists */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["MonitoredArtist"][];
-        };
-      };
-      /** @description Failed to load artists */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  create_artist: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateArtistRequest"];
-      };
-    };
-    responses: {
-      /** @description Artist created */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Artist already exists */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to create artist */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  search_artists: {
-    parameters: {
-      query: {
-        /** @description Artist search query */
-        query: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Search results across all providers */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["SearchArtistResult"][];
-        };
-      };
-      /** @description Provider search unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  get_artist: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Artist detail payload */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ArtistDetailResponse"];
-        };
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to load artist detail */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  delete_artist: {
-    parameters: {
-      query?: {
-        /** @description Whether to remove downloaded files */
-        remove_files?: boolean;
-      };
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Artist removed */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to remove artist */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  update_artist: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateArtistRequest"];
-      };
-    };
-    responses: {
-      /** @description Artist updated */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to update artist */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  fetch_artist_bio: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Artist bio refresh triggered */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to refresh artist bio */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  get_artist_images: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Available artist images from linked providers */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ArtistImageOption"][];
-        };
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to fetch artist images */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  refresh_match_suggestions: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Artist match suggestions refreshed */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to refresh match suggestions */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  toggle_artist_monitor: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ToggleArtistMonitorRequest"];
-      };
-    };
-    responses: {
-      /** @description Artist monitor flag updated */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to toggle artist monitor */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  list_artist_providers: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Provider links for the artist */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ProviderLink"][];
-        };
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to load provider links */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  link_artist_provider: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["LinkArtistProviderRequest"];
-      };
-    };
-    responses: {
-      /** @description Provider linked to artist */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to link provider */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  unlink_artist_provider: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UnlinkArtistProviderRequest"];
-      };
-    };
-    responses: {
-      /** @description Provider unlinked from artist */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to unlink provider */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  sync_artist: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Artist UUID */
-        artist_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Artist albums synced */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Artist not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to sync artist albums */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  auth_status: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Authentication status retrieved successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["AuthStatus"];
-        };
-      };
-      /** @description User is not authenticated */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to retrieve authentication status */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  get_dashboard: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Dashboard data */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["DashboardData"];
-        };
-      };
-    };
-  };
-  sse_events: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description A stream of server-sent events */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "text/event-stream": unknown;
-        };
-      };
-    };
-  };
-  proxy_tidal_image: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        image_id: string;
-        size: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The proxied image */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "image/jpeg": unknown;
-        };
-      };
-      /** @description Invalid request parameters */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Upstream error */
-      502: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  proxy_provider_image: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        provider: components["schemas"]["Provider"];
-        image_id: string;
-        size: number;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The proxied image */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "image/jpeg": unknown;
-        };
-      };
-      /** @description Invalid request parameters */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Upstream error */
-      502: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  browse_path: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["BrowsePathRequest"];
-      };
-    };
-    responses: {
-      /** @description Filesystem browse entries */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["BrowseEntry"][];
-        };
-      };
-      /** @description Failed to browse path */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  confirm_import: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ImportConfirmation"][];
-      };
-    };
-    responses: {
-      /** @description Import result summary */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ImportResultSummary"];
-        };
-      };
-      /** @description Failed to confirm import */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  confirm_external_import: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ExternalImportConfirmation"];
-      };
-    };
-    responses: {
-      /** @description External import result summary */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ImportResultSummary"];
-        };
-      };
-      /** @description Failed to confirm external import */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  preview_external_import: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PreviewExternalImportRequest"];
-      };
-    };
-    responses: {
-      /** @description External import preview items */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ImportPreviewItem"][];
-        };
-      };
-      /** @description Failed to preview external import */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  preview_import: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Import preview items */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ImportPreviewItem"][];
-        };
-      };
-      /** @description Failed to preview import */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  scan_import: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Import scan started */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to start import scan */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  list_jobs: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description All download jobs */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["DownloadJob"][];
-        };
-      };
-    };
-  };
-  clear_completed_jobs: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Completed jobs cleared */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to clear completed jobs */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  cancel_job: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Download job UUID */
-        job_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Job cancelled */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to cancel job */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  accept_match_suggestion: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Match suggestion UUID */
-        suggestion_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Match suggestion accepted */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Match suggestion not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to accept match suggestion */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  dismiss_match_suggestion: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Match suggestion UUID */
-        suggestion_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Match suggestion dismissed */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to dismiss match suggestion */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  list_providers: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description List of enabled metadata providers */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": string[];
-        };
-      };
-    };
-  };
-  search_all: {
-    parameters: {
-      query: {
-        query: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Aggregated search results */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["SearchAllResult"];
-        };
-      };
-      /** @description One or more provider searches failed */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  list_tracks: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description All local library tracks */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["LibraryTrack"][];
-        };
-      };
-      /** @description Failed to load tracks */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  create_track: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateTrackRequest"];
-      };
-    };
-    responses: {
-      /** @description Track created */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Provider track or album not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to create track */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  search_tracks: {
-    parameters: {
-      query: {
-        query: string;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Search results across all providers */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["SearchTrackResult"][];
-        };
-      };
-      /** @description Provider search unavailable */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  get_wanted: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Wanted view data */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["WantedData"];
-        };
-      };
-      /** @description Failed to load wanted data */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  login: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/x-www-form-urlencoded": components["schemas"]["LoginForm"];
-      };
-    };
-    responses: {
-      /** @description Login successful, client should redirect to the URL in the Location header */
-      303: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Invalid login form data */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Login failed due to server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  logout: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Logout successful, client should redirect to the URL in the Location header */
-      303: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Logout failed due to server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  update_credentials: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/x-www-form-urlencoded": components["schemas"]["CredentialsForm"];
-      };
-    };
-    responses: {
-      /** @description Credentials updated successfully, client should redirect to the URL in the Location header */
-      303: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Invalid form data */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Failed to update credentials due to server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
+    list_albums: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All local albums */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryAlbumSummary"][];
+                };
+            };
+            /** @description Failed to load albums */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_album: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAlbumRequest"];
+            };
+        };
+        responses: {
+            /** @description Album created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to create album */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    merge_albums: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeAlbumsRequest"];
+            };
+        };
+        responses: {
+            /** @description Albums merged */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to merge albums */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_albums: {
+        parameters: {
+            query: {
+                /** @description Album search query */
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Search results across all providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchAlbumResult"][];
+                };
+            };
+            /** @description Provider search unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_album: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Album detail payload */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumDetailResponse"];
+                };
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to load album detail */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_album_artist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlbumArtistRequest"];
+            };
+        };
+        responses: {
+            /** @description Artist added to album */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Album or artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to add artist to album */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_album_artist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Artist removed from album */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Album or artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cannot remove the only artist from an album */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to remove artist from album */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    retry_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Album download queued */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to retry album download */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_album_files: {
+        parameters: {
+            query?: {
+                /** @description Whether to unmonitor the album after file removal */
+                unmonitor?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Album files removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to remove album files */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    toggle_album_monitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleAlbumMonitorRequest"];
+            };
+        };
+        responses: {
+            /** @description Album monitor flag updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to toggle album monitor */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_album_providers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider links for the album */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderLink"][];
+                };
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to load album providers */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_album_quality: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAlbumQualityRequest"];
+            };
+        };
+        responses: {
+            /** @description Album quality updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to update album quality */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_album_tracks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tracks for the album */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackInfo"][];
+                };
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to load album tracks */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bulk_toggle_track_monitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleTrackMonitorRequest"];
+            };
+        };
+        responses: {
+            /** @description Track monitor flags updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to update track monitoring */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    toggle_track_monitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+                /** @description Track UUID */
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleTrackMonitorRequest"];
+            };
+        };
+        responses: {
+            /** @description Track monitor flag updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Track not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to toggle track monitoring */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_track_quality: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+                /** @description Track UUID */
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTrackQualityRequest"];
+            };
+        };
+        responses: {
+            /** @description Track quality updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Track not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to update track quality */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_artists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All local artists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoredArtist"][];
+                };
+            };
+            /** @description Failed to load artists */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_artist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateArtistRequest"];
+            };
+        };
+        responses: {
+            /** @description Artist created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artist already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to create artist */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_artists: {
+        parameters: {
+            query: {
+                /** @description Artist search query */
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Search results across all providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchArtistResult"][];
+                };
+            };
+            /** @description Provider search unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_artist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Artist detail payload */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistDetailResponse"];
+                };
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to load artist detail */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_artist: {
+        parameters: {
+            query?: {
+                /** @description Whether to remove downloaded files */
+                remove_files?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Artist removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to remove artist */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_artist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateArtistRequest"];
+            };
+        };
+        responses: {
+            /** @description Artist updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to update artist */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    fetch_artist_bio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Artist bio refresh triggered */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to refresh artist bio */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_artist_images: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available artist images from linked providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistImageOption"][];
+                };
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to fetch artist images */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refresh_match_suggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Artist match suggestions refreshed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to refresh match suggestions */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    toggle_artist_monitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleArtistMonitorRequest"];
+            };
+        };
+        responses: {
+            /** @description Artist monitor flag updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to toggle artist monitor */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_artist_providers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider links for the artist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderLink"][];
+                };
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to load provider links */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    link_artist_provider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkArtistProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description Provider linked to artist */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to link provider */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unlink_artist_provider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnlinkArtistProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description Provider unlinked from artist */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to unlink provider */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sync_artist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Artist UUID */
+                artist_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Artist albums synced */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artist not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to sync artist albums */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    auth_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authentication status retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthStatus"];
+                };
+            };
+            /** @description User is not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to retrieve authentication status */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_dashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dashboard data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardData"];
+                };
+            };
+        };
+    };
+    sse_events: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A stream of server-sent events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+        };
+    };
+    proxy_tidal_image: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+                size: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The proxied image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Invalid request parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upstream error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    proxy_provider_image: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: components["schemas"]["Provider"];
+                image_id: string;
+                size: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The proxied image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description Invalid request parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upstream error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    browse_path: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowsePathRequest"];
+            };
+        };
+        responses: {
+            /** @description Filesystem browse entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowseEntry"][];
+                };
+            };
+            /** @description Failed to browse path */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirm_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportConfirmation"][];
+            };
+        };
+        responses: {
+            /** @description Import result summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResultSummary"];
+                };
+            };
+            /** @description Failed to confirm import */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirm_external_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalImportConfirmation"];
+            };
+        };
+        responses: {
+            /** @description External import result summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResultSummary"];
+                };
+            };
+            /** @description Failed to confirm external import */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_external_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewExternalImportRequest"];
+            };
+        };
+        responses: {
+            /** @description External import preview items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreviewItem"][];
+                };
+            };
+            /** @description Failed to preview external import */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Import preview items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreviewItem"][];
+                };
+            };
+            /** @description Failed to preview import */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    scan_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Import scan started */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to start import scan */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_jobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All download jobs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadJob"][];
+                };
+            };
+        };
+    };
+    clear_completed_jobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Completed jobs cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to clear completed jobs */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancel_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Download job UUID */
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job cancelled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to cancel job */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    accept_match_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Match suggestion UUID */
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Match suggestion accepted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Match suggestion not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to accept match suggestion */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_match_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Match suggestion UUID */
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Match suggestion dismissed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to dismiss match suggestion */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_providers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of enabled metadata providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
+    search_all: {
+        parameters: {
+            query: {
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aggregated search results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchAllResult"];
+                };
+            };
+            /** @description One or more provider searches failed */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_tracks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All local library tracks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryTrack"][];
+                };
+            };
+            /** @description Failed to load tracks */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTrackRequest"];
+            };
+        };
+        responses: {
+            /** @description Track created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider track or album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to create track */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_tracks: {
+        parameters: {
+            query: {
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Search results across all providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchTrackResult"][];
+                };
+            };
+            /** @description Provider search unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_wanted: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Wanted view data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WantedData"];
+                };
+            };
+            /** @description Failed to load wanted data */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["LoginForm"];
+            };
+        };
+        responses: {
+            /** @description Login successful, client should redirect to the URL in the Location header */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid login form data */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Login failed due to server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logout successful, client should redirect to the URL in the Location header */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Logout failed due to server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_credentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["CredentialsForm"];
+            };
+        };
+        responses: {
+            /** @description Credentials updated successfully, client should redirect to the URL in the Location header */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid form data */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to update credentials due to server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
 }

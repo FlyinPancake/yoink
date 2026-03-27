@@ -13,7 +13,7 @@ use uuid::Uuid;
 use yoink_shared::{Album, ArtistImageOption, MonitoredArtist, ProviderLink, SearchArtistResult};
 
 use crate::{
-    db::{self, quality::Quality},
+    db::{self, provider::Provider, quality::Quality},
     error::AppError,
     services::{self, AlbumMatchSuggestion, ArtistMatchSuggestion, search::SearchQuery},
     state::AppState,
@@ -36,7 +36,7 @@ struct DeleteArtistQuery {
 #[derive(Debug, Deserialize, ToSchema)]
 struct CreateArtistRequest {
     name: String,
-    provider: String,
+    provider: Provider,
     external_id: String,
     #[serde(default)]
     image_url: Option<String>,
@@ -59,7 +59,7 @@ struct ToggleArtistMonitorRequest {
 
 #[derive(Debug, Deserialize, ToSchema)]
 struct LinkArtistProviderRequest {
-    provider: String,
+    provider: Provider,
     external_id: String,
     #[serde(default)]
     external_url: Option<String>,
@@ -204,17 +204,6 @@ async fn get_artist(
     State(state): State<AppState>,
     Path(artist_id): Path<Uuid>,
 ) -> ApiResult<ArtistDetailResponse> {
-    let loaded = db::artist::Entity::load()
-        .filter_by_id(artist_id)
-        .with(db::album::Entity)
-        .with(db::artist_provider_link::Entity)
-        .one(&state.db)
-        .await
-        .map_err(|e| app_error_response(e.into()))?
-        .ok_or_else(|| {
-            app_error_response(AppError::not_found("artist", Some(artist_id.to_string())))
-        })?;
-
     let db::artist::ModelEx {
         id,
         name,
@@ -222,10 +211,21 @@ async fn get_artist(
         bio,
         monitored,
         created_at,
+        match_suggestions,
         modified_at: _,
         albums: loaded_albums,
         provider_links: loaded_links,
-    } = loaded;
+    } = db::artist::Entity::load()
+        .filter_by_id(artist_id)
+        .with(db::album::Entity)
+        .with(db::artist_provider_link::Entity)
+        .with(db::artist_match_suggestion::Entity)
+        .one(&state.db)
+        .await
+        .map_err(|e| app_error_response(e.into()))?
+        .ok_or_else(|| {
+            app_error_response(AppError::not_found("artist", Some(artist_id.to_string())))
+        })?;
 
     let artist = MonitoredArtist {
         id,
@@ -240,11 +240,7 @@ async fn get_artist(
     let provider_links: Vec<ProviderLink> = loaded_links.into_iter().map(Into::into).collect();
 
     let artist_match_suggestions: Vec<ArtistMatchSuggestion> =
-        db::artist_match_suggestion::Entity::find_by_artist(artist_id)
-            .all(&state.db)
-            .await
-            .map(|models| models.into_iter().map(Into::into).collect())
-            .map_err(|e| app_error_response(e.into()))?;
+        match_suggestions.into_iter().map(Into::into).collect();
 
     let album_match_suggestions: Vec<AlbumMatchSuggestion> = if album_ids.is_empty() {
         Vec::new()

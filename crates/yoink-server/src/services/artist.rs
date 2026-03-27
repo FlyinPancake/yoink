@@ -1,13 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{
+    ActiveValue::Set, ColumnTrait, EntityLoaderTrait, EntityTrait, IntoActiveModel, QueryFilter,
+};
 use tracing::{info, warn};
 use url::Url;
 use uuid::Uuid;
 use yoink_shared::ArtistImageOption;
 
 use crate::{
-    db::{self, album_artist, artist, artist_provider_link},
+    db::{self, album_artist, artist, artist_provider_link, provider::Provider},
     error::{AppError, AppResult},
     providers::provider_image_url,
     state::AppState,
@@ -20,20 +22,19 @@ const ARTIST_IMAGE_SIZE: u16 = 320;
 pub(crate) async fn add_artist(
     state: &AppState,
     name: String,
-    provider: String,
+    provider: Provider,
     external_id: String,
     image_url: Option<String>,
     external_url: Option<Url>,
 ) -> AppResult<()> {
-    let provider_enum = helpers::parse_provider(&provider)?;
     let external_url = external_url
         .map(|u| u.to_string())
-        .or_else(|| helpers::default_provider_artist_url(&provider, &external_id));
+        .or_else(|| helpers::default_provider_artist_url(provider, &external_id));
     let external_name = name.clone();
 
     let artist_id = helpers::find_or_create_artist_with_provider_link(
         state,
-        provider_enum,
+        provider,
         &external_id,
         &name,
         image_url,
@@ -130,11 +131,12 @@ pub(crate) async fn update_artist(
     name: Option<String>,
     image_url: Option<String>,
 ) -> AppResult<()> {
-    let mut model: artist::ActiveModel = artist::Entity::find_by_id(artist_id)
+    let mut model = artist::Entity::load()
+        .filter_by_id(artist_id)
         .one(&state.db)
         .await?
         .ok_or_else(|| AppError::not_found("artist", Some(artist_id.to_string())))?
-        .into();
+        .into_active_model();
 
     if let Some(ref name) = name {
         model.name = Set(name.clone());
@@ -155,14 +157,14 @@ pub(crate) async fn toggle_artist_monitor(
     artist_id: Uuid,
     monitored: bool,
 ) -> AppResult<()> {
-    let mut model: artist::ActiveModel = artist::Entity::find_by_id(artist_id)
+    let model = artist::Entity::find_by_id(artist_id)
         .one(&state.db)
         .await?
         .ok_or_else(|| AppError::not_found("artist", Some(artist_id.to_string())))?
-        .into();
+        .into_active_model()
+        .into_ex();
 
-    model.monitored = Set(monitored);
-    model.update(&state.db).await?;
+    model.set_monitored(monitored).update(&state.db).await?;
 
     if monitored {
         super::sync_artist(state, artist_id).await?;
@@ -177,14 +179,14 @@ pub(crate) async fn toggle_artist_monitor(
 pub(crate) async fn fetch_artist_bio(state: &AppState, artist_id: Uuid) -> AppResult<()> {
     info!(%artist_id, "Manual bio fetch requested, clearing existing bio");
 
-    let mut model: artist::ActiveModel = artist::Entity::find_by_id(artist_id)
+    let model = artist::Entity::find_by_id(artist_id)
         .one(&state.db)
         .await?
         .ok_or_else(|| AppError::not_found("artist", Some(artist_id.to_string())))?
-        .into();
+        .into_active_model()
+        .into_ex();
 
-    model.bio = Set(None);
-    model.update(&state.db).await?;
+    model.set_bio(None).update(&state.db).await?;
 
     state.notify_sse();
     helpers::spawn_fetch_artist_bio(state, artist_id);
@@ -195,19 +197,17 @@ pub(crate) async fn get_artist_images(
     state: &AppState,
     artist_id: Uuid,
 ) -> AppResult<Vec<ArtistImageOption>> {
-    let artist = artist::Entity::find_by_id(artist_id)
+    let artist = artist::Entity::load()
+        .filter_by_id(artist_id)
+        .with(artist_provider_link::Entity)
         .one(&state.db)
         .await?
         .ok_or_else(|| AppError::not_found("artist", Some(artist_id.to_string())))?;
 
-    let provider_links = artist_provider_link::Entity::find_by_artist(artist_id)
-        .all(&state.db)
-        .await?;
-
     let mut images = Vec::new();
     let mut seen_urls = HashSet::new();
 
-    for link in provider_links {
+    for link in artist.provider_links.into_iter() {
         let Some(provider) = state.registry.metadata_provider(link.provider) else {
             continue;
         };
@@ -249,20 +249,19 @@ pub(crate) async fn sync_artist_and_refresh(state: &AppState, artist_id: Uuid) -
 pub(crate) async fn link_artist_provider(
     state: &AppState,
     artist_id: Uuid,
-    provider: String,
+    provider: Provider,
     external_id: String,
     external_url: Option<String>,
     external_name: Option<String>,
     _image_ref: Option<String>,
 ) -> AppResult<()> {
-    let provider_enum = helpers::parse_provider(&provider)?;
     let external_url =
-        external_url.or_else(|| helpers::default_provider_artist_url(&provider, &external_id));
+        external_url.or_else(|| helpers::default_provider_artist_url(provider, &external_id));
 
     helpers::upsert_artist_provider_link(
         state,
         artist_id,
-        provider_enum,
+        provider,
         &external_id,
         external_url,
         external_name,
