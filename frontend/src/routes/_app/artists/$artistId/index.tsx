@@ -16,7 +16,6 @@ import type { components } from "@/lib/api/types.gen";
 import { $api } from "@/lib/api";
 import { useSleeveGlow } from "@/hooks/use-sleeve-glow";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { isPendingMatchSuggestion } from "@/lib/matching";
 import {
   isAlbumAcquired,
   isAlbumInProgress,
@@ -257,9 +256,7 @@ function ArtistDetailContent({
   const acquiredCount = albums.filter((a) => isAlbumAcquired(a.wanted_status)).length;
   const wantedCount = albums.filter((a) => isAlbumWantedLike(a.wanted_status)).length;
 
-  const pendingSuggestions = artistMatchSuggestions.filter((m) =>
-    isPendingMatchSuggestion(m.status),
-  );
+  const pendingSuggestions = artistMatchSuggestions.filter((m) => m.status === "pending");
 
   /** Sort a list of albums by the current sort mode. */
   const sortList = (list: Album[]): Album[] => {

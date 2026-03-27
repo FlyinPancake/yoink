@@ -11,7 +11,6 @@ import {
 
 import type { components } from "@/lib/api/types.gen";
 import { $api, queryKeys } from "@/lib/api";
-import { isPendingMatchSuggestion } from "@/lib/matching";
 import {
   formatDurationSeconds,
   isAlbumAcquired,
@@ -235,7 +234,7 @@ function AlbumDetailContent({
     isAlbumWanted(album.wanted_status) && !isAlbumAcquired(album.wanted_status) && !hasActiveJob;
   const canRetry = latestJob?.status === "failed";
 
-  const pendingSuggestions = matchSuggestions.filter((m) => isPendingMatchSuggestion(m.status));
+  const pendingSuggestions = matchSuggestions.filter((m) => m.status === "pending");
 
   return (
     <div className="p-6 max-md:p-4">
