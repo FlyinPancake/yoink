@@ -95,6 +95,24 @@ pub(crate) async fn sync_artist(state: &AppState, artist_id: Uuid) -> AppResult<
     tracing::debug!(%artist_id, groups = groups.len(), "deduplication complete");
 
     let incoming_keys = groups.keys().cloned().collect::<HashSet<_>>();
+    let provider_filters = groups
+        .values()
+        .flat_map(|entries| entries.iter().map(|(provider, _)| *provider))
+        .collect::<HashSet<_>>();
+    let provider_album_id_filters = groups
+        .values()
+        .flat_map(|entries| entries.iter().map(|(_, album)| album.external_id.clone()))
+        .collect::<HashSet<_>>();
+
+    let existing_album_links = db::album_provider_link::Entity::find()
+        .filter(db::album_provider_link::Column::Provider.is_in(provider_filters))
+        .filter(db::album_provider_link::Column::ProviderAlbumId.is_in(provider_album_id_filters))
+        .all(&state.db)
+        .await?;
+    let album_link_by_provider_external: HashMap<(Provider, String), Uuid> = existing_album_links
+        .into_iter()
+        .map(|link| ((link.provider, link.provider_album_id), link.album_id))
+        .collect();
 
     for entries in groups.values() {
         let (best_provider, best_album) = entries
@@ -111,16 +129,10 @@ pub(crate) async fn sync_artist(state: &AppState, artist_id: Uuid) -> AppResult<
 
         let mut local_album_id = None;
         for (prov, album) in entries {
-            let link = db::album_provider_link::Entity::find()
-                .filter(
-                    db::album_provider_link::Column::ProviderAlbumId.eq(album.external_id.clone()),
-                )
-                .filter(db::album_provider_link::Column::Provider.eq(*prov))
-                .one(&state.db)
-                .await?;
-
-            if let Some(link) = link {
-                local_album_id = Some(link.album_id);
+            if let Some(album_id) =
+                album_link_by_provider_external.get(&(*prov, album.external_id.clone()))
+            {
+                local_album_id = Some(*album_id);
                 break;
             }
         }
