@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use sea_orm::{ActiveValue::Set, QueryFilter, QueryOrder, entity::prelude::*};
 use yoink_shared::TrackInfo;
 
+use crate::db::quality::Quality;
+
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "tracks")]
@@ -26,6 +28,7 @@ pub struct Model {
     #[sea_orm(belongs_to, from = "root_folder_id", to = "id", on_delete = "SetNull")]
     pub root_folder: Option<super::root_folder::Entity>,
     pub status: super::wanted_status::WantedStatus,
+    pub quality_override: Option<Quality>,
     pub file_path: Option<String>,
     pub created_at: DateTimeUtc,
     pub modified_at: DateTimeUtc,
@@ -71,7 +74,7 @@ impl From<Model> for TrackInfo {
             file_path: value.file_path,
             monitored: value.status != super::wanted_status::WantedStatus::Unmonitored,
             acquired,
-            quality_override: None,
+            quality_override: value.quality_override.map(Into::into),
             track_artist: None,
         }
     }

@@ -648,6 +648,17 @@ export function useSetTrackQuality() {
           },
         ],
       });
+      void qc.invalidateQueries({
+        queryKey: [
+          "get",
+          "/api/album/{album_id}/track",
+          {
+            params: {
+              path: { album_id: variables.params.path.album_id },
+            },
+          },
+        ],
+      });
     },
   });
 }

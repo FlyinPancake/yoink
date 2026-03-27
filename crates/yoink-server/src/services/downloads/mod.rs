@@ -362,7 +362,10 @@ pub(crate) async fn enqueue_track_download(state: &AppState, track_id: Uuid) -> 
         ));
     }
 
-    let quality = album.requested_quality.unwrap_or(state.default_quality);
+    let quality = track
+        .quality_override
+        .or(album.requested_quality)
+        .unwrap_or(state.default_quality);
     let source =
         select_download_source(state, album.provider_links.iter().map(|link| link.provider));
 
@@ -915,6 +918,33 @@ mod tests {
             .expect_err("track job should conflict");
 
         assert!(matches!(err, AppError::Conflict { .. }));
+    }
+
+    #[tokio::test]
+    async fn enqueue_track_download_prefers_track_quality_override() {
+        let state = test_state().await;
+        let (_artist, album, track_one, _track_two) = seed_album_with_tracks(&state).await;
+
+        let mut album_model = album.clone().into_active_model();
+        album_model.requested_quality = Set(Some(Quality::High));
+        album_model.update(&state.db).await.expect("update album");
+
+        let mut track_model = track_one.clone().into_active_model();
+        track_model.quality_override = Set(Some(Quality::HiRes));
+        track_model.update(&state.db).await.expect("update track");
+
+        enqueue_track_download(&state, track_one.id)
+            .await
+            .expect("enqueue track");
+
+        let job = db::download_job::Entity::find()
+            .filter(download_job::Column::TrackId.eq(track_one.id))
+            .one(&state.db)
+            .await
+            .expect("load job")
+            .expect("job exists");
+
+        assert_eq!(job.quality, Quality::HiRes);
     }
 
     #[tokio::test]
