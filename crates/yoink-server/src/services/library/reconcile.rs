@@ -19,7 +19,7 @@ use crate::{
 
 /// Reconcile library files on disk with the database.
 pub(crate) async fn reconcile_library_files(state: &AppState) -> AppResult<usize> {
-    info!(
+    debug!(
         music_root = %state.music_root.display(),
         "Starting repair-only library reconciliation"
     );
@@ -110,17 +110,26 @@ pub(crate) async fn reconcile_library_files(state: &AppState) -> AppResult<usize
 
     if repaired_tracks > 0 {
         state.notify_sse();
+        info!(
+            scanned_tracks,
+            repaired_tracks,
+            unchanged_tracks,
+            invalid_paths,
+            missing_files,
+            recomputed_albums = affected_album_ids.len(),
+            "Completed library reconciliation"
+        );
+    } else {
+        debug!(
+            scanned_tracks,
+            repaired_tracks,
+            unchanged_tracks,
+            invalid_paths,
+            missing_files,
+            recomputed_albums = affected_album_ids.len(),
+            "Completed library reconciliation"
+        );
     }
-
-    info!(
-        scanned_tracks,
-        repaired_tracks,
-        unchanged_tracks,
-        invalid_paths,
-        missing_files,
-        recomputed_albums = affected_album_ids.len(),
-        "Completed library reconciliation"
-    );
 
     Ok(repaired_tracks)
 }
