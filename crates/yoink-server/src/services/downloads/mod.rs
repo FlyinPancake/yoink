@@ -729,8 +729,6 @@ pub(crate) async fn remove_downloaded_album_files(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use crate::api::DownloadJobKind;
     use sea_orm::{
         ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
@@ -742,119 +740,33 @@ mod tests {
         list_jobs, retry_album_download, sync_album_wanted_status_from_tracks,
     };
     use crate::{
-        app_config::AuthConfig,
         db::{
-            self, album, album_artist, album_type::AlbumType, artist, download_job,
-            download_status::DownloadStatus, provider::Provider, quality::Quality, track,
-            wanted_status::WantedStatus,
+            self, album, artist, download_job, download_status::DownloadStatus, provider::Provider,
+            quality::Quality, track, wanted_status::WantedStatus,
         },
         error::AppError,
-        providers::registry::ProviderRegistry,
         state::AppState,
+        test_support,
     };
-
-    async fn test_state() -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-downloads-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            PathBuf::from("./music"),
-            Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
-    }
 
     async fn seed_album_with_tracks(
         state: &AppState,
     ) -> (artist::Model, album::Model, track::Model, track::Model) {
-        let artist = artist::ActiveModel {
-            name: Set("Test Artist".to_string()),
-            image_url: Set(None),
-            bio: Set(None),
-            monitored: Set(true),
-            ..artist::ActiveModel::new()
-        }
-        .insert(&state.db)
-        .await
-        .expect("insert artist");
-
-        let album = album::ActiveModel {
-            title: Set("Test Album".to_string()),
-            album_type: Set(AlbumType::Album),
-            release_date: Set(None),
-            cover_url: Set(None),
-            explicit: Set(false),
-            wanted_status: Set(WantedStatus::Wanted),
-            requested_quality: Set(None),
-            ..album::ActiveModel::new()
-        }
-        .insert(&state.db)
-        .await
-        .expect("insert album");
-
-        album_artist::ActiveModel {
-            album_id: Set(album.id),
-            artist_id: Set(artist.id),
-            priority: Set(0),
-        }
-        .insert(&state.db)
-        .await
-        .expect("insert album artist");
-
-        let track_one = track::ActiveModel {
-            title: Set("Track One".to_string()),
-            version: Set(None),
-            disc_number: Set(Some(1)),
-            track_number: Set(Some(1)),
-            duration: Set(Some(180)),
-            album_id: Set(album.id),
-            explicit: Set(false),
-            isrc: Set(None),
-            root_folder_id: Set(None),
-            status: Set(WantedStatus::Wanted),
-            file_path: Set(None),
-            ..track::ActiveModel::new()
-        }
-        .insert(&state.db)
-        .await
-        .expect("insert track one");
-
-        let track_two = track::ActiveModel {
-            title: Set("Track Two".to_string()),
-            version: Set(None),
-            disc_number: Set(Some(1)),
-            track_number: Set(Some(2)),
-            duration: Set(Some(200)),
-            album_id: Set(album.id),
-            explicit: Set(false),
-            isrc: Set(None),
-            root_folder_id: Set(None),
-            status: Set(WantedStatus::Unmonitored),
-            file_path: Set(None),
-            ..track::ActiveModel::new()
-        }
-        .insert(&state.db)
-        .await
-        .expect("insert track two");
+        let artist = test_support::seed_artist(state, "Test Artist", true).await;
+        let album = test_support::seed_album(state, "Test Album", WantedStatus::Wanted).await;
+        test_support::link_album_artist(state, album.id, artist.id, 0).await;
+        let track_one =
+            test_support::seed_track(state, album.id, "Track One", 1, WantedStatus::Wanted).await;
+        let track_two =
+            test_support::seed_track(state, album.id, "Track Two", 2, WantedStatus::Unmonitored)
+                .await;
 
         (artist, album, track_one, track_two)
     }
 
     #[tokio::test]
     async fn list_jobs_returns_album_and_track_jobs() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         let (_artist, album, track_one, _track_two) = seed_album_with_tracks(&state).await;
 
         download_job::ActiveModel {
@@ -906,7 +818,7 @@ mod tests {
 
     #[tokio::test]
     async fn enqueue_track_download_rejects_when_album_job_is_active() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         let (_artist, album, track_one, _track_two) = seed_album_with_tracks(&state).await;
 
         enqueue_album_download(&state, album.id)
@@ -922,7 +834,7 @@ mod tests {
 
     #[tokio::test]
     async fn enqueue_track_download_prefers_track_quality_override() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         let (_artist, album, track_one, _track_two) = seed_album_with_tracks(&state).await;
 
         let mut album_model = album.clone().into_active_model();
@@ -949,7 +861,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_and_clear_jobs_operate_on_service_state() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         let (_artist, album, _track_one, _track_two) = seed_album_with_tracks(&state).await;
 
         enqueue_album_download(&state, album.id)
@@ -1020,7 +932,7 @@ mod tests {
 
     #[tokio::test]
     async fn retry_album_download_creates_a_new_queued_job() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         let (_artist, album, _track_one, _track_two) = seed_album_with_tracks(&state).await;
 
         download_job::ActiveModel {
@@ -1055,7 +967,7 @@ mod tests {
 
     #[tokio::test]
     async fn sync_album_wanted_status_only_promotes_fully_monitored_albums() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         let (_artist, album, track_one, track_two) = seed_album_with_tracks(&state).await;
 
         sync_album_wanted_status_from_tracks(&state, album.id)

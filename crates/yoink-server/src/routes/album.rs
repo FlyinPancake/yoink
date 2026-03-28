@@ -683,39 +683,13 @@ mod tests {
     use sea_orm::{ActiveModelTrait, ActiveValue::Set};
     use tower::ServiceExt as _;
 
-    use crate::{
-        app_config::AuthConfig, providers::registry::ProviderRegistry, routes::build_router,
-        state::AppState,
-    };
+    use crate::{routes::build_router, test_support};
 
     use super::*;
 
-    async fn test_state() -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-album-route-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            std::path::PathBuf::from("./music"),
-            crate::db::quality::Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
-    }
-
     #[tokio::test]
     async fn list_albums_returns_primary_artist_context() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         let artist = db::artist::ActiveModel {
             name: Set("Primary Artist".to_string()),
             monitored: Set(true),
@@ -776,7 +750,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_albums_uses_first_ordered_artist_when_multiple_artists_exist() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         let first_artist = db::artist::ActiveModel {
             name: Set("First Artist".to_string()),
             monitored: Set(true),
@@ -850,7 +824,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_albums_returns_none_artist_fields_when_album_has_no_artists() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         db::album::ActiveModel {
             title: Set("Orphan Album".to_string()),
             album_type: Set(db::album_type::AlbumType::Album),

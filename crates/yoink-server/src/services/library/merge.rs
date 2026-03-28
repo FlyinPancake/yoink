@@ -489,8 +489,6 @@ fn quality_rank(value: Quality) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use chrono::NaiveDate;
     use sea_orm::{
         ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
@@ -499,42 +497,17 @@ mod tests {
 
     use super::merge_albums;
     use crate::{
-        app_config::AuthConfig,
         db::{
             self, album, album_artist, album_provider_link, album_type::AlbumType, download_job,
             download_status::DownloadStatus, provider::Provider, quality::Quality, track,
             track_provider_link, wanted_status::WantedStatus,
         },
-        providers::registry::ProviderRegistry,
-        state::AppState,
+        test_support,
     };
-
-    async fn test_state() -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-merge-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            PathBuf::from("./music"),
-            Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
-    }
 
     #[tokio::test]
     async fn merge_albums_moves_links_tracks_and_jobs() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
 
         let artist = db::artist::ActiveModel {
             name: Set("Artist".to_string()),

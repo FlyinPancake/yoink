@@ -130,10 +130,8 @@ mod tests {
     use tempfile::tempdir;
 
     use crate::{
-        app_config::AuthConfig,
         db::{album, album_type::AlbumType, artist, track, wanted_status::WantedStatus},
-        providers::registry::ProviderRegistry,
-        state::AppState,
+        test_support,
     };
 
     use super::{
@@ -142,29 +140,6 @@ mod tests {
         preview_source,
         types::{DiscoveredAlbum, EmbeddedTrackMetadata, LocalArtistCatalog, ScannedAudioFile},
     };
-
-    async fn test_state(music_root: PathBuf) -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-import-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            music_root,
-            crate::db::quality::Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
-    }
 
     #[test]
     fn summarize_album_prefers_embedded_metadata_over_path() {
@@ -250,7 +225,7 @@ mod tests {
         std::fs::write(album_dir.join("01 - First Song.mp3"), b"one").expect("write track");
         std::fs::write(album_dir.join("02 - Second Song.mp3"), b"two").expect("write track");
 
-        let state = test_state(music_root.path().to_path_buf()).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
         let preview = preview_source(&state, music_root.path())
             .await
             .expect("preview import");
@@ -313,7 +288,7 @@ mod tests {
         let source_track = album_dir.join("01 - Outside Song.mp3");
         std::fs::write(&source_track, b"outside").expect("write source track");
 
-        let state = test_state(music_root.path().to_path_buf()).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
         let preview = preview_source(&state, source_root.path())
             .await
             .expect("preview import");

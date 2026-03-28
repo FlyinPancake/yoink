@@ -250,8 +250,6 @@ pub(crate) async fn bulk_toggle_track_monitor(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use sea_orm::{
         ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
         QueryFilter,
@@ -259,41 +257,16 @@ mod tests {
 
     use super::{list_library_tracks, set_track_quality};
     use crate::{
-        app_config::AuthConfig,
         db::{
             album, album_artist, album_type::AlbumType, artist, download_job,
             download_status::DownloadStatus, quality::Quality, track, wanted_status::WantedStatus,
         },
-        providers::registry::ProviderRegistry,
-        state::AppState,
+        test_support,
     };
-
-    async fn test_state() -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-track-service-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            PathBuf::from("./music"),
-            Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
-    }
 
     #[tokio::test]
     async fn list_library_tracks_returns_track_with_album_and_primary_artist() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
 
         let artist = artist::ActiveModel {
             name: sea_orm::ActiveValue::Set("Test Artist".to_string()),
@@ -366,7 +339,7 @@ mod tests {
 
     #[tokio::test]
     async fn set_track_quality_persists_override_and_updates_pending_track_jobs() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
 
         let artist = artist::ActiveModel {
             name: Set("Test Artist".to_string()),

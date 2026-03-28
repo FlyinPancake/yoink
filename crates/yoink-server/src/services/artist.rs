@@ -339,7 +339,6 @@ mod tests {
 
     use super::*;
     use crate::{
-        app_config::AuthConfig,
         db::{
             album, album_artist, album_type::AlbumType, provider::Provider, track,
             wanted_status::WantedStatus,
@@ -348,52 +347,15 @@ mod tests {
             MetadataProvider, ProviderAlbum, ProviderArtist, ProviderError, ProviderTrack,
             registry::ProviderRegistry,
         },
+        test_support,
     };
 
     async fn test_state() -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-artist-service-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            PathBuf::from("./music"),
-            crate::db::quality::Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
+        test_support::test_state().await
     }
 
     async fn test_state_with_music_root(music_root: PathBuf) -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-artist-remove-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            music_root,
-            crate::db::quality::Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
+        test_support::test_state_with_music_root(music_root).await
     }
 
     struct TestArtistImageProvider;
@@ -455,29 +417,10 @@ mod tests {
     }
 
     async fn test_state_with_artist_image_provider() -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-artist-image-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
         let mut registry = ProviderRegistry::new();
         registry.register_metadata(Arc::new(TestArtistImageProvider));
 
-        AppState::new(
-            PathBuf::from("./music"),
-            crate::db::quality::Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            registry,
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
+        test_support::test_state_with_registry(registry).await
     }
 
     #[tokio::test]

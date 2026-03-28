@@ -337,37 +337,9 @@ pub(crate) async fn find_or_create_lightweight_artist(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use sea_orm::EntityTrait;
 
-    use crate::{
-        app_config::AuthConfig, db::provider::Provider, providers::registry::ProviderRegistry,
-        state::AppState,
-    };
-
-    async fn test_state() -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-helpers-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            PathBuf::from("./music"),
-            crate::db::quality::Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
-    }
+    use crate::{db::provider::Provider, test_support};
 
     #[test]
     fn default_provider_artist_url_known_providers() {
@@ -405,7 +377,7 @@ mod tests {
 
     #[tokio::test]
     async fn find_or_create_lightweight_artist_persists_artist_and_link() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
 
         let artist_id = super::find_or_create_lightweight_artist(
             &state,

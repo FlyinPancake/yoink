@@ -399,71 +399,21 @@ pub(crate) async fn add_album(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
 
     use super::{remove_album_files, toggle_album_monitor};
     use crate::{
-        app_config::AuthConfig,
         db::{
             self, album, album_type::AlbumType, download_job, download_status::DownloadStatus,
             provider::Provider, quality::Quality, track, wanted_status::WantedStatus,
         },
         error::AppError,
-        providers::registry::ProviderRegistry,
-        state::AppState,
+        test_support,
     };
-
-    async fn test_state() -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-album-monitor-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            PathBuf::from("./music"),
-            Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
-    }
-
-    async fn test_state_with_music_root(music_root: PathBuf) -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-album-remove-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            music_root,
-            Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
-    }
 
     #[tokio::test]
     async fn toggle_album_monitor_updates_album_and_track_statuses() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
 
         let album = album::ActiveModel {
             title: sea_orm::ActiveValue::Set("Test Album".to_string()),
@@ -536,7 +486,7 @@ mod tests {
 
     #[tokio::test]
     async fn unmonitoring_album_cancels_queued_download_jobs() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
 
         let album = album::ActiveModel {
             title: sea_orm::ActiveValue::Set("Queued Album".to_string()),
@@ -601,7 +551,7 @@ mod tests {
 
     #[tokio::test]
     async fn unmonitoring_album_conflicts_with_active_download_jobs() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
 
         let album = album::ActiveModel {
             title: sea_orm::ActiveValue::Set("Busy Album".to_string()),
@@ -660,7 +610,7 @@ mod tests {
     #[tokio::test]
     async fn remove_album_files_deletes_files_and_clears_track_state() {
         let music_root = tempfile::tempdir().expect("create music root");
-        let state = test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
 
         let album = album::ActiveModel {
             title: sea_orm::ActiveValue::Set("Downloaded Album".to_string()),
@@ -777,7 +727,7 @@ mod tests {
     #[tokio::test]
     async fn remove_and_unmonitor_handles_multiple_tracks_in_same_album_directory() {
         let music_root = tempfile::tempdir().expect("create music root");
-        let state = test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
 
         let album = album::ActiveModel {
             title: sea_orm::ActiveValue::Set("For Old Times Sake EP".to_string()),

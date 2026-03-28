@@ -15,6 +15,7 @@ use crate::{
     error::{AppError, AppResult},
     services::downloads::sync_album_wanted_status_from_tracks,
     state::AppState,
+    test_support,
 };
 
 /// Reconcile library files on disk with the database.
@@ -166,93 +167,26 @@ fn resolve_managed_track_path(music_root: &Path, stored_path: &str) -> Option<Pa
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{path::Path, time::Duration};
 
-    use sea_orm::{EntityTrait, QueryFilter};
+    use sea_orm::{ActiveModelTrait, ActiveValue::Set, EntityTrait, QueryFilter};
     use tempfile::tempdir;
     use tokio::sync::broadcast::error::{RecvError, TryRecvError};
     use uuid::Uuid;
 
-    use crate::{
-        app_config::AuthConfig,
-        db::{album, album_artist, album_type::AlbumType, artist, root_folder},
-        providers::registry::ProviderRegistry,
-    };
+    use crate::db::{album, root_folder};
 
     use super::*;
 
-    async fn test_state(music_root: PathBuf) -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-reconcile-test-{}.db?mode=rwc",
-            Uuid::now_v7()
-        );
-
-        AppState::new(
-            music_root,
-            crate::db::quality::Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
-    }
-
-    async fn seed_album(
-        state: &AppState,
-        wanted_status: WantedStatus,
-    ) -> (artist::Model, album::Model) {
-        let artist = artist::ActiveModel {
-            name: Set("Test Artist".to_string()),
-            image_url: Set(None),
-            bio: Set(None),
-            monitored: Set(true),
-            ..Default::default()
-        }
-        .insert(&state.db)
-        .await
-        .expect("insert artist");
-
-        let album = album::ActiveModel {
-            title: Set("Test Album".to_string()),
-            album_type: Set(AlbumType::Album),
-            release_date: Set(None),
-            cover_url: Set(None),
-            explicit: Set(false),
-            wanted_status: Set(wanted_status),
-            requested_quality: Set(None),
-            ..Default::default()
-        }
-        .insert(&state.db)
-        .await
-        .expect("insert album");
-
-        album_artist::ActiveModel {
-            album_id: Set(album.id),
-            artist_id: Set(artist.id),
-            priority: Set(0),
-        }
-        .insert(&state.db)
-        .await
-        .expect("insert album artist");
-
-        (artist, album)
+    async fn seed_album_with_artist(state: &AppState, wanted_status: WantedStatus) -> album::Model {
+        let artist = test_support::seed_artist(state, "Test Artist", true).await;
+        let album = test_support::seed_album(state, "Test Album", wanted_status).await;
+        test_support::link_album_artist(state, album.id, artist.id, 0).await;
+        album
     }
 
     async fn seed_root_folder(state: &AppState, path: &Path) -> root_folder::Model {
-        root_folder::ActiveModel {
-            path: Set(path.display().to_string()),
-            ..Default::default()
-        }
-        .insert(&state.db)
-        .await
-        .expect("insert root folder")
+        test_support::seed_root_folder(state, path.display().to_string()).await
     }
 
     async fn seed_track(
@@ -262,23 +196,11 @@ mod tests {
         file_path: Option<String>,
         root_folder_id: Option<Uuid>,
     ) -> track::Model {
-        track::ActiveModel {
-            title: Set("Track 1".to_string()),
-            version: Set(None),
-            disc_number: Set(Some(1)),
-            track_number: Set(Some(1)),
-            duration: Set(Some(180)),
-            album_id: Set(album_id),
-            explicit: Set(false),
-            isrc: Set(None),
-            root_folder_id: Set(root_folder_id),
-            status: Set(status),
-            file_path: Set(file_path),
-            ..Default::default()
-        }
-        .insert(&state.db)
-        .await
-        .expect("insert track")
+        let track = test_support::seed_track(state, album_id, "Track 1", 1, status).await;
+        let mut active: track::ActiveModel = track.into();
+        active.file_path = Set(file_path);
+        active.root_folder_id = Set(root_folder_id);
+        active.update(&state.db).await.expect("update track")
     }
 
     async fn load_track(state: &AppState, track_id: Uuid) -> track::Model {
@@ -305,8 +227,8 @@ mod tests {
         std::fs::create_dir_all(absolute_path.parent().expect("parent")).expect("create parent");
         std::fs::write(&absolute_path, b"audio").expect("write audio");
 
-        let state = test_state(music_root.path().to_path_buf()).await;
-        let (_artist, album) = seed_album(&state, WantedStatus::Acquired).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let album = seed_album_with_artist(&state, WantedStatus::Acquired).await;
         let track = seed_track(
             &state,
             album.id,
@@ -327,8 +249,8 @@ mod tests {
     #[tokio::test]
     async fn reconcile_clears_missing_acquired_file() {
         let music_root = tempdir().expect("create music root");
-        let state = test_state(music_root.path().to_path_buf()).await;
-        let (_artist, album) = seed_album(&state, WantedStatus::Acquired).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let album = seed_album_with_artist(&state, WantedStatus::Acquired).await;
         let root_folder = seed_root_folder(&state, music_root.path()).await;
         let track = seed_track(
             &state,
@@ -353,8 +275,8 @@ mod tests {
     #[tokio::test]
     async fn reconcile_keeps_missing_unmonitored_track_unmonitored() {
         let music_root = tempdir().expect("create music root");
-        let state = test_state(music_root.path().to_path_buf()).await;
-        let (_artist, album) = seed_album(&state, WantedStatus::Unmonitored).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let album = seed_album_with_artist(&state, WantedStatus::Unmonitored).await;
         let track = seed_track(
             &state,
             album.id,
@@ -382,8 +304,8 @@ mod tests {
         std::fs::create_dir_all(absolute_path.parent().expect("parent")).expect("create parent");
         std::fs::write(&absolute_path, b"audio").expect("write audio");
 
-        let state = test_state(music_root.path().to_path_buf()).await;
-        let (_artist, album) = seed_album(&state, WantedStatus::Wanted).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let album = seed_album_with_artist(&state, WantedStatus::Wanted).await;
         let track = seed_track(
             &state,
             album.id,
@@ -405,8 +327,8 @@ mod tests {
     #[tokio::test]
     async fn reconcile_treats_parent_dir_path_as_missing() {
         let music_root = tempdir().expect("create music root");
-        let state = test_state(music_root.path().to_path_buf()).await;
-        let (_artist, album) = seed_album(&state, WantedStatus::Acquired).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let album = seed_album_with_artist(&state, WantedStatus::Acquired).await;
         let track = seed_track(
             &state,
             album.id,
@@ -431,8 +353,8 @@ mod tests {
         let outside_path = outside_root.path().join("outside.mp3");
         std::fs::write(&outside_path, b"audio").expect("write audio");
 
-        let state = test_state(music_root.path().to_path_buf()).await;
-        let (_artist, album) = seed_album(&state, WantedStatus::Acquired).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let album = seed_album_with_artist(&state, WantedStatus::Acquired).await;
         let track = seed_track(
             &state,
             album.id,
@@ -453,8 +375,8 @@ mod tests {
     #[tokio::test]
     async fn reconcile_is_idempotent_on_second_run() {
         let music_root = tempdir().expect("create music root");
-        let state = test_state(music_root.path().to_path_buf()).await;
-        let (_artist, album) = seed_album(&state, WantedStatus::Acquired).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let album = seed_album_with_artist(&state, WantedStatus::Acquired).await;
         let track = seed_track(
             &state,
             album.id,
@@ -488,9 +410,9 @@ mod tests {
         std::fs::create_dir_all(absolute_path.parent().expect("parent")).expect("create parent");
         std::fs::write(&absolute_path, b"audio").expect("write audio");
 
-        let state = test_state(music_root.path().to_path_buf()).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
         let mut rx = state.sse_tx.subscribe();
-        let (_artist, album) = seed_album(&state, WantedStatus::Acquired).await;
+        let album = seed_album_with_artist(&state, WantedStatus::Acquired).await;
         let _track = seed_track(
             &state,
             album.id,
@@ -520,7 +442,7 @@ mod tests {
     async fn reconcile_does_not_fail_when_music_root_is_missing() {
         let missing_root =
             std::env::temp_dir().join(format!("yoink-missing-root-{}", Uuid::now_v7()));
-        let state = test_state(missing_root).await;
+        let state = test_support::test_state_with_music_root(missing_root).await;
 
         let repaired = reconcile_library_files(&state).await.expect("reconcile");
 
@@ -530,8 +452,8 @@ mod tests {
     #[tokio::test]
     async fn reconcile_does_not_delete_tracks_for_missing_files() {
         let music_root = tempdir().expect("create music root");
-        let state = test_state(music_root.path().to_path_buf()).await;
-        let (_artist, album) = seed_album(&state, WantedStatus::Acquired).await;
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let album = seed_album_with_artist(&state, WantedStatus::Acquired).await;
         let track = seed_track(
             &state,
             album.id,

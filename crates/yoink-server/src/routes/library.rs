@@ -56,37 +56,11 @@ mod tests {
     use tokio_stream::StreamExt as _;
     use tower::ServiceExt as _;
 
-    use crate::{
-        app_config::AuthConfig, providers::registry::ProviderRegistry, routes::build_router,
-        state::AppState,
-    };
-
-    async fn test_state() -> AppState {
-        let db_path = format!(
-            "sqlite:/tmp/yoink-sse-test-{}.db?mode=rwc",
-            uuid::Uuid::now_v7()
-        );
-
-        AppState::new(
-            std::path::PathBuf::from("./music"),
-            crate::db::quality::Quality::Lossless,
-            false,
-            1,
-            &db_path,
-            ProviderRegistry::new(),
-            AuthConfig {
-                enabled: false,
-                session_secret: String::new(),
-                init_admin_username: None,
-                init_admin_password: None,
-            },
-        )
-        .await
-    }
+    use crate::{routes::build_router, test_support};
 
     #[tokio::test]
     async fn sse_events_returns_stream_response() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         let app = build_router(state).split_for_parts().0;
 
         let response = app
@@ -108,7 +82,7 @@ mod tests {
 
     #[tokio::test]
     async fn sse_events_emit_connected_then_refresh() {
-        let state = test_state().await;
+        let state = test_support::test_state().await;
         let app = build_router(state.clone()).split_for_parts().0;
 
         let response = app

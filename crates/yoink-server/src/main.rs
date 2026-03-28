@@ -14,6 +14,8 @@ mod redirects;
 mod routes;
 mod services;
 mod state;
+#[cfg(test)]
+mod test_support;
 mod util;
 
 use std::{sync::Arc, time::Duration};
