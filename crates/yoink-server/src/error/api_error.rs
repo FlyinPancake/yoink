@@ -85,3 +85,83 @@ impl From<AppError> for ApiError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use crate::{error::AppError, providers::ProviderError};
+
+    use super::ApiError;
+
+    #[test]
+    fn maps_not_found_errors() {
+        let err = ApiError::from(AppError::not_found("album", Some("123")));
+
+        assert!(matches!(
+            err,
+            ApiError::NotFound {
+                resource,
+                id: Some(id),
+            } if resource == "album" && id == "123"
+        ));
+    }
+
+    #[test]
+    fn maps_validation_errors() {
+        let err = ApiError::from(AppError::validation(Some("provider"), "bad value"));
+
+        assert!(matches!(
+            err,
+            ApiError::Validation {
+                field: Some(field),
+                reason,
+            } if field == "provider" && reason == "bad value"
+        ));
+    }
+
+    #[test]
+    fn maps_conflict_errors() {
+        let err = ApiError::from(AppError::conflict("already exists"));
+
+        assert!(matches!(
+            err,
+            ApiError::Conflict { reason } if reason == "already exists"
+        ));
+    }
+
+    #[test]
+    fn maps_unavailable_errors() {
+        let err = ApiError::from(AppError::unavailable("provider", "offline"));
+
+        assert!(matches!(
+            err,
+            ApiError::Unavailable { service, reason } if service == "provider" && reason == "offline"
+        ));
+    }
+
+    #[test]
+    fn maps_provider_errors_to_unavailable() {
+        let err = ApiError::from(AppError::from(ProviderError::unavailable("tidal", "down")));
+
+        assert!(matches!(
+            err,
+            ApiError::Unavailable { service, reason } if service == "provider" && reason.contains("tidal")
+        ));
+    }
+
+    #[test]
+    fn maps_filesystem_errors_to_internal() {
+        let err = ApiError::from(AppError::filesystem(
+            "copy",
+            "/tmp/file.mp3",
+            io::Error::other("disk full"),
+        ));
+
+        assert!(matches!(
+            err,
+            ApiError::Internal { message }
+                if message.contains("filesystem:copy:/tmp/file.mp3") && message.contains("disk full")
+        ));
+    }
+}

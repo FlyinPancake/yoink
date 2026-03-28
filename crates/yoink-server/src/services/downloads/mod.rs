@@ -143,8 +143,8 @@ async fn serialize_job(
         album_title,
         track_title,
         artist_name,
-        status: job.status.into(),
-        quality: job.quality.into(),
+        status: job.status,
+        quality: job.quality,
         total_tracks: job.total_tracks,
         completed_tracks: job.completed_tasks,
         error: job.error_message,
@@ -857,6 +857,60 @@ mod tests {
             .expect("job exists");
 
         assert_eq!(job.quality, Quality::HiRes);
+    }
+
+    #[tokio::test]
+    async fn enqueue_track_download_rejects_when_track_job_is_active() {
+        let state = test_support::test_state().await;
+        let (_artist, album, track_one, _track_two) = seed_album_with_tracks(&state).await;
+
+        download_job::ActiveModel {
+            album_id: Set(album.id),
+            track_id: Set(Some(track_one.id)),
+            source: Set(Provider::Tidal),
+            quality: Set(Quality::Lossless),
+            status: Set(DownloadStatus::Queued),
+            total_tracks: Set(1),
+            completed_tasks: Set(0),
+            error_message: Set(None),
+            ..download_job::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert queued track job");
+
+        let err = enqueue_track_download(&state, track_one.id)
+            .await
+            .expect_err("track job should be rejected");
+
+        assert!(matches!(err, AppError::Validation { .. }));
+    }
+
+    #[tokio::test]
+    async fn cancel_job_rejects_non_queued_jobs() {
+        let state = test_support::test_state().await;
+        let (_artist, album, _track_one, _track_two) = seed_album_with_tracks(&state).await;
+
+        let job = download_job::ActiveModel {
+            album_id: Set(album.id),
+            track_id: Set(None),
+            source: Set(Provider::Tidal),
+            quality: Set(Quality::Lossless),
+            status: Set(DownloadStatus::Failed),
+            total_tracks: Set(2),
+            completed_tasks: Set(1),
+            error_message: Set(Some("failed".to_string())),
+            ..download_job::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert failed job");
+
+        let err = cancel_job(&state, job.id)
+            .await
+            .expect_err("cancel should reject failed jobs");
+
+        assert!(matches!(err, AppError::Validation { .. }));
     }
 
     #[tokio::test]

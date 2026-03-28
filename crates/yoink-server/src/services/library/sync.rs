@@ -472,3 +472,387 @@ fn should_prefer_album(
 
     candidate.external_id > existing.external_id
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use async_trait::async_trait;
+    use chrono::NaiveDate;
+    use sea_orm::{
+        ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
+        QueryFilter,
+    };
+    use serde_json::Value;
+
+    use crate::{
+        db::{self, provider::Provider, wanted_status::WantedStatus},
+        providers::{
+            MetadataProvider, ProviderAlbum, ProviderArtist, ProviderError, ProviderTrack,
+            registry::ProviderRegistry,
+        },
+        test_support,
+    };
+
+    use super::{
+        album_identity_key, normalize_title, should_prefer_album, strip_featuring, sync_artist,
+    };
+
+    struct TestSyncProvider {
+        albums_by_artist: HashMap<String, Vec<ProviderAlbum>>,
+        tracks_by_album: HashMap<String, Vec<ProviderTrack>>,
+    }
+
+    #[async_trait]
+    impl MetadataProvider for TestSyncProvider {
+        fn id(&self) -> Provider {
+            Provider::Tidal
+        }
+
+        fn display_name(&self) -> &str {
+            "Test Sync Provider"
+        }
+
+        async fn search_artists(&self, _query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
+            Ok(Vec::new())
+        }
+
+        async fn fetch_albums(
+            &self,
+            external_artist_id: &str,
+        ) -> Result<Vec<ProviderAlbum>, ProviderError> {
+            Ok(self
+                .albums_by_artist
+                .get(external_artist_id)
+                .cloned()
+                .unwrap_or_default())
+        }
+
+        async fn fetch_tracks(
+            &self,
+            external_album_id: &str,
+        ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError> {
+            Ok((
+                self.tracks_by_album
+                    .get(external_album_id)
+                    .cloned()
+                    .unwrap_or_default(),
+                HashMap::new(),
+            ))
+        }
+
+        async fn fetch_track_info_extra(
+            &self,
+            _external_track_id: &str,
+        ) -> Option<HashMap<String, Value>> {
+            None
+        }
+
+        fn image_url(&self, image_ref: &str, size: u16) -> String {
+            format!("https://example.test/{image_ref}/{size}")
+        }
+
+        async fn fetch_cover_art_bytes(&self, _image_ref: &str) -> Option<Vec<u8>> {
+            None
+        }
+    }
+
+    fn provider_album(
+        external_id: &str,
+        title: &str,
+        release_date: Option<NaiveDate>,
+        cover_ref: Option<&str>,
+        explicit: bool,
+    ) -> ProviderAlbum {
+        ProviderAlbum {
+            external_id: external_id.to_string(),
+            title: title.to_string(),
+            album_type: None,
+            release_date,
+            cover_ref: cover_ref.map(str::to_string),
+            url: None,
+            explicit,
+        }
+    }
+
+    #[test]
+    fn normalize_title_strips_featuring_and_normalizes_unicode_punctuation() {
+        assert_eq!(normalize_title("First Time (feat. Elipsa)"), "first time");
+        assert_eq!(
+            normalize_title("Don\u{2019}t Stop \u{2013} Live"),
+            "don't stop - live"
+        );
+    }
+
+    #[test]
+    fn strip_featuring_removes_bracketed_feature_clauses() {
+        assert_eq!(strip_featuring("track [feat. guest]"), "track");
+        assert_eq!(strip_featuring("track (ft guest)"), "track");
+        assert_eq!(strip_featuring("track (live)"), "track (live)");
+    }
+
+    #[test]
+    fn album_identity_key_uses_normalized_title_and_year() {
+        let key = album_identity_key("Album Title (feat. Guest)", Some("2024-02-03".to_string()));
+
+        assert_eq!(key, "album title|2024");
+    }
+
+    #[test]
+    fn should_prefer_album_prefers_cover_then_provider_priority_then_explicit() {
+        let without_cover = provider_album(
+            "1",
+            "Album",
+            NaiveDate::from_ymd_opt(2024, 1, 1),
+            None,
+            false,
+        );
+        let with_cover = provider_album(
+            "2",
+            "Album",
+            NaiveDate::from_ymd_opt(2024, 1, 1),
+            Some("cover"),
+            false,
+        );
+        assert!(should_prefer_album(
+            &Provider::Tidal,
+            &without_cover,
+            &Provider::Tidal,
+            &with_cover
+        ));
+
+        let deezer_album = provider_album(
+            "1",
+            "Album",
+            NaiveDate::from_ymd_opt(2024, 1, 1),
+            Some("cover"),
+            false,
+        );
+        let musicbrainz_album = provider_album(
+            "2",
+            "Album",
+            NaiveDate::from_ymd_opt(2024, 1, 1),
+            Some("cover"),
+            false,
+        );
+        assert!(should_prefer_album(
+            &Provider::MusicBrainz,
+            &musicbrainz_album,
+            &Provider::Deezer,
+            &deezer_album
+        ));
+
+        let non_explicit = provider_album(
+            "1",
+            "Album",
+            NaiveDate::from_ymd_opt(2024, 1, 1),
+            Some("cover"),
+            false,
+        );
+        let explicit = provider_album(
+            "2",
+            "Album",
+            NaiveDate::from_ymd_opt(2024, 1, 1),
+            Some("cover"),
+            true,
+        );
+        assert!(should_prefer_album(
+            &Provider::Tidal,
+            &non_explicit,
+            &Provider::Tidal,
+            &explicit
+        ));
+    }
+
+    #[tokio::test]
+    async fn sync_artist_creates_album_tracks_and_provider_links() {
+        let mut registry = ProviderRegistry::new();
+        registry.register_metadata(Arc::new(TestSyncProvider {
+            albums_by_artist: HashMap::from([(
+                "artist-ext".to_string(),
+                vec![provider_album(
+                    "album-ext",
+                    "Synced Album",
+                    NaiveDate::from_ymd_opt(2024, 6, 1),
+                    Some("cover-ref"),
+                    true,
+                )],
+            )]),
+            tracks_by_album: HashMap::from([(
+                "album-ext".to_string(),
+                vec![ProviderTrack {
+                    external_id: "track-ext".to_string(),
+                    title: "Synced Track".to_string(),
+                    version: Some("VIP".to_string()),
+                    track_number: 1,
+                    disc_number: Some(1),
+                    duration_secs: 210,
+                    isrc: Some("ISRC123".to_string()),
+                    explicit: true,
+                    extra: HashMap::new(),
+                }],
+            )]),
+        }));
+        let state = test_support::test_state_with_registry(registry).await;
+        let artist = test_support::seed_artist(&state, "Artist", true).await;
+        db::artist_provider_link::ActiveModel {
+            artist_id: Set(artist.id),
+            provider: Set(Provider::Tidal),
+            external_id: Set("artist-ext".to_string()),
+            external_url: Set(None),
+            external_name: Set(None),
+            ..db::artist_provider_link::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert artist provider link");
+
+        sync_artist(&state, artist.id).await.expect("sync artist");
+
+        let albums = db::album::Entity::find()
+            .all(&state.db)
+            .await
+            .expect("load albums");
+        let tracks = db::track::Entity::find()
+            .all(&state.db)
+            .await
+            .expect("load tracks");
+        let album_links = db::album_provider_link::Entity::find()
+            .all(&state.db)
+            .await
+            .expect("load album links");
+        let track_links = db::track_provider_link::Entity::find()
+            .all(&state.db)
+            .await
+            .expect("load track links");
+
+        assert_eq!(albums.len(), 1);
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(album_links.len(), 1);
+        assert_eq!(track_links.len(), 1);
+        assert_eq!(albums[0].title, "Synced Album");
+        assert_eq!(albums[0].wanted_status, WantedStatus::Unmonitored);
+        assert_eq!(
+            albums[0].cover_url.as_deref(),
+            Some("/api/image/tidal/cover-ref/640")
+        );
+        assert_eq!(tracks[0].title, "Synced Track");
+        assert_eq!(tracks[0].version.as_deref(), Some("VIP"));
+        assert_eq!(tracks[0].status, WantedStatus::Unmonitored);
+        assert_eq!(track_links[0].provider_track_id, "track-ext");
+    }
+
+    #[tokio::test]
+    async fn sync_artist_updates_existing_album_and_preserves_local_track_state() {
+        let mut registry = ProviderRegistry::new();
+        registry.register_metadata(Arc::new(TestSyncProvider {
+            albums_by_artist: HashMap::from([(
+                "artist-ext".to_string(),
+                vec![provider_album(
+                    "album-ext",
+                    "Updated Album",
+                    NaiveDate::from_ymd_opt(2025, 2, 2),
+                    Some("new-cover"),
+                    true,
+                )],
+            )]),
+            tracks_by_album: HashMap::from([(
+                "album-ext".to_string(),
+                vec![ProviderTrack {
+                    external_id: "track-ext".to_string(),
+                    title: "Updated Track".to_string(),
+                    version: Some("Remix".to_string()),
+                    track_number: 1,
+                    disc_number: Some(1),
+                    duration_secs: 222,
+                    isrc: Some("NEWISRC".to_string()),
+                    explicit: true,
+                    extra: HashMap::new(),
+                }],
+            )]),
+        }));
+        let state = test_support::test_state_with_registry(registry).await;
+        let artist = test_support::seed_artist(&state, "Artist", true).await;
+        let album = test_support::seed_album(&state, "Old Album", WantedStatus::Wanted).await;
+        test_support::link_album_artist(&state, album.id, artist.id, 0).await;
+        db::artist_provider_link::ActiveModel {
+            artist_id: Set(artist.id),
+            provider: Set(Provider::Tidal),
+            external_id: Set("artist-ext".to_string()),
+            external_url: Set(None),
+            external_name: Set(None),
+            ..db::artist_provider_link::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert artist provider link");
+        db::album_provider_link::ActiveModel {
+            album_id: Set(album.id),
+            provider: Set(Provider::Tidal),
+            provider_album_id: Set("album-ext".to_string()),
+            external_url: Set(None),
+            external_name: Set(Some("Old Album".to_string())),
+            ..db::album_provider_link::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album provider link");
+        let mut track: db::track::ActiveModel =
+            test_support::seed_track(&state, album.id, "Old Track", 1, WantedStatus::Wanted)
+                .await
+                .into();
+        track.file_path = Set(Some("managed/old-track.flac".to_string()));
+        let track = track.update(&state.db).await.expect("update track");
+        db::track_provider_link::ActiveModel {
+            track_id: Set(track.id),
+            provider: Set(Provider::Tidal),
+            provider_track_id: Set("track-ext".to_string()),
+            ..db::track_provider_link::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert track provider link");
+
+        sync_artist(&state, artist.id).await.expect("sync artist");
+
+        let refreshed_album = db::album::Entity::find_by_id(album.id)
+            .one(&state.db)
+            .await
+            .expect("load album")
+            .expect("album exists");
+        let refreshed_track = db::track::Entity::find_by_id(track.id)
+            .one(&state.db)
+            .await
+            .expect("load track")
+            .expect("track exists");
+        let track_links = db::track_provider_link::Entity::find()
+            .filter(db::track_provider_link::Column::TrackId.eq(track.id))
+            .all(&state.db)
+            .await
+            .expect("load track links");
+
+        assert_eq!(refreshed_album.title, "Updated Album");
+        assert_eq!(
+            refreshed_album.release_date,
+            NaiveDate::from_ymd_opt(2025, 2, 2)
+        );
+        assert_eq!(
+            refreshed_album.cover_url.as_deref(),
+            Some("/api/image/tidal/new-cover/640")
+        );
+        assert!(refreshed_album.explicit);
+        assert_eq!(refreshed_album.wanted_status, WantedStatus::Wanted);
+        assert_eq!(refreshed_track.title, "Updated Track");
+        assert_eq!(refreshed_track.version.as_deref(), Some("Remix"));
+        assert_eq!(refreshed_track.duration, Some(222));
+        assert_eq!(refreshed_track.isrc.as_deref(), Some("NEWISRC"));
+        assert!(refreshed_track.explicit);
+        assert_eq!(refreshed_track.status, WantedStatus::Wanted);
+        assert_eq!(
+            refreshed_track.file_path.as_deref(),
+            Some("managed/old-track.flac")
+        );
+        assert_eq!(track_links.len(), 1);
+        assert_eq!(track_links[0].provider_track_id, "track-ext");
+    }
+}

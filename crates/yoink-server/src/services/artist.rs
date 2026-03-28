@@ -423,6 +423,59 @@ mod tests {
         test_support::test_state_with_registry(registry).await
     }
 
+    struct TestBioFallbackProvider {
+        provider: Provider,
+        bio: Option<String>,
+    }
+
+    #[async_trait]
+    impl MetadataProvider for TestBioFallbackProvider {
+        fn id(&self) -> Provider {
+            self.provider
+        }
+
+        fn display_name(&self) -> &str {
+            "Bio Fallback Provider"
+        }
+
+        async fn search_artists(&self, _query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
+            Ok(Vec::new())
+        }
+
+        async fn fetch_albums(
+            &self,
+            _external_artist_id: &str,
+        ) -> Result<Vec<ProviderAlbum>, ProviderError> {
+            Ok(Vec::new())
+        }
+
+        async fn fetch_tracks(
+            &self,
+            _external_album_id: &str,
+        ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError> {
+            Ok((Vec::new(), HashMap::new()))
+        }
+
+        async fn fetch_track_info_extra(
+            &self,
+            _external_track_id: &str,
+        ) -> Option<HashMap<String, Value>> {
+            None
+        }
+
+        fn image_url(&self, image_ref: &str, size: u16) -> String {
+            format!("https://example.test/{image_ref}/{size}")
+        }
+
+        async fn fetch_cover_art_bytes(&self, _image_ref: &str) -> Option<Vec<u8>> {
+            None
+        }
+
+        async fn fetch_artist_bio(&self, _external_artist_id: &str) -> Option<String> {
+            self.bio.clone()
+        }
+    }
+
     #[tokio::test]
     async fn get_artist_images_returns_provider_candidates() {
         let state = test_state_with_artist_image_provider().await;
@@ -532,6 +585,93 @@ mod tests {
             .await
             .expect("reload links");
         assert!(links.is_empty());
+    }
+
+    #[tokio::test]
+    async fn unlinking_non_last_provider_keeps_artist_monitored() {
+        let state = test_state().await;
+
+        let artist = test_support::seed_artist(&state, "Test Artist", true).await;
+
+        for (provider, external_id) in [(Provider::Deezer, "123"), (Provider::Tidal, "456")] {
+            artist_provider_link::ActiveModel {
+                artist_id: Set(artist.id),
+                provider: Set(provider),
+                external_id: Set(external_id.to_string()),
+                external_url: Set(None),
+                external_name: Set(None),
+                ..artist_provider_link::ActiveModel::new()
+            }
+            .insert(&state.db)
+            .await
+            .expect("insert provider link");
+        }
+
+        unlink_artist_provider(&state, artist.id, "deezer".to_string(), "123".to_string())
+            .await
+            .expect("unlink provider");
+
+        let reloaded_artist = artist::Entity::find_by_id(artist.id)
+            .one(&state.db)
+            .await
+            .expect("reload artist")
+            .expect("artist exists");
+        let links = artist_provider_link::Entity::find_by_artist(artist.id)
+            .all(&state.db)
+            .await
+            .expect("reload links");
+
+        assert!(reloaded_artist.monitored);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].provider, Provider::Tidal);
+    }
+
+    #[tokio::test]
+    async fn fetch_artist_bio_falls_through_to_later_provider() {
+        let mut registry = ProviderRegistry::new();
+        registry.register_metadata(Arc::new(TestBioFallbackProvider {
+            provider: Provider::Deezer,
+            bio: None,
+        }));
+        registry.register_metadata(Arc::new(TestBioFallbackProvider {
+            provider: Provider::Tidal,
+            bio: Some("Fallback bio".to_string()),
+        }));
+        let state = test_support::test_state_with_registry(registry).await;
+        let artist = test_support::seed_artist(&state, "Artist", true).await;
+
+        for (provider, external_id) in [(Provider::Deezer, "dz-1"), (Provider::Tidal, "td-1")] {
+            artist_provider_link::ActiveModel {
+                artist_id: Set(artist.id),
+                provider: Set(provider),
+                external_id: Set(external_id.to_string()),
+                external_url: Set(None),
+                external_name: Set(None),
+                ..artist_provider_link::ActiveModel::new()
+            }
+            .insert(&state.db)
+            .await
+            .expect("insert provider link");
+        }
+
+        super::fetch_artist_bio(&state, artist.id)
+            .await
+            .expect("request bio fetch");
+
+        let mut persisted_bio = None;
+        for _ in 0..20 {
+            persisted_bio = artist::Entity::find_by_id(artist.id)
+                .one(&state.db)
+                .await
+                .expect("reload artist")
+                .and_then(|artist| artist.bio);
+            if persisted_bio.is_some() {
+                break;
+            }
+            sleep(Duration::from_millis(25)).await;
+        }
+
+        assert_eq!(persisted_bio.as_deref(), Some("Fallback bio"));
     }
 
     #[tokio::test]

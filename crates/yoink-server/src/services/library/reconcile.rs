@@ -15,7 +15,6 @@ use crate::{
     error::{AppError, AppResult},
     services::downloads::sync_album_wanted_status_from_tracks,
     state::AppState,
-    test_support,
 };
 
 /// Reconcile library files on disk with the database.
@@ -174,7 +173,10 @@ mod tests {
     use tokio::sync::broadcast::error::{RecvError, TryRecvError};
     use uuid::Uuid;
 
-    use crate::db::{album, root_folder};
+    use crate::{
+        db::{album, root_folder},
+        test_support,
+    };
 
     use super::*;
 
@@ -473,5 +475,62 @@ mod tests {
 
         assert_eq!(persisted.len(), 1);
         assert_eq!(persisted[0].id, track.id);
+    }
+
+    #[tokio::test]
+    async fn reconcile_keeps_missing_in_progress_track_in_progress() {
+        let music_root = tempdir().expect("create music root");
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let album = seed_album_with_artist(&state, WantedStatus::InProgress).await;
+        let track = seed_track(
+            &state,
+            album.id,
+            WantedStatus::InProgress,
+            Some("Test Artist/Test Album (2024)/01 - Track 1.mp3".to_string()),
+            None,
+        )
+        .await;
+
+        let repaired = reconcile_library_files(&state).await.expect("reconcile");
+        let reloaded_track = load_track(&state, track.id).await;
+        let reloaded_album = load_album(&state, album.id).await;
+
+        assert_eq!(repaired, 1);
+        assert_eq!(reloaded_track.file_path, None);
+        assert_eq!(reloaded_track.status, WantedStatus::InProgress);
+        assert_eq!(reloaded_album.wanted_status, WantedStatus::Wanted);
+    }
+
+    #[tokio::test]
+    async fn reconcile_repairs_multiple_tracks_in_one_album() {
+        let music_root = tempdir().expect("create music root");
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let album = seed_album_with_artist(&state, WantedStatus::Acquired).await;
+        let first = seed_track(
+            &state,
+            album.id,
+            WantedStatus::Acquired,
+            Some("Test Artist/Test Album (2024)/01 - Track 1.mp3".to_string()),
+            None,
+        )
+        .await;
+        let second = seed_track(
+            &state,
+            album.id,
+            WantedStatus::Acquired,
+            Some("Test Artist/Test Album (2024)/02 - Track 2.mp3".to_string()),
+            None,
+        )
+        .await;
+
+        let repaired = reconcile_library_files(&state).await.expect("reconcile");
+        let first = load_track(&state, first.id).await;
+        let second = load_track(&state, second.id).await;
+        let album = load_album(&state, album.id).await;
+
+        assert_eq!(repaired, 2);
+        assert_eq!(first.status, WantedStatus::Wanted);
+        assert_eq!(second.status, WantedStatus::Wanted);
+        assert_eq!(album.wanted_status, WantedStatus::Wanted);
     }
 }

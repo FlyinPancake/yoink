@@ -482,3 +482,311 @@ async fn prune_empty_import_dirs(path: &Path, music_root: &Path) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
+    use tempfile::tempdir;
+
+    use crate::{
+        api::{ImportConfirmation, ManualImportMode},
+        db::{album_artist, track, track_artist, wanted_status::WantedStatus},
+        test_support,
+    };
+
+    use super::{
+        find_matching_track, next_available_track_path, normalize_year, parse_release_year,
+        planned_album_directory, transfer_external_tracks,
+    };
+    use crate::services::library::import::shared::types::PreparedTrack;
+
+    #[test]
+    fn normalize_year_accepts_only_valid_years() {
+        assert_eq!(normalize_year("2024").as_deref(), Some("2024"));
+        assert_eq!(normalize_year("1899"), None);
+        assert_eq!(normalize_year("2101"), None);
+        assert_eq!(normalize_year("2024-01-01"), None);
+    }
+
+    #[test]
+    fn parse_release_year_builds_first_day_of_year() {
+        assert_eq!(
+            parse_release_year(Some("2024")),
+            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+        );
+        assert_eq!(parse_release_year(Some("not-a-year")), None);
+        assert_eq!(parse_release_year(None), None);
+    }
+
+    #[test]
+    fn planned_album_directory_sanitizes_names_and_falls_back_to_unknown_year() {
+        let path = planned_album_directory(
+            std::path::Path::new("/music"),
+            "Artist/Name",
+            "Album:Name",
+            None,
+        );
+
+        assert_eq!(
+            path,
+            PathBuf::from("/music")
+                .join("Artist_Name")
+                .join("Album_Name (Unknown)")
+        );
+    }
+
+    #[test]
+    fn next_available_track_path_appends_counter_when_name_exists() {
+        let dir = tempdir().expect("create dir");
+        let track = PreparedTrack {
+            source_path: dir.path().join("source.flac"),
+            title: "Track Name".to_string(),
+            disc_number: Some(1),
+            track_number: Some(2),
+            duration_secs: Some(180),
+            isrc: None,
+        };
+        let existing = dir.path().join("1-02 - Track Name.flac");
+        std::fs::write(&existing, b"audio").expect("write existing file");
+
+        let next = next_available_track_path(dir.path(), &track);
+
+        assert_eq!(next, dir.path().join("1-02 - Track Name (2).flac"));
+    }
+
+    #[tokio::test]
+    async fn transfer_external_tracks_copies_files_into_target_dir() {
+        let source_root = tempdir().expect("create source root");
+        let target_root = tempdir().expect("create target root");
+        let source_track = source_root.path().join("01 - Track.flac");
+        std::fs::write(&source_track, b"audio").expect("write source file");
+        let tracks = vec![PreparedTrack {
+            source_path: source_track.clone(),
+            title: "Track".to_string(),
+            disc_number: None,
+            track_number: Some(1),
+            duration_secs: Some(180),
+            isrc: None,
+        }];
+
+        let transferred =
+            transfer_external_tracks(&tracks, target_root.path(), ManualImportMode::Copy)
+                .await
+                .expect("transfer tracks");
+
+        assert_eq!(transferred.len(), 1);
+        assert!(transferred[0].exists());
+        assert_eq!(
+            std::fs::read(&transferred[0]).expect("read transferred"),
+            b"audio"
+        );
+        assert!(source_track.exists());
+    }
+
+    #[tokio::test]
+    async fn find_matching_track_prefers_disc_and_track_number() {
+        let state = test_support::test_state().await;
+        let artist = test_support::seed_artist(&state, "Artist", true).await;
+        let album = test_support::seed_album(&state, "Album", WantedStatus::Wanted).await;
+        test_support::link_album_artist(&state, album.id, artist.id, 0).await;
+        let existing =
+            test_support::seed_track(&state, album.id, "Existing", 3, WantedStatus::Wanted).await;
+
+        let prepared = PreparedTrack {
+            source_path: PathBuf::from("/music/03 - New Title.flac"),
+            title: "Different Title".to_string(),
+            disc_number: Some(1),
+            track_number: Some(3),
+            duration_secs: Some(200),
+            isrc: None,
+        };
+
+        let matched = find_matching_track(&state.db, album.id, &prepared)
+            .await
+            .expect("find matching track")
+            .expect("matching track exists");
+
+        assert_eq!(matched.id, existing.id);
+    }
+
+    #[tokio::test]
+    async fn persist_imported_album_creates_new_artist_album_and_tracks() {
+        let music_root = tempdir().expect("create music root");
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let root_path = music_root.path();
+        let tracks = vec![
+            PreparedTrack {
+                source_path: root_path.join("Artist/Album (2024)/01 - First.flac"),
+                title: "First".to_string(),
+                disc_number: Some(1),
+                track_number: Some(1),
+                duration_secs: Some(180),
+                isrc: Some("ISRC001".to_string()),
+            },
+            PreparedTrack {
+                source_path: root_path.join("Artist/Album (2024)/02 - Second.flac"),
+                title: "Second".to_string(),
+                disc_number: Some(1),
+                track_number: Some(2),
+                duration_secs: Some(200),
+                isrc: Some("ISRC002".to_string()),
+            },
+        ];
+        let confirmation = ImportConfirmation {
+            preview_id: "preview-1".to_string(),
+            artist_name: "Artist".to_string(),
+            album_title: "Album".to_string(),
+            year: Some("2024".to_string()),
+            artist_id: None,
+            album_id: None,
+        };
+
+        let tx = state.db.begin().await.expect("begin tx");
+        let artists_added = super::persist_imported_album(
+            &state,
+            &tx,
+            root_path,
+            None,
+            &confirmation,
+            &tracks,
+            &[],
+        )
+        .await
+        .expect("persist imported album");
+        tx.commit().await.expect("commit tx");
+
+        assert_eq!(artists_added, 1);
+
+        let artist = crate::db::artist::Entity::find()
+            .one(&state.db)
+            .await
+            .expect("load artist")
+            .expect("artist exists");
+        let album = crate::db::album::Entity::find()
+            .one(&state.db)
+            .await
+            .expect("load album")
+            .expect("album exists");
+        let stored_tracks = track::Entity::find()
+            .filter(track::Column::AlbumId.eq(album.id))
+            .all(&state.db)
+            .await
+            .expect("load tracks");
+        let album_links = album_artist::Entity::find()
+            .filter(album_artist::Column::AlbumId.eq(album.id))
+            .all(&state.db)
+            .await
+            .expect("load album links");
+        let track_links = track_artist::Entity::find()
+            .all(&state.db)
+            .await
+            .expect("load track links");
+
+        assert_eq!(artist.name, "Artist");
+        assert!(!artist.monitored);
+        assert_eq!(album.title, "Album");
+        assert_eq!(album.wanted_status, WantedStatus::Acquired);
+        assert_eq!(
+            album.release_date,
+            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+        );
+        assert_eq!(album_links.len(), 1);
+        assert_eq!(stored_tracks.len(), 2);
+        assert_eq!(track_links.len(), 2);
+        assert!(
+            stored_tracks
+                .iter()
+                .all(|track| track.status == WantedStatus::Acquired)
+        );
+        assert!(
+            stored_tracks
+                .iter()
+                .any(|track| track.file_path.as_deref()
+                    == Some("Artist/Album (2024)/01 - First.flac"))
+        );
+        assert!(stored_tracks.iter().any(
+            |track| track.file_path.as_deref() == Some("Artist/Album (2024)/02 - Second.flac")
+        ));
+    }
+
+    #[tokio::test]
+    async fn persist_imported_album_updates_existing_album_and_track() {
+        let music_root = tempdir().expect("create music root");
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+        let root_path = music_root.path();
+        let artist = test_support::seed_artist(&state, "Existing Artist", true).await;
+        let album = test_support::seed_album(&state, "Existing Album", WantedStatus::Wanted).await;
+        let existing_track =
+            test_support::seed_track(&state, album.id, "Old Title", 1, WantedStatus::Wanted).await;
+        let confirmation = ImportConfirmation {
+            preview_id: "preview-2".to_string(),
+            artist_name: artist.name.clone(),
+            album_title: album.title.clone(),
+            year: Some("2025".to_string()),
+            artist_id: Some(artist.id),
+            album_id: Some(album.id),
+        };
+        let tracks = vec![PreparedTrack {
+            source_path: root_path
+                .join("Existing Artist/Existing Album (2025)/01 - New Title.flac"),
+            title: "New Title".to_string(),
+            disc_number: Some(1),
+            track_number: Some(1),
+            duration_secs: Some(245),
+            isrc: Some("NEWISRC".to_string()),
+        }];
+
+        let tx = state.db.begin().await.expect("begin tx");
+        let artists_added = super::persist_imported_album(
+            &state,
+            &tx,
+            root_path,
+            None,
+            &confirmation,
+            &tracks,
+            &[],
+        )
+        .await
+        .expect("persist imported album");
+        tx.commit().await.expect("commit tx");
+
+        assert_eq!(artists_added, 0);
+
+        let refreshed_album = crate::db::album::Entity::find_by_id(album.id)
+            .one(&state.db)
+            .await
+            .expect("load album")
+            .expect("album exists");
+        let refreshed_track = track::Entity::find_by_id(existing_track.id)
+            .one(&state.db)
+            .await
+            .expect("load track")
+            .expect("track exists");
+        let album_links = album_artist::Entity::find()
+            .filter(album_artist::Column::AlbumId.eq(album.id))
+            .all(&state.db)
+            .await
+            .expect("load album links");
+        let track_links = track_artist::Entity::find()
+            .filter(track_artist::Column::TrackId.eq(existing_track.id))
+            .all(&state.db)
+            .await
+            .expect("load track links");
+
+        assert_eq!(refreshed_album.wanted_status, WantedStatus::Acquired);
+        assert_eq!(album_links.len(), 1);
+        assert_eq!(album_links[0].artist_id, artist.id);
+        assert_eq!(refreshed_track.title, "New Title");
+        assert_eq!(refreshed_track.duration, Some(245));
+        assert_eq!(refreshed_track.isrc.as_deref(), Some("NEWISRC"));
+        assert_eq!(refreshed_track.status, WantedStatus::Acquired);
+        assert_eq!(
+            refreshed_track.file_path.as_deref(),
+            Some("Existing Artist/Existing Album (2025)/01 - New Title.flac")
+        );
+        assert_eq!(track_links.len(), 1);
+        assert_eq!(track_links[0].artist_id, artist.id);
+    }
+}

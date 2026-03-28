@@ -337,9 +337,76 @@ pub(crate) async fn find_or_create_lightweight_artist(
 
 #[cfg(test)]
 mod tests {
-    use sea_orm::EntityTrait;
+    use std::{collections::HashMap, sync::Arc};
 
-    use crate::{db::provider::Provider, test_support};
+    use async_trait::async_trait;
+    use chrono::NaiveDate;
+    use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
+    use serde_json::Value;
+
+    use crate::{
+        db::{
+            album_artist, album_provider_link, artist_provider_link, provider::Provider,
+            wanted_status::WantedStatus,
+        },
+        providers::{
+            MetadataProvider, ProviderAlbum, ProviderArtist, ProviderError, ProviderTrack,
+            registry::ProviderRegistry,
+        },
+        test_support,
+    };
+
+    struct TestAlbumProvider {
+        albums_by_artist: HashMap<String, Vec<ProviderAlbum>>,
+    }
+
+    #[async_trait]
+    impl MetadataProvider for TestAlbumProvider {
+        fn id(&self) -> Provider {
+            Provider::Tidal
+        }
+
+        fn display_name(&self) -> &str {
+            "Test Album Provider"
+        }
+
+        async fn search_artists(&self, _query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
+            Ok(Vec::new())
+        }
+
+        async fn fetch_albums(
+            &self,
+            external_artist_id: &str,
+        ) -> Result<Vec<ProviderAlbum>, ProviderError> {
+            Ok(self
+                .albums_by_artist
+                .get(external_artist_id)
+                .cloned()
+                .unwrap_or_default())
+        }
+
+        async fn fetch_tracks(
+            &self,
+            _external_album_id: &str,
+        ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError> {
+            Ok((Vec::new(), HashMap::new()))
+        }
+
+        async fn fetch_track_info_extra(
+            &self,
+            _external_track_id: &str,
+        ) -> Option<HashMap<String, Value>> {
+            None
+        }
+
+        fn image_url(&self, image_ref: &str, size: u16) -> String {
+            format!("https://example.test/{image_ref}/{size}")
+        }
+
+        async fn fetch_cover_art_bytes(&self, _image_ref: &str) -> Option<Vec<u8>> {
+            None
+        }
+    }
 
     #[test]
     fn default_provider_artist_url_known_providers() {
@@ -373,6 +440,79 @@ mod tests {
             Some("https://musicbrainz.org/release-group/abc".to_string())
         );
         assert!(super::default_provider_album_url("unknown", "x").is_none());
+    }
+
+    #[tokio::test]
+    async fn upsert_artist_provider_link_inserts_new_link() {
+        let state = test_support::test_state().await;
+        let artist = test_support::seed_artist(&state, "Artist", true).await;
+
+        super::upsert_artist_provider_link(
+            &state,
+            artist.id,
+            Provider::Tidal,
+            "artist-123",
+            Some("https://tidal.com/browse/artist/artist-123".to_string()),
+            Some("Artist".to_string()),
+        )
+        .await
+        .expect("insert link");
+
+        let link = artist_provider_link::Entity::find_by_artist_provider_external(
+            artist.id,
+            Provider::Tidal,
+            "artist-123",
+        )
+        .one(&state.db)
+        .await
+        .expect("load provider link")
+        .expect("link exists");
+
+        assert_eq!(link.external_name.as_deref(), Some("Artist"));
+        assert_eq!(
+            link.external_url.as_deref(),
+            Some("https://tidal.com/browse/artist/artist-123")
+        );
+    }
+
+    #[tokio::test]
+    async fn upsert_artist_provider_link_updates_existing_link() {
+        let state = test_support::test_state().await;
+        let artist = test_support::seed_artist(&state, "Artist", true).await;
+
+        super::upsert_artist_provider_link(
+            &state,
+            artist.id,
+            Provider::Tidal,
+            "artist-123",
+            Some("https://old.example.test".to_string()),
+            Some("Old Name".to_string()),
+        )
+        .await
+        .expect("insert link");
+
+        super::upsert_artist_provider_link(
+            &state,
+            artist.id,
+            Provider::Tidal,
+            "artist-123",
+            Some("https://new.example.test".to_string()),
+            Some("New Name".to_string()),
+        )
+        .await
+        .expect("update link");
+
+        let links = artist_provider_link::Entity::find()
+            .filter(artist_provider_link::Column::ArtistId.eq(artist.id))
+            .all(&state.db)
+            .await
+            .expect("load provider links");
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].external_name.as_deref(), Some("New Name"));
+        assert_eq!(
+            links[0].external_url.as_deref(),
+            Some("https://new.example.test")
+        );
     }
 
     #[tokio::test]
@@ -417,5 +557,156 @@ mod tests {
         .expect("reuse existing lightweight artist");
 
         assert_eq!(same_artist_id, artist_id);
+    }
+
+    #[tokio::test]
+    async fn find_or_create_artist_with_provider_link_uses_explicit_link_metadata() {
+        let state = test_support::test_state().await;
+
+        let artist_id = super::find_or_create_artist_with_provider_link(
+            &state,
+            Provider::Deezer,
+            "artist-456",
+            "Artist",
+            Some("https://images.example.test/artist.jpg".to_string()),
+            true,
+            Some("https://deezer.example.test/artist-456".to_string()),
+            Some("Display Artist".to_string()),
+        )
+        .await
+        .expect("create artist");
+
+        let artist = crate::db::artist::Entity::find_by_id(artist_id)
+            .one(&state.db)
+            .await
+            .expect("load artist")
+            .expect("artist exists");
+        let link = artist_provider_link::Entity::find_by_artist_provider_external(
+            artist_id,
+            Provider::Deezer,
+            "artist-456",
+        )
+        .one(&state.db)
+        .await
+        .expect("load provider link")
+        .expect("link exists");
+
+        assert!(artist.monitored);
+        assert_eq!(
+            artist.image_url.as_deref(),
+            Some("https://images.example.test/artist.jpg")
+        );
+        assert_eq!(
+            link.external_url.as_deref(),
+            Some("https://deezer.example.test/artist-456")
+        );
+        assert_eq!(link.external_name.as_deref(), Some("Display Artist"));
+    }
+
+    #[tokio::test]
+    async fn ensure_local_album_reuses_existing_provider_link() {
+        let state = test_support::test_state().await;
+        let artist_id = super::find_or_create_lightweight_artist(
+            &state,
+            Provider::Tidal,
+            "artist-123",
+            "Artist",
+        )
+        .await
+        .expect("create lightweight artist");
+        let album = test_support::seed_album(&state, "Existing Album", WantedStatus::Wanted).await;
+        test_support::link_album_artist(&state, album.id, artist_id, 0).await;
+        album_provider_link::ActiveModel {
+            album_id: sea_orm::ActiveValue::Set(album.id),
+            provider: sea_orm::ActiveValue::Set(Provider::Tidal),
+            provider_album_id: sea_orm::ActiveValue::Set("album-123".to_string()),
+            external_url: sea_orm::ActiveValue::Set(None),
+            external_name: sea_orm::ActiveValue::Set(Some("Existing Album".to_string())),
+            ..album_provider_link::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album provider link");
+
+        let album_id = super::ensure_local_album(
+            &state,
+            Provider::Tidal,
+            "album-123",
+            "artist-123",
+            "Artist",
+            WantedStatus::Acquired,
+        )
+        .await
+        .expect("ensure local album");
+
+        assert_eq!(album_id, album.id);
+        assert_eq!(
+            crate::db::album::Entity::find()
+                .all(&state.db)
+                .await
+                .expect("reload albums")
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn ensure_local_album_creates_album_from_provider_metadata() {
+        let mut registry = ProviderRegistry::new();
+        registry.register_metadata(Arc::new(TestAlbumProvider {
+            albums_by_artist: HashMap::from([(
+                "artist-123".to_string(),
+                vec![ProviderAlbum {
+                    external_id: "album-123".to_string(),
+                    title: "Fetched Album".to_string(),
+                    album_type: Some("ep".to_string()),
+                    release_date: NaiveDate::from_ymd_opt(2024, 4, 20),
+                    cover_ref: Some("cover-ref".to_string()),
+                    url: Some("https://tidal.example.test/album-123".to_string()),
+                    explicit: true,
+                }],
+            )]),
+        }));
+        let state = test_support::test_state_with_registry(registry).await;
+
+        let album_id = super::ensure_local_album(
+            &state,
+            Provider::Tidal,
+            "album-123",
+            "artist-123",
+            "Artist",
+            WantedStatus::Wanted,
+        )
+        .await
+        .expect("ensure local album");
+
+        let album = crate::db::album::Entity::find_by_id(album_id)
+            .one(&state.db)
+            .await
+            .expect("load album")
+            .expect("album exists");
+        let links = album_provider_link::Entity::find()
+            .filter(album_provider_link::Column::AlbumId.eq(album_id))
+            .all(&state.db)
+            .await
+            .expect("load provider links");
+        let artists = album_artist::Entity::find()
+            .filter(album_artist::Column::AlbumId.eq(album_id))
+            .all(&state.db)
+            .await
+            .expect("load album artists");
+
+        assert_eq!(album.title, "Fetched Album");
+        assert_eq!(album.album_type, crate::db::album_type::AlbumType::EP);
+        assert_eq!(album.release_date, NaiveDate::from_ymd_opt(2024, 4, 20));
+        assert_eq!(
+            album.cover_url.as_deref(),
+            Some("/api/image/tidal/cover-ref/640")
+        );
+        assert!(album.explicit);
+        assert_eq!(album.wanted_status, WantedStatus::Wanted);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].provider_album_id, "album-123");
+        assert_eq!(artists.len(), 1);
     }
 }
