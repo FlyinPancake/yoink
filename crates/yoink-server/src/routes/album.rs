@@ -885,7 +885,7 @@ mod tests {
         assert_eq!(payload[0].artist_name, None);
         assert_eq!(
             payload[0].album.wanted_status,
-            crate::api::WantedStatus::Unwanted
+            crate::api::WantedStatus::Unmonitored
         );
     }
 }

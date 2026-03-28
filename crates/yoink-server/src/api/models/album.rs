@@ -6,21 +6,7 @@ use uuid::Uuid;
 
 use crate::db;
 
-use super::Quality;
-
-/// Album status indicating what the download system should do with it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum WantedStatus {
-    /// Not wanted — either not monitored or explicitly skipped.
-    Unwanted,
-    /// Wanted — monitored and awaiting download.
-    Wanted,
-    /// Download is in progress.
-    InProgress,
-    /// Fully acquired — all monitored tracks are on disk.
-    Acquired,
-}
+use super::{Quality, WantedStatus};
 
 /// Core album data as stored in the database.
 /// Relation data (artists, tracks, provider links) is returned separately
@@ -38,17 +24,6 @@ pub struct Album {
     #[serde(default)]
     pub quality_override: Option<Quality>,
     pub created_at: DateTime<Utc>,
-}
-
-impl From<db::wanted_status::WantedStatus> for WantedStatus {
-    fn from(value: db::wanted_status::WantedStatus) -> Self {
-        match value {
-            db::wanted_status::WantedStatus::Unmonitored => Self::Unwanted,
-            db::wanted_status::WantedStatus::Wanted => Self::Wanted,
-            db::wanted_status::WantedStatus::InProgress => Self::InProgress,
-            db::wanted_status::WantedStatus::Acquired => Self::Acquired,
-        }
-    }
 }
 
 impl From<db::album::Model> for Album {

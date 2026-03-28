@@ -6,7 +6,7 @@ mod provider;
 mod search;
 mod track;
 
-pub(crate) use crate::db::quality::Quality;
+pub(crate) use crate::db::{quality::Quality, wanted_status::WantedStatus};
 
 pub(crate) use album::*;
 pub(crate) use artist::*;

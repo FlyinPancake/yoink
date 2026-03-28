@@ -30,10 +30,10 @@ type WantedStatus = components["schemas"]["WantedStatus"];
 
 function deriveWantedStatus(current: WantedStatus, monitored: boolean): WantedStatus {
   if (!monitored) {
-    return "unwanted";
+    return "unmonitored";
   }
 
-  return current === "unwanted" ? "wanted" : current;
+  return current === "unmonitored" ? "wanted" : current;
 }
 
 function patchArtistMonitorCaches(

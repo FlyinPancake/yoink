@@ -1381,11 +1381,8 @@ export interface components {
             artists: components["schemas"]["MonitoredArtist"][];
             jobs: components["schemas"]["DownloadJob"][];
         };
-        /**
-         * @description Album status indicating what the download system should do with it.
-         * @enum {string}
-         */
-        WantedStatus: "unwanted" | "wanted" | "in_progress" | "acquired";
+        /** @enum {string} */
+        WantedStatus: "unmonitored" | "wanted" | "in_progress" | "acquired";
     };
     responses: never;
     parameters: never;
