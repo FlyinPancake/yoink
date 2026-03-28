@@ -34,7 +34,7 @@ pub async fn search_aritsts(
         .into_iter()
         .flat_map(|(provider, results)| {
             results.into_iter().map(move |result| SearchArtistResult {
-                provider: provider.to_string(),
+                provider,
                 external_id: result.external_id,
                 name: result.name,
                 image_url: result
@@ -95,10 +95,13 @@ pub async fn search_albums(
         .into_iter()
         .flat_map(|(provider, results)| {
             results.into_iter().map(move |result| SearchAlbumResult {
-                provider: provider.to_string(),
+                provider,
                 external_id: result.external_id,
                 title: result.title,
-                album_type: result.album_type,
+                album_type: result
+                    .album_type
+                    .as_deref()
+                    .map(db::album_type::AlbumType::parse),
                 release_date: result.release_date,
                 cover_url: result
                     .cover_ref
@@ -160,7 +163,7 @@ pub async fn search_tracks(
         .into_iter()
         .flat_map(|(provider, results)| {
             results.into_iter().map(move |result| SearchTrackResult {
-                provider: provider.to_string(),
+                provider,
                 external_id: result.external_id,
                 title: result.title,
                 explicit: result.explicit,

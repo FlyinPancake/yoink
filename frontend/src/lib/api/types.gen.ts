@@ -978,7 +978,7 @@ export interface components {
          *     in API responses — not embedded here.
          */
         Album: {
-            album_type?: string | null;
+            album_type?: null | components["schemas"]["AlbumType"];
             cover_url?: string | null;
             /** Format: date-time */
             created_at: string;
@@ -1025,6 +1025,8 @@ export interface components {
             status: components["schemas"]["MatchStatus"];
             tags: string[];
         };
+        /** @enum {string} */
+        AlbumType: "album" | "e_p" | "single" | "unknown";
         ArtistDetailResponse: {
             album_match_suggestions: components["schemas"]["AlbumMatchSuggestion"][];
             albums: components["schemas"]["Album"][];
@@ -1036,7 +1038,7 @@ export interface components {
         /** @description An artist image option from a linked provider. */
         ArtistImageOption: {
             image_url: string;
-            provider: string;
+            provider: components["schemas"]["Provider"];
         };
         ArtistMatchSuggestion: {
             /** Format: uuid */
@@ -1267,20 +1269,20 @@ export interface components {
             external_id: string;
             external_name?: string | null;
             external_url?: string | null;
-            provider: string;
+            provider: components["schemas"]["Provider"];
         };
         /** @enum {string} */
         Quality: "Low" | "High" | "Lossless" | "HiRes";
         /** @description An album search result from a metadata provider. */
         SearchAlbumResult: {
-            album_type?: string | null;
+            album_type?: null | components["schemas"]["AlbumType"];
             already_added?: boolean | null;
             artist_external_id: string;
             artist_name: string;
             cover_url?: string | null;
             explicit: boolean;
             external_id: string;
-            provider: string;
+            provider: components["schemas"]["Provider"];
             release_date?: string | null;
             title: string;
             url?: string | null;
@@ -1301,7 +1303,7 @@ export interface components {
             name: string;
             /** Format: int32 */
             popularity?: number | null;
-            provider: string;
+            provider: components["schemas"]["Provider"];
             tags: string[];
             url?: string | null;
         };
@@ -1318,7 +1320,7 @@ export interface components {
             explicit: boolean;
             external_id: string;
             isrc?: string | null;
-            provider: string;
+            provider: components["schemas"]["Provider"];
             title: string;
             version?: string | null;
         };

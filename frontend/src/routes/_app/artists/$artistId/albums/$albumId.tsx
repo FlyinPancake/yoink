@@ -52,6 +52,7 @@ type AlbumMatchSuggestion = components["schemas"]["AlbumMatchSuggestion"];
 type DownloadJob = components["schemas"]["DownloadJob"];
 type Quality = components["schemas"]["Quality"];
 type ArtistWithPriority = components["schemas"]["ArtistWithPriority"];
+type AlbumType = components["schemas"]["AlbumType"];
 
 export const Route = createFileRoute("/_app/artists/$artistId/albums/$albumId")({
   component: AlbumDetailPage,
@@ -65,7 +66,7 @@ export const Route = createFileRoute("/_app/artists/$artistId/albums/$albumId")(
 
 // ── Helpers ────────────────────────────────────────────────────
 
-function albumTypeLabel(albumType: string | null | undefined): string {
+function albumTypeLabel(albumType: AlbumType | null | undefined): string {
   if (!albumType) return "Album";
   const map: Record<string, string> = {
     album: "Album",

@@ -223,7 +223,7 @@ pub(crate) async fn get_artist_images(
         let image_url = provider_image_url(link.provider, &image_ref, ARTIST_IMAGE_SIZE);
         if seen_urls.insert(image_url.clone()) {
             images.push(ArtistImageOption {
-                provider: link.provider.to_string(),
+                provider: link.provider,
                 image_url,
             });
         }
@@ -498,7 +498,7 @@ mod tests {
             .expect("get artist images");
 
         assert_eq!(images.len(), 1);
-        assert_eq!(images[0].provider, "deezer");
+        assert_eq!(images[0].provider, crate::db::provider::Provider::Deezer);
         assert_eq!(images[0].image_url, "/api/image/deezer/artist:123/320");
     }
 

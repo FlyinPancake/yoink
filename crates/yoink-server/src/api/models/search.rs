@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::db;
+
 /// A search result from a metadata provider.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchArtistResult {
-    pub provider: String,
+    pub provider: db::provider::Provider,
     pub external_id: String,
     pub name: String,
     pub image_url: Option<String>,
@@ -21,10 +23,10 @@ pub struct SearchArtistResult {
 /// An album search result from a metadata provider.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchAlbumResult {
-    pub provider: String,
+    pub provider: db::provider::Provider,
     pub external_id: String,
     pub title: String,
-    pub album_type: Option<String>,
+    pub album_type: Option<db::album_type::AlbumType>,
     pub release_date: Option<String>,
     pub cover_url: Option<String>,
     pub url: Option<String>,
@@ -38,7 +40,7 @@ pub struct SearchAlbumResult {
 /// A track search result from a metadata provider.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchTrackResult {
-    pub provider: String,
+    pub provider: db::provider::Provider,
     pub external_id: String,
     pub title: String,
     pub version: Option<String>,

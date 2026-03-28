@@ -1,6 +1,5 @@
 import type { components } from "@/lib/api/types.gen";
 
-type Provider = components["schemas"]["Provider"];
 type DownloadStatus = components["schemas"]["DownloadStatus"];
 type WantedStatus = components["schemas"]["WantedStatus"];
 
@@ -42,21 +41,6 @@ export function isDownloadHistory(status: DownloadStatus): boolean {
 
 export function canCancelDownload(status: DownloadStatus): boolean {
   return status === "queued";
-}
-
-export function normalizeProvider(provider: string): Provider | null {
-  switch (provider) {
-    case "tidal":
-    case "deezer":
-    case "music_brainz":
-    case "soulseek":
-    case "none":
-      return provider;
-    case "musicbrainz":
-      return "music_brainz";
-    default:
-      return null;
-  }
 }
 
 export function providerDisplayName(provider: string): string {

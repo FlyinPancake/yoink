@@ -5,6 +5,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { ShieldIcon } from "lucide-react";
+import type { components } from "@/lib/api/types.gen";
+
+type Provider = components["schemas"]["Provider"];
 
 export const Route = createFileRoute("/_app/settings/")({
   component: SettingsIndexPage,
@@ -104,18 +107,15 @@ function SettingsIndexPage() {
   );
 }
 
-function providerDescription(provider: string): string {
-  const map: Record<string, string> = {
+function providerDescription(provider: Provider): string {
+  const map: Record<Provider, string> = {
     tidal: "Metadata + lossless downloads.",
     deezer: "Fallback metadata source.",
     music_brainz: "Open metadata database.",
-    musicbrainz: "Open metadata database.",
     soulseek: "Peer-to-peer file sharing network.",
-    spotify: "Metadata from Spotify.",
-    qobuz: "Hi-res lossless downloads.",
-    lastfm: "Scrobbling and metadata.",
+    none: "Provider disabled.",
   };
-  return map[provider.toLowerCase()] ?? "Metadata provider.";
+  return map[provider];
 }
 
 function SettingRow({

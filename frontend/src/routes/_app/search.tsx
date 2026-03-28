@@ -16,7 +16,7 @@ import {
 import { $api, getCollections, addedItemKey } from "@/lib/api";
 import { useCreateArtist, useCreateAlbum, useCreateTrack } from "@/lib/api/mutations";
 import { useLocalStorage } from "@/hooks/use-local-storage";
-import { formatDurationSeconds, normalizeProvider, providerDisplayName } from "@/lib/music";
+import { formatDurationSeconds, providerDisplayName } from "@/lib/music";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -253,7 +253,6 @@ function ArtistResultCard({
   addedKeys: Set<string>;
 }) {
   const createArtist = useCreateArtist();
-  const provider = normalizeProvider(artist.provider);
 
   const isAdded =
     artist.already_monitored || addedKeys.has(addedItemKey(artist.provider, artist.external_id));
@@ -285,14 +284,13 @@ function ArtistResultCard({
           size="sm"
           variant="outline"
           className="shrink-0"
-          disabled={createArtist.isPending || provider == null}
+          disabled={createArtist.isPending}
           onClick={() =>
-            provider &&
             createArtist.mutate({
               body: {
                 name: artist.name,
                 external_id: artist.external_id,
-                provider,
+                provider: artist.provider,
                 image_url: artist.image_url ?? null,
                 external_url: artist.url ?? null,
               },
@@ -300,7 +298,7 @@ function ArtistResultCard({
           }
         >
           <PlusIcon className="mr-1 size-3.5" />
-          {provider == null ? "Unsupported" : createArtist.isPending ? "Adding..." : "Add"}
+          {createArtist.isPending ? "Adding..." : "Add"}
         </Button>
       )}
     </div>
@@ -317,7 +315,6 @@ function AlbumResultCard({
   addedKeys: Set<string>;
 }) {
   const createAlbum = useCreateAlbum();
-  const provider = normalizeProvider(album.provider);
 
   const isAdded =
     album.already_added || addedKeys.has(addedItemKey(album.provider, album.external_id));
@@ -351,22 +348,21 @@ function AlbumResultCard({
           size="sm"
           variant="outline"
           className="shrink-0"
-          disabled={createAlbum.isPending || provider == null}
+          disabled={createAlbum.isPending}
           onClick={() =>
-            provider &&
             createAlbum.mutate({
               body: {
                 external_album_id: album.external_id,
                 artist_external_id: album.artist_external_id,
                 artist_name: album.artist_name,
-                provider,
+                provider: album.provider,
                 monitor_all: true,
               },
             })
           }
         >
           <PlusIcon className="mr-1 size-3.5" />
-          {provider == null ? "Unsupported" : createAlbum.isPending ? "Adding..." : "Add"}
+          {createAlbum.isPending ? "Adding..." : "Add"}
         </Button>
       )}
     </div>
@@ -383,7 +379,6 @@ function TrackResultRow({
   addedKeys: Set<string>;
 }) {
   const createTrack = useCreateTrack();
-  const provider = normalizeProvider(track.provider);
 
   const isAdded =
     track.already_added || addedKeys.has(addedItemKey(track.provider, track.external_id));
@@ -417,22 +412,21 @@ function TrackResultRow({
           size="sm"
           variant="outline"
           className="shrink-0"
-          disabled={createTrack.isPending || provider == null}
+          disabled={createTrack.isPending}
           onClick={() =>
-            provider &&
             createTrack.mutate({
               body: {
                 external_track_id: track.external_id,
                 external_album_id: track.album_external_id,
                 artist_external_id: track.artist_external_id,
                 artist_name: track.artist_name,
-                provider,
+                provider: track.provider,
               },
             })
           }
         >
           <PlusIcon className="mr-1 size-3.5" />
-          {provider == null ? "Unsupported" : createTrack.isPending ? "Adding..." : "Add"}
+          {createTrack.isPending ? "Adding..." : "Add"}
         </Button>
       )}
     </div>

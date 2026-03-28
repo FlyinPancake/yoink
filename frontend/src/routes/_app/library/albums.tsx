@@ -11,6 +11,7 @@ import {
   getLibraryAlbumArtistName,
   sortLibraryAlbums,
 } from "@/lib/library/albums";
+import type { components } from "@/lib/api/types.gen";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -21,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AlbumSort, LibraryAlbumSummary as AlbumListItem } from "@/lib/library/albums";
+
+type AlbumType = components["schemas"]["AlbumType"];
 
 export const Route = createFileRoute("/_app/library/albums")({
   component: AlbumsPage,
@@ -53,12 +56,12 @@ const ALBUM_TYPE_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-function albumTypeKey(albumType: string | null | undefined): string {
+function albumTypeKey(albumType: AlbumType | null | undefined): string {
   const key = (albumType ?? "album").toLowerCase();
   return ALBUM_TYPE_ORDER.includes(key as (typeof ALBUM_TYPE_ORDER)[number]) ? key : "other";
 }
 
-function albumTypeRank(albumType: string | null | undefined): number {
+function albumTypeRank(albumType: AlbumType | null | undefined): number {
   const idx = ALBUM_TYPE_ORDER.indexOf(
     albumTypeKey(albumType) as (typeof ALBUM_TYPE_ORDER)[number],
   );

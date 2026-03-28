@@ -76,6 +76,7 @@ type ProviderLink = components["schemas"]["ProviderLink"];
 type ArtistMatchSuggestion = components["schemas"]["ArtistMatchSuggestion"];
 type ArtistImageOption = components["schemas"]["ArtistImageOption"];
 type Quality = components["schemas"]["Quality"];
+type AlbumType = components["schemas"]["AlbumType"];
 
 export const Route = createFileRoute("/_app/artists/$artistId/")({
   component: ArtistDetailPage,
@@ -83,7 +84,7 @@ export const Route = createFileRoute("/_app/artists/$artistId/")({
 
 // ── Helpers ────────────────────────────────────────────────────
 
-function albumTypeLabel(albumType: string | null | undefined): string {
+function albumTypeLabel(albumType: AlbumType | null | undefined): string {
   if (!albumType) return "Album";
   const map: Record<string, string> = {
     album: "Album",
@@ -120,12 +121,12 @@ const ALBUM_TYPE_GROUP_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-function albumTypeKey(albumType: string | null | undefined): string {
+function albumTypeKey(albumType: AlbumType | null | undefined): string {
   const key = (albumType ?? "album").toLowerCase();
   return ALBUM_TYPE_ORDER.includes(key as (typeof ALBUM_TYPE_ORDER)[number]) ? key : "other";
 }
 
-function albumTypeRank(albumType: string | null | undefined): number {
+function albumTypeRank(albumType: AlbumType | null | undefined): number {
   const idx = ALBUM_TYPE_ORDER.indexOf(
     albumTypeKey(albumType) as (typeof ALBUM_TYPE_ORDER)[number],
   );

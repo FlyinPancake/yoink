@@ -20,7 +20,7 @@ pub struct MonitoredArtist {
 /// An artist image option from a linked provider.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ArtistImageOption {
-    pub provider: String,
+    pub provider: db::provider::Provider,
     pub image_url: String,
 }
 

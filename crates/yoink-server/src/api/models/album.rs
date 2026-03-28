@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use sea_orm::ActiveEnum;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -15,7 +14,7 @@ use super::{Quality, WantedStatus};
 pub struct Album {
     pub id: Uuid,
     pub title: String,
-    pub album_type: Option<String>,
+    pub album_type: Option<db::album_type::AlbumType>,
     pub release_date: Option<String>,
     pub cover_url: Option<String>,
     pub explicit: bool,
@@ -31,7 +30,7 @@ impl From<db::album::Model> for Album {
         Self {
             id: value.id,
             title: value.title,
-            album_type: Some(value.album_type.to_value()),
+            album_type: Some(value.album_type),
             release_date: value.release_date.map(|d| d.to_string()),
             cover_url: value.cover_url.map(|u| u.to_string()),
             explicit: value.explicit,
