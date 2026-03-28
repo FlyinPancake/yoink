@@ -56,7 +56,7 @@ impl From<db::track::Model> for TrackInfo {
             file_path: value.file_path,
             monitored: value.status != db::wanted_status::WantedStatus::Unmonitored,
             acquired,
-            quality_override: value.quality_override.map(Into::into),
+            quality_override: value.quality_override,
             track_artist: None,
         }
     }

@@ -35,8 +35,8 @@ impl From<db::album::Model> for Album {
             cover_url: value.cover_url.map(|u| u.to_string()),
             explicit: value.explicit,
             monitored: value.wanted_status != db::wanted_status::WantedStatus::Unmonitored,
-            wanted_status: value.wanted_status.into(),
-            quality_override: value.requested_quality.map(Into::into),
+            wanted_status: value.wanted_status,
+            quality_override: value.requested_quality,
             created_at: value.created_at,
         }
     }
