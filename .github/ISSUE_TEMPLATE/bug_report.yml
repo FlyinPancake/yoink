@@ -1,0 +1,105 @@
+name: Bug report
+description: Report broken behavior, regressions, crashes, or incorrect results
+title: "[bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        yoink is still in alpha and is not production ready yet.
+
+        Please include exact reproduction steps and any sanitized logs or screenshots that help explain the problem.
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      description: Which part of yoink is involved?
+      options:
+        - Backend/API
+        - Frontend/UI
+        - Downloads
+        - Import
+        - Providers/metadata
+        - Authentication
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: yoink version / commit / image tag
+      description: For example `main@<commit>`, `v0.x.y`, or a Docker image tag.
+      placeholder: main@abcdef1
+    validations:
+      required: true
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Install method
+      options:
+        - Docker / Compose
+        - From source
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      description: Optional if the issue is UI-related.
+      placeholder: Firefox 137 / Chrome 135 / Safari 18
+  - type: textarea
+    id: providers
+    attributes:
+      label: Provider setup involved
+      description: List any providers or integrations involved and any relevant context.
+      placeholder: |
+        Tidal
+        Deezer
+        MusicBrainz
+        SoulSeek/slskd
+        Other relevant integration context
+      render: text
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack traces
+      description: Paste any sanitized logs, errors, or stack traces here.
+      render: shell
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots / recordings / API response snippets
+      description: Add screenshots, recordings, or sanitized response snippets if they help.
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues first.
+          required: true
+        - label: I can still reproduce this on the latest `main` branch or latest release/image available to me.
+          required: true
+        - label: I removed or redacted secrets from logs, screenshots, and config snippets.
+          required: true

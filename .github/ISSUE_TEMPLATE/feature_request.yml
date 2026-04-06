@@ -1,0 +1,72 @@
+name: Feature request
+description: Propose a new capability or improvement
+title: "[feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the problem first, then the solution you want.
+
+        yoink is still in alpha, so some ideas may be deferred if they add too much scope too early.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do, and what is missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the change you want to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Describe workarounds or other ideas you considered.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature area
+      options:
+        - Search
+        - Downloads
+        - Library management
+        - Import
+        - Metadata/providers
+        - UI/UX
+        - API/integrations
+        - Auth/users
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Audience / impact
+      options:
+        - Only my setup
+        - Some advanced users
+        - Most users
+    validations:
+      required: true
+  - type: textarea
+    id: prior_art
+    attributes:
+      label: Related tools or prior art
+      description: Optional. Link similar behavior in other tools, apps, or repos.
+  - type: textarea
+    id: contribution
+    attributes:
+      label: Willingness to implement or help test
+      description: Optional. Mention whether you want to implement this or help validate it.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and the roadmap first.
+          required: true

@@ -1,0 +1,88 @@
+name: Support / setup help
+description: Ask for help configuring, running, or understanding yoink
+title: "[support] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for setup questions, troubleshooting, or understanding how yoink works.
+
+        If you already know something is broken, use the bug report form instead. Please sanitize logs and config snippets before posting them.
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - Installation
+        - Configuration
+        - Providers
+        - SoulSeek/slskd
+        - Import/library organization
+        - Building from source
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Install method
+      options:
+        - Docker / Compose
+        - From source
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: yoink version / commit / image tag
+      placeholder: main@abcdef1
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Relevant environment details
+      description: Optional. Include OS, browser, reverse proxy, storage path shape, or other useful context.
+      placeholder: |
+        OS:
+        Browser:
+        Reverse proxy:
+        Storage path layout:
+  - type: textarea
+    id: provider_config
+    attributes:
+      label: Relevant provider configuration summary
+      description: Optional. Summarize the providers or integrations involved without posting secrets.
+      placeholder: |
+        Tidal enabled:
+        Deezer enabled:
+        MusicBrainz enabled:
+        SoulSeek/slskd enabled:
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: blocked
+    attributes:
+      label: What happened instead / where are you blocked?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs / screenshots / error messages
+      description: Optional. Paste sanitized logs or errors here.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I reviewed the README and setup docs first.
+          required: true
+        - label: I removed or redacted secrets from logs and config snippets.
+          required: true
