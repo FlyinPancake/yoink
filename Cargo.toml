@@ -16,8 +16,6 @@ base64 = "0.22"
 chrono = { version = "0.4", features = ["clock", "serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 cookie = "0.18"
-dotenvy = "0.15"
-envy = "0.4"
 envious = "0.2.2"
 governor = "0.10"
 lofty = "0.23"
@@ -47,10 +45,8 @@ sea-orm = { version = "2.0.0-rc.37", features = [
   "macros",
 ] }
 serde = { version = "1", features = ["derive"] }
-serde_alias = { git = "https://github.com/petar-dambovaliev/serde_alias.git", rev = "bf2ef1bef24f866f3d648c234a95cd0ba42fd651" }
 serde_json = "1"
 serde_trim = "1.1.0"
-serial_test = "3"
 sha2 = "0.11"
 strsim = "0.11"
 tempfile = "3.27.0"

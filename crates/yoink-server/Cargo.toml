@@ -16,7 +16,6 @@ base64.workspace             = true
 chrono.workspace             = true
 cookie.workspace             = true
 clap.workspace               = true
-dotenvy.workspace            = true
 envious.workspace            = true
 governor.workspace           = true
 lrclib-api-rs.workspace      = true
@@ -27,7 +26,6 @@ reqwest.workspace            = true
 roxmltree.workspace          = true
 sea-orm.workspace            = true
 serde.workspace              = true
-serde_alias.workspace        = true
 serde_json.workspace         = true
 serde_trim.workspace         = true
 sha2.workspace               = true
@@ -50,5 +48,4 @@ rust-embed.workspace         = true
 mime_guess.workspace         = true
 
 [dev-dependencies]
-serial_test = { workspace = true }
-tempfile    = "3"
+tempfile = "3"

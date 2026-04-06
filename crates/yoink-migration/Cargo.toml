@@ -6,8 +6,10 @@ rust-version = "1.85.0"
 version      = "0.1.0"
 
 [lib]
-name = "migration"
-path = "src/lib.rs"
+name    = "migration"
+path    = "src/lib.rs"
+test    = false
+doctest = false
 
 [dependencies]
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }

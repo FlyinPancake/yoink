@@ -1,4 +1,5 @@
 [tools]
+"cargo:cargo-shear" = "latest"
 "cargo:cargo-tarpaulin"      = "latest"
 "cargo:sea-orm-cli"          = "2.0.0-rc.37"
 "github:tursodatabase/turso" = "latest"
