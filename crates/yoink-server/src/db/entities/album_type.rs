@@ -7,7 +7,7 @@ use utoipa::ToSchema;
 )]
 #[sea_orm(
     rs_type = "String",
-    db_type = "Enum",
+    db_type = "String(StringLen::None)",
     enum_name = "album_type",
     rename_all = "snake_case"
 )]

@@ -17,7 +17,7 @@ use utoipa::ToSchema;
 )]
 #[sea_orm(
     rs_type = "String",
-    db_type = "Text",
+    db_type = "String(StringLen::None)",
     rename_all = "snake_case",
     enum_name = "match_status"
 )]

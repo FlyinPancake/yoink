@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
+use migration::MigratorTrait;
 use sea_orm::DatabaseConnection;
 use tokio::sync::{Notify, broadcast};
 
@@ -35,10 +36,15 @@ impl AppState {
             .await
             .expect("failed to connect to database");
 
-        conn.get_schema_registry("yoink_server::db::entities::*")
-            .sync(&conn)
+        // TODO: remove this once proper migrations are in place
+        // conn.get_schema_registry("yoink_server::db::entities::*")
+        //     .sync(&conn)
+        //     .await
+        //     .expect("failed to sync database schema");
+
+        migration::Migrator::up(&conn, None)
             .await
-            .expect("failed to sync database schema");
+            .expect("failed to run database migrations");
 
         let auth = AuthService::new(auth_config, conn.clone())
             .await

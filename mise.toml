@@ -1,5 +1,6 @@
 [tools]
-"cargo:cargo-tarpaulin" = "latest"
+"cargo:cargo-tarpaulin"      = "latest"
+"cargo:sea-orm-cli"          = "2.0.0-rc.37"
 "github:tursodatabase/turso" = "latest"
 
 [tasks.lint-server]
@@ -25,12 +26,16 @@ run = "bun run build"
 
 [tasks.gen-frontend-types]
 alias = "gt"
-dir = "frontend"
-run = "bun x openapi-typescript http://localhost:3000/docs/openapi.json --output src/lib/api/types.gen.ts"
+dir   = "frontend"
+run   = "bun x openapi-typescript http://localhost:3000/docs/openapi.json --output src/lib/api/types.gen.ts"
 
 [tasks.lint]
 depends = ["lint-server", "lint-frontend"]
 
 [tasks.dev]
 depends = ["dev-server", "dev-frontend"]
-alias = "d"
+alias   = "d"
+
+[tasks.sea]
+env.MIGRATION_DIR = "crates/yoink-migration"
+run               = "sea"

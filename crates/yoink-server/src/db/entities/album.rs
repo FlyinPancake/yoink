@@ -17,6 +17,7 @@ pub struct Model {
     pub download_jobs: HasMany<super::download_job::Entity>,
     #[sea_orm(has_many)]
     pub provider_links: HasMany<super::album_provider_link::Entity>,
+    #[sea_orm(index)]
     pub title: String,
     pub album_type: AlbumType,
     pub release_date: Option<chrono::NaiveDate>,

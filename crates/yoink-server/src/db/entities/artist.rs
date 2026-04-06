@@ -8,6 +8,7 @@ use uuid::Uuid;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
+    #[sea_orm(index)]
     pub name: String,
     pub image_url: Option<String>,
     pub bio: Option<String>,
