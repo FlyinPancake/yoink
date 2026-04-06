@@ -1,5 +1,14 @@
 use sea_orm_migration::{prelude::*, schema::*};
 
+const QUALITY_VALUES: &[&str] = &["low", "high", "lossless", "hi_res"];
+const WANTED_STATUS_VALUES: &[&str] = &["unmonitored", "wanted", "in_progress", "acquired"];
+const PROVIDER_VALUES: &[&str] = &["tidal", "deezer", "music_brainz", "soulseek", "none"];
+const MATCH_KIND_VALUES: &[&str] = &["fuzzy", "isrc_exact"];
+const MATCH_STATUS_VALUES: &[&str] = &["pending", "accepted", "dismissed"];
+const DOWNLOAD_STATUS_VALUES: &[&str] =
+    &["queued", "resolving", "downloading", "completed", "failed"];
+const ALBUM_TYPE_VALUES: &[&str] = &["album", "ep", "single", "unknown"];
+
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
@@ -76,6 +85,22 @@ impl MigrationTrait for Migration {
                     .col(string_null("tags_json"))
                     .col(integer_null("popularity"))
                     .col(string("status"))
+                    .check(provider_check(
+                        "ck-artist-match-candidates-left-provider",
+                        "left_provider",
+                    ))
+                    .check(provider_check(
+                        "ck-artist-match-candidates-right-provider",
+                        "right_provider",
+                    ))
+                    .check(match_kind_check(
+                        "ck-artist-match-candidates-match-kind",
+                        "match_kind",
+                    ))
+                    .check(match_status_check(
+                        "ck-artist-match-candidates-status",
+                        "status",
+                    ))
                     .col(timestamp_with_time_zone("created_at"))
                     .col(timestamp_with_time_zone("modified_at"))
                     .to_owned(),
@@ -99,6 +124,10 @@ impl MigrationTrait for Migration {
                     .col(string("external_id"))
                     .col(string_null("external_url"))
                     .col(string_null("external_name"))
+                    .check(provider_check(
+                        "ck-artist-provider-links-provider",
+                        "provider",
+                    ))
                     .col(timestamp_with_time_zone("created_at"))
                     .col(timestamp_with_time_zone("modified_at"))
                     .to_owned(),
@@ -129,6 +158,15 @@ impl MigrationTrait for Migration {
                     .col(boolean("explicit"))
                     .col(string("wanted_status"))
                     .col(string_null("requested_quality"))
+                    .check(album_type_check("ck-albums-album-type", "album_type"))
+                    .check(wanted_status_check(
+                        "ck-albums-wanted-status",
+                        "wanted_status",
+                    ))
+                    .check(quality_check(
+                        "ck-albums-requested-quality",
+                        "requested_quality",
+                    ))
                     .col(timestamp_with_time_zone("created_at"))
                     .col(timestamp_with_time_zone("modified_at"))
                     .to_owned(),
@@ -162,6 +200,10 @@ impl MigrationTrait for Migration {
                     .col(string("provider_album_id"))
                     .col(string_null("external_url"))
                     .col(string_null("external_name"))
+                    .check(provider_check(
+                        "ck-album-provider-links-provider",
+                        "provider",
+                    ))
                     .col(timestamp_with_time_zone("created_at"))
                     .col(timestamp_with_time_zone("modified_at"))
                     .to_owned(),
@@ -204,6 +246,22 @@ impl MigrationTrait for Migration {
                     .col(string_null("tags_json"))
                     .col(integer_null("popularity"))
                     .col(string("status"))
+                    .check(provider_check(
+                        "ck-album-match-candidates-left-provider",
+                        "left_provider",
+                    ))
+                    .check(provider_check(
+                        "ck-album-match-candidates-right-provider",
+                        "right_provider",
+                    ))
+                    .check(match_kind_check(
+                        "ck-album-match-candidates-match-kind",
+                        "match_kind",
+                    ))
+                    .check(match_status_check(
+                        "ck-album-match-candidates-status",
+                        "status",
+                    ))
                     .col(timestamp_with_time_zone("created_at"))
                     .col(timestamp_with_time_zone("modified_at"))
                     .to_owned(),
@@ -243,6 +301,11 @@ impl MigrationTrait for Migration {
                     .col(string("status"))
                     .col(string_null("quality_override"))
                     .col(string_null("file_path"))
+                    .check(wanted_status_check("ck-tracks-status", "status"))
+                    .check(quality_check(
+                        "ck-tracks-quality-override",
+                        "quality_override",
+                    ))
                     .col(timestamp_with_time_zone("created_at"))
                     .col(timestamp_with_time_zone("modified_at"))
                     .to_owned(),
@@ -290,6 +353,10 @@ impl MigrationTrait for Migration {
                     )
                     .col(string("provider"))
                     .col(string("provider_track_id"))
+                    .check(provider_check(
+                        "ck-track-provider-links-provider",
+                        "provider",
+                    ))
                     .col(timestamp_with_time_zone("created_at"))
                     .col(timestamp_with_time_zone("modified_at"))
                     .to_owned(),
@@ -393,6 +460,9 @@ impl MigrationTrait for Migration {
                     .col(integer("total_tracks"))
                     .col(integer("completed_tasks"))
                     .col(string_null("error_message"))
+                    .check(provider_check("ck-download-jobs-source", "source"))
+                    .check(quality_check("ck-download-jobs-quality", "quality"))
+                    .check(download_status_check("ck-download-jobs-status", "status"))
                     .col(timestamp_with_time_zone("created_at"))
                     .col(timestamp_with_time_zone("modified_at"))
                     .to_owned(),
@@ -505,5 +575,140 @@ impl MigrationTrait for Migration {
             .await?;
 
         Ok(())
+    }
+}
+
+fn enum_check(name: &str, column: &str, values: &[&str]) -> Check {
+    Check::named(
+        Alias::new(name),
+        Expr::col(Alias::new(column)).is_in(values.iter().copied()),
+    )
+}
+
+fn quality_check(name: &str, column: &str) -> Check {
+    enum_check(name, column, QUALITY_VALUES)
+}
+
+fn wanted_status_check(name: &str, column: &str) -> Check {
+    enum_check(name, column, WANTED_STATUS_VALUES)
+}
+
+fn provider_check(name: &str, column: &str) -> Check {
+    enum_check(name, column, PROVIDER_VALUES)
+}
+
+fn match_kind_check(name: &str, column: &str) -> Check {
+    enum_check(name, column, MATCH_KIND_VALUES)
+}
+
+fn match_status_check(name: &str, column: &str) -> Check {
+    enum_check(name, column, MATCH_STATUS_VALUES)
+}
+
+fn download_status_check(name: &str, column: &str) -> Check {
+    enum_check(name, column, DOWNLOAD_STATUS_VALUES)
+}
+
+fn album_type_check(name: &str, column: &str) -> Check {
+    enum_check(name, column, ALBUM_TYPE_VALUES)
+}
+
+#[cfg(test)]
+mod tests {
+    use sea_orm_migration::sea_orm::Database;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn initial_schema_adds_enum_check_constraints() {
+        let db = Database::connect("sqlite::memory:")
+            .await
+            .expect("connect sqlite");
+        let manager = SchemaManager::new(&db);
+
+        Migration.up(&manager).await.expect("apply migration");
+
+        let artist_match_sql = table_sql(&db, "artist_match_candidates").await;
+        assert!(artist_match_sql.contains(
+            r#"CHECK ("left_provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
+        ));
+        assert!(artist_match_sql.contains(r#"CHECK ("match_kind" IN ('fuzzy', 'isrc_exact'))"#,));
+        assert!(
+            artist_match_sql
+                .contains(r#"CHECK ("status" IN ('pending', 'accepted', 'dismissed'))"#)
+        );
+
+        let albums_sql = table_sql(&db, "albums").await;
+        assert!(
+            albums_sql.contains(r#"CHECK ("album_type" IN ('album', 'ep', 'single', 'unknown'))"#,)
+        );
+        assert!(albums_sql.contains(
+            r#"CHECK ("wanted_status" IN ('unmonitored', 'wanted', 'in_progress', 'acquired'))"#,
+        ));
+        assert!(
+            albums_sql.contains(
+                r#"CHECK ("requested_quality" IN ('low', 'high', 'lossless', 'hi_res'))"#,
+            )
+        );
+
+        let album_match_sql = table_sql(&db, "album_match_candidates").await;
+        assert!(album_match_sql.contains(
+            r#"CHECK ("right_provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
+        ));
+        assert!(album_match_sql.contains(r#"CHECK ("match_kind" IN ('fuzzy', 'isrc_exact'))"#,));
+        assert!(
+            album_match_sql.contains(r#"CHECK ("status" IN ('pending', 'accepted', 'dismissed'))"#)
+        );
+
+        let tracks_sql = table_sql(&db, "tracks").await;
+        assert!(tracks_sql.contains(
+            r#"CHECK ("status" IN ('unmonitored', 'wanted', 'in_progress', 'acquired'))"#,
+        ));
+        assert!(tracks_sql.contains(
+            r#"CHECK ("quality_override" IN ('low', 'high', 'lossless', 'hi_res'))"#,
+        ));
+
+        let download_jobs_sql = table_sql(&db, "download_jobs").await;
+        assert!(download_jobs_sql.contains(
+            r#"CHECK ("source" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
+        ));
+        assert!(
+            download_jobs_sql
+                .contains(r#"CHECK ("quality" IN ('low', 'high', 'lossless', 'hi_res'))"#,)
+        );
+        assert!(download_jobs_sql.contains(
+            r#"CHECK ("status" IN ('queued', 'resolving', 'downloading', 'completed', 'failed'))"#,
+        ));
+
+        let artist_provider_links_sql = table_sql(&db, "artist_provider_links").await;
+        assert!(artist_provider_links_sql.contains(
+            r#"CHECK ("provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
+        ));
+
+        let album_provider_links_sql = table_sql(&db, "album_provider_links").await;
+        assert!(album_provider_links_sql.contains(
+            r#"CHECK ("provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
+        ));
+
+        let track_provider_links_sql = table_sql(&db, "track_provider_links").await;
+        assert!(track_provider_links_sql.contains(
+            r#"CHECK ("provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
+        ));
+    }
+
+    async fn table_sql(db: &sea_orm_migration::sea_orm::DatabaseConnection, table: &str) -> String {
+        let stmt = Query::select()
+            .column(Alias::new("sql"))
+            .from(Alias::new("sqlite_master"))
+            .and_where(Expr::col(Alias::new("type")).eq("table"))
+            .and_where(Expr::col(Alias::new("name")).eq(table))
+            .to_owned();
+        let row = db
+            .query_one(&stmt)
+            .await
+            .expect("query sqlite_master")
+            .expect("table metadata row");
+
+        row.try_get("", "sql").expect("table sql")
     }
 }
