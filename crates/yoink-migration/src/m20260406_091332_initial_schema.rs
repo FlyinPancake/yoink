@@ -108,6 +108,16 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
+            .create_index(
+                Index::create()
+                    .name("idx-artist-match-candidates-artist-id")
+                    .table("artist_match_candidates")
+                    .col("artist_id")
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
             .create_table(
                 Table::create()
                     .table("artist_provider_links")
@@ -130,6 +140,16 @@ impl MigrationTrait for Migration {
                     ))
                     .col(timestamp_with_time_zone("created_at"))
                     .col(timestamp_with_time_zone("modified_at"))
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-artist-provider-links-artist-id")
+                    .table("artist_provider_links")
+                    .col("artist_id")
                     .to_owned(),
             )
             .await?;
@@ -268,6 +288,16 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-album-match-candidates-album-id")
+                    .table("album_match_candidates")
+                    .col("album_id")
+                    .to_owned(),
+            )
+            .await?;
+
         // Tracks
 
         manager
@@ -313,6 +343,26 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
+            .create_index(
+                Index::create()
+                    .name("idx-tracks-album-id")
+                    .table("tracks")
+                    .col("album_id")
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-tracks-root-folder-id")
+                    .table("tracks")
+                    .col("root_folder_id")
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
             .create_table(
                 Table::create()
                     .table("track_artists")
@@ -334,6 +384,16 @@ impl MigrationTrait for Migration {
                     )
                     .col(integer("priority").default(0))
                     .primary_key(Index::create().col("track_id").col("artist_id"))
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-track-artists-artist-id")
+                    .table("track_artists")
+                    .col("artist_id")
                     .to_owned(),
             )
             .await?;
@@ -363,6 +423,16 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-track-provider-links-track-id")
+                    .table("track_provider_links")
+                    .col("track_id")
+                    .to_owned(),
+            )
+            .await?;
+
         // Album Artists
 
         manager
@@ -387,6 +457,16 @@ impl MigrationTrait for Migration {
                             .to("albums", "id")
                             .on_delete(ForeignKeyAction::Cascade),
                     )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-album-artists-artist-id")
+                    .table("album_artists")
+                    .col("artist_id")
                     .to_owned(),
             )
             .await?;
@@ -469,10 +549,48 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-download-jobs-album-id")
+                    .table("download_jobs")
+                    .col("album_id")
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx-download-jobs-track-id")
+                    .table("download_jobs")
+                    .col("track_id")
+                    .to_owned(),
+            )
+            .await?;
+
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-download-jobs-track-id")
+                    .table("download_jobs")
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-download-jobs-album-id")
+                    .table("download_jobs")
+                    .to_owned(),
+            )
+            .await?;
+
         manager
             .drop_table(Table::drop().table("download_jobs").to_owned())
             .await?;
@@ -495,7 +613,25 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-album-artists-artist-id")
+                    .table("album_artists")
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
             .drop_table(Table::drop().table("album_artists").to_owned())
+            .await?;
+
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-track-provider-links-track-id")
+                    .table("track_provider_links")
+                    .to_owned(),
+            )
             .await?;
 
         manager
@@ -503,11 +639,47 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-track-artists-artist-id")
+                    .table("track_artists")
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
             .drop_table(Table::drop().table("track_artists").to_owned())
             .await?;
 
         manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-tracks-root-folder-id")
+                    .table("tracks")
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-tracks-album-id")
+                    .table("tracks")
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
             .drop_table(Table::drop().table("tracks").to_owned())
+            .await?;
+
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-album-match-candidates-album-id")
+                    .table("album_match_candidates")
+                    .to_owned(),
+            )
             .await?;
 
         manager
@@ -543,6 +715,15 @@ impl MigrationTrait for Migration {
         manager
             .drop_index(
                 Index::drop()
+                    .name("idx-artist-provider-links-artist-id")
+                    .table("artist_provider_links")
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .drop_index(
+                Index::drop()
                     .name("idx-artist-provider-links-external-id")
                     .table("artist_provider_links")
                     .to_owned(),
@@ -551,6 +732,15 @@ impl MigrationTrait for Migration {
 
         manager
             .drop_table(Table::drop().table("artist_provider_links").to_owned())
+            .await?;
+
+        manager
+            .drop_index(
+                Index::drop()
+                    .name("idx-artist-match-candidates-artist-id")
+                    .table("artist_match_candidates")
+                    .to_owned(),
+            )
             .await?;
 
         manager
@@ -696,6 +886,27 @@ mod tests {
         ));
     }
 
+    #[tokio::test]
+    async fn initial_schema_adds_foreign_key_lookup_indexes() {
+        let db = Database::connect("sqlite::memory:")
+            .await
+            .expect("connect sqlite");
+        let manager = SchemaManager::new(&db);
+
+        Migration.up(&manager).await.expect("apply migration");
+
+        assert!(index_exists(&db, "idx-artist-match-candidates-artist-id").await);
+        assert!(index_exists(&db, "idx-artist-provider-links-artist-id").await);
+        assert!(index_exists(&db, "idx-album-match-candidates-album-id").await);
+        assert!(index_exists(&db, "idx-tracks-album-id").await);
+        assert!(index_exists(&db, "idx-tracks-root-folder-id").await);
+        assert!(index_exists(&db, "idx-track-artists-artist-id").await);
+        assert!(index_exists(&db, "idx-track-provider-links-track-id").await);
+        assert!(index_exists(&db, "idx-album-artists-artist-id").await);
+        assert!(index_exists(&db, "idx-download-jobs-album-id").await);
+        assert!(index_exists(&db, "idx-download-jobs-track-id").await);
+    }
+
     async fn table_sql(db: &sea_orm_migration::sea_orm::DatabaseConnection, table: &str) -> String {
         let stmt = Query::select()
             .column(Alias::new("sql"))
@@ -710,5 +921,22 @@ mod tests {
             .expect("table metadata row");
 
         row.try_get("", "sql").expect("table sql")
+    }
+
+    async fn index_exists(
+        db: &sea_orm_migration::sea_orm::DatabaseConnection,
+        index: &str,
+    ) -> bool {
+        let stmt = Query::select()
+            .expr(Expr::value(1))
+            .from(Alias::new("sqlite_master"))
+            .and_where(Expr::col(Alias::new("type")).eq("index"))
+            .and_where(Expr::col(Alias::new("name")).eq(index))
+            .to_owned();
+
+        db.query_one(&stmt)
+            .await
+            .expect("query sqlite_master for index")
+            .is_some()
     }
 }
