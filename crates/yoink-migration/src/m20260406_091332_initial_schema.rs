@@ -29,7 +29,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // Aritst
+        // Artist
 
         manager
             .create_table(
