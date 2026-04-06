@@ -2,7 +2,8 @@ use sea_orm_migration::{prelude::*, schema::*};
 
 const QUALITY_VALUES: &[&str] = &["low", "high", "lossless", "hi_res"];
 const WANTED_STATUS_VALUES: &[&str] = &["unmonitored", "wanted", "in_progress", "acquired"];
-const PROVIDER_VALUES: &[&str] = &["tidal", "deezer", "music_brainz", "soulseek", "none"];
+const PROVIDER_VALUES: &[&str] = &["tidal", "deezer", "music_brainz", "soulseek"];
+const PROVIDER_VALUES_WITH_NONE: &[&str] = &["tidal", "deezer", "music_brainz", "soulseek", "none"];
 const MATCH_KIND_VALUES: &[&str] = &["fuzzy", "isrc_exact"];
 const MATCH_STATUS_VALUES: &[&str] = &["pending", "accepted", "dismissed"];
 const DOWNLOAD_STATUS_VALUES: &[&str] =
@@ -540,7 +541,10 @@ impl MigrationTrait for Migration {
                     .col(integer("total_tracks"))
                     .col(integer("completed_tasks"))
                     .col(string_null("error_message"))
-                    .check(provider_check("ck-download-jobs-source", "source"))
+                    .check(provider_with_none_check(
+                        "ck-download-jobs-source",
+                        "source",
+                    ))
                     .check(quality_check("ck-download-jobs-quality", "quality"))
                     .check(download_status_check("ck-download-jobs-status", "status"))
                     .col(timestamp_with_time_zone("created_at"))
@@ -787,6 +791,10 @@ fn provider_check(name: &str, column: &str) -> Check {
     enum_check(name, column, PROVIDER_VALUES)
 }
 
+fn provider_with_none_check(name: &str, column: &str) -> Check {
+    enum_check(name, column, PROVIDER_VALUES_WITH_NONE)
+}
+
 fn match_kind_check(name: &str, column: &str) -> Check {
     enum_check(name, column, MATCH_KIND_VALUES)
 }
@@ -820,7 +828,7 @@ mod tests {
 
         let artist_match_sql = table_sql(&db, "artist_match_candidates").await;
         assert!(artist_match_sql.contains(
-            r#"CHECK ("left_provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
+            r#"CHECK ("left_provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek'))"#,
         ));
         assert!(artist_match_sql.contains(r#"CHECK ("match_kind" IN ('fuzzy', 'isrc_exact'))"#,));
         assert!(
@@ -843,7 +851,7 @@ mod tests {
 
         let album_match_sql = table_sql(&db, "album_match_candidates").await;
         assert!(album_match_sql.contains(
-            r#"CHECK ("right_provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
+            r#"CHECK ("right_provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek'))"#,
         ));
         assert!(album_match_sql.contains(r#"CHECK ("match_kind" IN ('fuzzy', 'isrc_exact'))"#,));
         assert!(
@@ -871,19 +879,25 @@ mod tests {
         ));
 
         let artist_provider_links_sql = table_sql(&db, "artist_provider_links").await;
-        assert!(artist_provider_links_sql.contains(
-            r#"CHECK ("provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
-        ));
+        assert!(
+            artist_provider_links_sql.contains(
+                r#"CHECK ("provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek'))"#,
+            )
+        );
 
         let album_provider_links_sql = table_sql(&db, "album_provider_links").await;
-        assert!(album_provider_links_sql.contains(
-            r#"CHECK ("provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
-        ));
+        assert!(
+            album_provider_links_sql.contains(
+                r#"CHECK ("provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek'))"#,
+            )
+        );
 
         let track_provider_links_sql = table_sql(&db, "track_provider_links").await;
-        assert!(track_provider_links_sql.contains(
-            r#"CHECK ("provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek', 'none'))"#,
-        ));
+        assert!(
+            track_provider_links_sql.contains(
+                r#"CHECK ("provider" IN ('tidal', 'deezer', 'music_brainz', 'soulseek'))"#,
+            )
+        );
     }
 
     #[tokio::test]
