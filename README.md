@@ -136,4 +136,5 @@ Contributions are welcome! Whether it's a filing an issue, bug fix, new feature,
 1. Fork the repository
 2. Create a feature branch
 3. Use [Conventional Commits](https://www.conventionalcommits.org/) for your commit messages
-4. Submit a pull request
+4. Keep `CHANGELOG.md` and crate versions untouched; releases are managed by `release-please`
+5. Submit a pull request

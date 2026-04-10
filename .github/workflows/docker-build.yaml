@@ -1,0 +1,67 @@
+name: Docker Build Reusable
+
+on:
+  workflow_call:
+    inputs:
+      push:
+        required: true
+        type: boolean
+      semver_tag:
+        required: false
+        type: string
+        default: ""
+      checkout_ref:
+        required: false
+        type: string
+        default: ""
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: flyinpancake/yoink
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: ${{ inputs.push }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,enable=${{ inputs.semver_tag == '' }}
+            type=ref,event=pr,enable=${{ inputs.semver_tag == '' }}
+            type=sha,enable=${{ inputs.semver_tag == '' }}
+            type=raw,value=latest,enable=${{ inputs.semver_tag != '' }}
+            type=semver,pattern={{version}},value=${{ inputs.semver_tag }},enable=${{ inputs.semver_tag != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.semver_tag }},enable=${{ inputs.semver_tag != '' }}
+          # Since the major version number is 0, we don't want to tag with just the major version yet
+          # TODO: Once we hit 1.0.0, we can enable major-only version tagging
+          # type=semver,pattern={{major}},value=${{ inputs.semver_tag }},enable=${{ inputs.semver_tag != '' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ inputs.push }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

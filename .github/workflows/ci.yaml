@@ -1,0 +1,48 @@
+name: Build Docker Images
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  cargo:
+    runs-on: ubuntu-latest
+    name: Cargo ${{ matrix.name }}
+    strategy:
+      matrix:
+        include:
+          - name: Test
+            key: test
+            cmd: nextest run
+          - name: Lint
+            key: lint
+            cmd: clippy --all-targets --all-features -- -D warnings
+          - name: Format Check
+            key: format
+            cmd: fmt --check
+          - name: Check unused dependencies
+            key: shear
+            cmd: shear
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-shared-key: ${{ matrix.key }}
+      - name: mise
+        uses: jdx/mise-action@v3
+      - run: cargo ${{ matrix.cmd }}
+
+  docker:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-build.yaml
+    secrets: inherit
+    with:
+      push: true

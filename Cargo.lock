@@ -2034,7 +2034,7 @@ dependencies = [
 
 [[package]]
 name = "migration"
-version = "0.1.0"
+version = "0.1.3"
 dependencies = [
  "sea-orm-migration",
  "tokio",
@@ -5012,7 +5012,7 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "yoink-server"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "argon2",
  "async-trait",
