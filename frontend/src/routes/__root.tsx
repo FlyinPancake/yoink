@@ -30,7 +30,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         title: "yoink",
       },
     ],
-    links: [{ rel: "icon", type: "image/svg+xml", href: "/yoink.svg" }, { rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "icon", type: "image/svg+xml", href: "/yoink.svg" },
+      { rel: "stylesheet", href: appCss },
+    ],
   }),
   component: RootComponent,
 });
