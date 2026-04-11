@@ -19,6 +19,7 @@ export const Route = createFileRoute("/_app/settings/")({
 function SettingsIndexPage() {
   const { data: providers, isLoading: providersLoading } = $api.useQuery("get", "/api/provider");
   const { data: authStatus, isLoading: authLoading } = $api.useQuery("get", "/api/auth/status");
+  const providerOptions = (providers ?? []) as Provider[];
 
   return (
     <div className="grid max-w-2xl gap-6">
@@ -39,9 +40,9 @@ function SettingsIndexPage() {
               </div>
             ))}
           </div>
-        ) : providers && providers.length > 0 ? (
+        ) : providerOptions.length > 0 ? (
           <div className="divide-y">
-            {providers.map((provider) => (
+            {providerOptions.map((provider) => (
               <SettingRow
                 key={provider}
                 label={providerDisplayName(provider)}

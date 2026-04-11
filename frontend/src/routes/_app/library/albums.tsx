@@ -104,7 +104,7 @@ function AlbumsPage() {
 
     // Sort the groups by canonical type order, then sort albums within each
     return [...buckets.entries()]
-      .sort(([a], [b]) => albumTypeRank(a) - albumTypeRank(b))
+      .sort(([a], [b]) => albumTypeRank(a as AlbumType) - albumTypeRank(b as AlbumType))
       .map(([type, items]) => ({
         type,
         label: ALBUM_TYPE_LABELS[type] ?? type,

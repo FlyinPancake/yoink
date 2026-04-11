@@ -1,7 +1,7 @@
 [tools]
-bun = "latest"
-"cargo:cargo-nextest" = "latest"
-"cargo:cargo-shear" = "latest"
+bun                          = "latest"
+"cargo:cargo-nextest"        = "latest"
+"cargo:cargo-shear"          = "latest"
 "cargo:cargo-tarpaulin"      = "latest"
 "cargo:sea-orm-cli"          = "2.0.0-rc.37"
 "github:tursodatabase/turso" = "latest"
