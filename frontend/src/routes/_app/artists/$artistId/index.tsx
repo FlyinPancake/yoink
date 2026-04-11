@@ -595,7 +595,7 @@ function LinkArtistProviderDialog({
     isLoading: isLoadingProviders,
     isError: isProvidersError,
   } = $api.useQuery("get", "/api/provider");
-  const providerOptions = (providers ?? []) as Provider[];
+  const providerOptions = useMemo(() => (providers ?? []) as Provider[], [providers]);
   const {
     data: searchResults,
     isLoading: isSearching,
