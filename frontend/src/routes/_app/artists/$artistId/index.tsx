@@ -667,6 +667,7 @@ function LinkArtistProviderDialog({
                         type="button"
                         size="sm"
                         variant={isSelected ? "default" : "outline"}
+                        aria-pressed={isSelected}
                         className="h-8 rounded-full px-3"
                         onClick={() => toggleProvider(provider)}
                       >
