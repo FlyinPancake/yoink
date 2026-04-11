@@ -10,7 +10,7 @@
 
 This project is built using AI tools like OpenCode and Codex. All code is reviewed and tested by me, but if you encounter any weirdness and don't hesitate to report any issues you find.
 
-![yoink open for Pendulum](docs/screenshot-1.png)
+![yoink open for Pendulum](public/screenshot-1.png)
 
 ## What Is Yoink?
 
