@@ -36,9 +36,12 @@ jobs:
           cache-shared-key: ${{ matrix.key }}
       - name: mise
         uses: jdx/mise-action@v3
+        with:
+          install_args: "cargo-binstall cargo:cargo-nextest cargo:cargo-shear"
       - run: cargo ${{ matrix.cmd }}
 
   docker:
+    name: Docker
     permissions:
       contents: read
       packages: write

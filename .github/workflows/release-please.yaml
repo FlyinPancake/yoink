@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   release-please:
+    name: Release Please
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
@@ -26,6 +27,7 @@ jobs:
           manifest-file: .release-please-manifest.json
 
   docker:
+    name: Build and Push Docker Image
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     needs: release-please
     permissions:
