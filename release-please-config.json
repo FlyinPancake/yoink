@@ -7,7 +7,7 @@
       "package-name": "yoink",
       "component": "yoink",
       "release-type": "python",
-      "versioning": "always-bump-minor",
+      "versioning": "always-bump-patch",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         {
