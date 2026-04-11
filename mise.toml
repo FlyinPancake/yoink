@@ -1,4 +1,5 @@
 [tools]
+bun = "latest"
 "cargo:cargo-nextest" = "latest"
 "cargo:cargo-shear" = "latest"
 "cargo:cargo-tarpaulin"      = "latest"

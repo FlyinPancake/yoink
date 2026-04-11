@@ -1,4 +1,4 @@
-name: Build Docker Images
+name: CI
 
 on:
   push:
@@ -9,6 +9,45 @@ on:
       - main
 
 jobs:
+  bun:
+    runs-on: ubuntu-latest
+    name: Bun ${{ matrix.name }}
+    strategy:
+      matrix:
+        include:
+          - name: Test
+            cmd: test
+          - name: Lint
+            cmd: lint
+          - name: Format Check
+            cmd: fmt:check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: mise
+        uses: jdx/mise-action@v3
+        with:
+          install_args: "bun"
+      - run: bun ${{ matrix.cmd }}
+        working-directory: frontend
+  bun-build:
+    runs-on: ubuntu-latest
+    name: Bun Build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: mise
+        uses: jdx/mise-action@v3
+        with:
+          install_args: "bun"
+      - run: bun run build
+        working-directory: frontend
+      - name: Upload static frontend
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend
+          path: frontend/dist
+
   cargo:
     runs-on: ubuntu-latest
     name: Cargo ${{ matrix.name }}
@@ -38,6 +77,11 @@ jobs:
         uses: jdx/mise-action@v3
         with:
           install_args: "cargo-binstall cargo:cargo-nextest cargo:cargo-shear"
+      - name: Download frontend
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend
+          path: frontend/dist
       - run: cargo ${{ matrix.cmd }}
 
   docker:
