@@ -45,6 +45,7 @@ jobs:
           install_args: "bun"
       - name: Install dependencies
         run: bun ci
+        working-directory: frontend
       - run: bun run build
         working-directory: frontend
       - name: Upload static frontend
