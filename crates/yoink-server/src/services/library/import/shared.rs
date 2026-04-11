@@ -245,7 +245,7 @@ mod tests {
         // No parent-folder hint available, so fall back to the embedded value
         assert_eq!(discovered.discovered_artist, "Artist1/Album1");
     }
-    
+
     #[test]
     fn build_candidates_rejects_unrelated_partial_match() {
         let now = chrono::Utc::now();

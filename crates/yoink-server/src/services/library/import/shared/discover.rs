@@ -71,7 +71,7 @@ pub(super) fn summarize_discovered_album(
     // artist tag instead of just the artist name. When the embedded artist looks
     // like a path, prefer the folder-derived hint so that all albums under the
     // same artist directory share the correct, consistent artist name.
-     let discovered_artist = match embedded_artist {
+    let discovered_artist = match embedded_artist {
         Some(name) if name.contains('/') || name.contains('\\') => {
             path_hint.artist.clone().or(Some(name))
         }

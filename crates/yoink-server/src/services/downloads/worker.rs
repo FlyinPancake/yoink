@@ -8,7 +8,10 @@ use crate::{
         self,
         downloads::{
             TrackMetadata,
-            io::{DownloadPayload, MediaContainer, has_flac_stream_marker, sniff_media_container, extract_year},
+            io::{
+                DownloadPayload, MediaContainer, extract_year, has_flac_stream_marker,
+                sniff_media_container,
+            },
             metadata::{build_full_artist_string, extract_disc_number},
             sanitize_path_component, write_audio_metadata,
         },
