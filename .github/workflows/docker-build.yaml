@@ -147,9 +147,11 @@ jobs:
 
       - name: Create manifest list
         working-directory: /tmp/digests
+        env:
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
         run: |
           set -euo pipefail
-          tags="$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< '${{ steps.meta.outputs.json }}')"
+          tags="$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")"
           refs=()
           for digest_file in *; do
             refs+=("${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:${digest_file}")
