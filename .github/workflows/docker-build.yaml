@@ -21,8 +21,18 @@ env:
 
 jobs:
   build:
-    name: Build Docker Image
-    runs-on: ubuntu-latest
+    name: Build Docker Image (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            platform_pair: linux-amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            platform_pair: linux-arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -57,12 +67,104 @@ jobs:
           # TODO: Once we hit 1.0.0, we can enable major-only version tagging
           # type=semver,pattern={{major}},value=${{ inputs.semver_tag }},enable=${{ inputs.semver_tag != '' }}
 
-      - name: Build and push
+      - name: Build image
+        if: ${{ !inputs.push }}
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ inputs.push }}
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.platform_pair }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform_pair }}
+
+      - name: Build and push by digest
+        if: ${{ inputs.push }}
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},name-canonical=true,push-by-digest=true,push=true
+          cache-from: type=gha,scope=${{ matrix.platform_pair }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform_pair }}
+
+      - name: Export digest
+        if: ${{ inputs.push }}
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: ${{ inputs.push }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.platform_pair }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Publish Docker Manifest
+    if: ${{ inputs.push }}
+    needs: build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,enable=${{ inputs.semver_tag == '' }}
+            type=ref,event=pr,enable=${{ inputs.semver_tag == '' }}
+            type=sha,enable=${{ inputs.semver_tag == '' }}
+            type=raw,value=latest,enable=${{ inputs.semver_tag != '' }}
+            type=semver,pattern={{version}},value=${{ inputs.semver_tag }},enable=${{ inputs.semver_tag != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.semver_tag }},enable=${{ inputs.semver_tag != '' }}
+          # Since the major version number is 0, we don't want to tag with just the major version yet
+          # TODO: Once we hit 1.0.0, we can enable major-only version tagging
+          # type=semver,pattern={{major}},value=${{ inputs.semver_tag }},enable=${{ inputs.semver_tag != '' }}
+
+      - name: Create manifest list
+        working-directory: /tmp/digests
+        env:
+          DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
+        run: |
+          set -euo pipefail
+          tags="$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")"
+          refs=()
+          for digest_file in *; do
+            refs+=("${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:${digest_file}")
+          done
+
+          # shellcheck disable=SC2086
+          docker buildx imagetools create $tags "${refs[@]}"
+
+      - name: Select inspection tag
+        id: inspect_tag
+        run: |
+          tag="$(jq -r '.tags[0]' <<< '${{ steps.meta.outputs.json }}')"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Inspect manifest
+        run: docker buildx imagetools inspect ${{ steps.inspect_tag.outputs.tag }}
