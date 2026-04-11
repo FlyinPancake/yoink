@@ -1,25 +1,33 @@
 #!/bin/sh
-set -e
+set -eu
 
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
 
-# Create group if it doesn't exist
-if ! getent group yoink >/dev/null 2>&1; then
-    groupadd -g "$PGID" yoink
+# Create or adjust group
+if ! grep -q '^yoink:' /etc/group; then
+    addgroup -g "$PGID" -S yoink
 else
-    groupmod -o -g "$PGID" yoink
+    existing_gid="$(awk -F: '$1 == "yoink" { print $3 }' /etc/group)"
+    if [ "$existing_gid" != "$PGID" ]; then
+        delgroup yoink
+        addgroup -g "$PGID" -S yoink
+    fi
 fi
 
-# Create user if it doesn't exist
-if ! getent passwd yoink >/dev/null 2>&1; then
-    useradd -u "$PUID" -g yoink -d /app -s /bin/sh yoink
+# Create or adjust user
+if ! id yoink >/dev/null 2>&1; then
+    adduser -u "$PUID" -S -D -H -h /app -s /bin/sh -G yoink yoink
 else
-    usermod -o -u "$PUID" yoink
+    existing_uid="$(id -u yoink)"
+    if [ "$existing_uid" != "$PUID" ]; then
+        deluser yoink
+        adduser -u "$PUID" -S -D -H -h /app -s /bin/sh -G yoink yoink
+    fi
 fi
 
 # Ensure ownership of writable directories
 chown -R yoink:yoink /app /data /music
 
 # Drop privileges and exec the main process
-exec gosu yoink "$@"
+exec su-exec yoink "$@"

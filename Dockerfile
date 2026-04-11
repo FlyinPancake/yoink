@@ -1,5 +1,5 @@
 # ── Stage 1: Frontend — build the SPA ────────────────────────
-FROM oven/bun:1 AS frontend
+FROM docker.io/oven/bun:1 AS frontend
 
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/bun.lock ./
@@ -9,11 +9,23 @@ COPY frontend/ .
 RUN bun run build
 
 # ── Stage 2: Chef — compute Rust dependency recipe ──────────
-FROM rust:1.94 AS chef
+FROM docker.io/library/rust:1.94-alpine3.23 AS chef
 
-RUN curl -fsSL https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz \
-    | tar -xz -C /usr/local/cargo/bin && \
-    cargo binstall cargo-chef -y
+RUN apk add --no-cache curl ca-certificates
+
+ENV MISE_DATA_DIR="/mise"
+ENV MISE_CONFIG_DIR="/mise"
+ENV MISE_CACHE_DIR="/mise/cache"
+ENV MISE_INSTALL_PATH="/usr/local/bin/mise"
+ENV PATH="/mise/shims:$PATH"
+
+RUN curl https://mise.run | sh
+
+RUN mise use cargo-binstall cargo:cargo-chef
+
+# RUN curl -fsSL https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz \
+#     | tar -xz -C /usr/local/cargo/bin && \
+#     cargo binstall cargo-chef -y
 
 WORKDIR /app
 
@@ -21,15 +33,20 @@ WORKDIR /app
 FROM chef AS planner
 
 COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
+RUN mise trust
+RUN cargo chef prepare --recipe-path recipe.json --bin yoink-server
 
 # ── Stage 4: Builder — cache deps, then build ───────────────
 FROM chef AS builder
 
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --package yoink-server --recipe-path recipe.json
+RUN cargo chef cook --release --bin yoink-server --recipe-path recipe.json
 
-COPY . .
+# Restore the real workspace tree after `cargo chef cook`, which leaves
+# placeholder crate sources under `/app/crates/*`.
+COPY crates/ ./crates/
+COPY frontend/ ./frontend/
+COPY Cargo.toml Cargo.lock ./
 
 # Copy the frontend build output into the tree so rust-embed can pick it up.
 COPY --from=frontend /app/frontend/dist/. /tmp/frontend-dist/
@@ -37,16 +54,12 @@ RUN mkdir -p frontend/dist && \
     cp -a /tmp/frontend-dist/. frontend/dist/ && \
     test -f frontend/dist/index.html
 
-RUN cargo build --release --package yoink-server
+RUN cargo build --release --bin yoink-server
 
 # ── Stage 5: Runtime ─────────────────────────────────────────
-FROM debian:bookworm-slim AS runtime
+FROM docker.io/library/alpine:3.23
 
-RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends ca-certificates gosu && \
-    apt-get autoremove -y && \
-    apt-get clean -y && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache su-exec
 
 COPY docker-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
@@ -55,19 +68,13 @@ WORKDIR /app
 
 COPY --from=builder /app/target/release/yoink-server /usr/local/bin/yoink-server
 
-# better-config expects a .env file to exist
-RUN touch .env
-
 ENV PUID=1000
 ENV PGID=1000
 ENV MUSIC_ROOT=/music
 ENV DATABASE_URL=sqlite:/data/yoink.db?mode=rwc
-ENV DEFAULT_QUALITY=LOSSLESS
 ENV LOG_FORMAT=pretty
 
 EXPOSE 3000
-
-VOLUME ["/data", "/music"]
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["yoink-server"]

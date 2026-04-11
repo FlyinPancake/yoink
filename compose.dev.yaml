@@ -13,6 +13,7 @@ services:
     environment:
       RUST_BACKTRACE: 1
       AUTH_DISABLED: true
+      DOWNLOAD_LYRICS: true
   slskd:
     image: slskd/slskd
     container_name: slskd
