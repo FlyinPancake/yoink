@@ -1,0 +1,116 @@
+---
+title: Contributing
+description: How to set up a development environment and contribute to yoink.
+icon: GitPullRequest
+---
+
+Contributions are welcome. Whether it's a bug fix, new feature, or documentation improvement.
+
+## Development Setup
+
+<Steps>
+<Step>
+### Fork and clone
+
+```bash
+git clone https://github.com/YOUR_USERNAME/yoink.git
+cd yoink
+```
+
+</Step>
+
+<Step>
+### Install tools
+
+```bash
+mise install
+```
+
+This installs bun, sea-orm-cli, and other development dependencies.
+
+</Step>
+
+<Step>
+### Install frontend dependencies
+
+```bash
+cd frontend && bun install && cd ..
+```
+
+</Step>
+
+<Step>
+### Configure environment
+
+```bash
+cp .env.example .env
+```
+
+For development, you may want to set `AUTH_DISABLED=true` to skip authentication.
+
+</Step>
+
+<Step>
+### Start development servers
+
+```bash
+mise run dev
+```
+
+This starts the backend in watch mode and the frontend dev server. The UI is at [http://localhost:5173](http://localhost:5173).
+
+Alternatively, use Docker for the full stack:
+
+```bash
+docker compose -f compose.dev.yaml up -d
+```
+
+</Step>
+</Steps>
+
+## Project Commands
+
+| Command                       | Description                                   |
+| ----------------------------- | --------------------------------------------- |
+| `mise run dev`                | Start backend + frontend in dev mode          |
+| `mise run lint`               | Run all linters                               |
+| `mise run lint-server`        | Clippy with warnings as errors                |
+| `mise run lint-frontend`      | Frontend linting via oxlint                   |
+| `mise run build-frontend`     | Production frontend build                     |
+| `mise run gen-frontend-types` | Regenerate TypeScript types from OpenAPI spec |
+| `mise run sea`                | SeaORM CLI (migrations, entities)             |
+
+## Commit Conventions
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages:
+
+```
+feat: add album merge dialog
+fix: prevent duplicate provider links
+docs: update SoulSeek setup guide
+```
+
+**Do not** modify `CHANGELOG.md` or crate version numbers. These are managed by [release-please](https://github.com/googleapis/release-please).
+
+## Pull Request Workflow
+
+1. Fork the repository and create a feature branch
+2. Make your changes with conventional commit messages
+3. Verify your changes pass checks:
+
+```bash
+cargo fmt --check
+cargo test -p yoink-server
+cd frontend && bun run lint && bun run fmt:check
+```
+
+4. Submit a pull request
+
+## API Contract Changes
+
+If you modify API routes or response types:
+
+1. Update the `utoipa` annotations on the affected handlers
+2. Start the backend: `mise run run-server`
+3. Regenerate frontend types: `mise run gen-frontend-types`
+4. Commit the regenerated `frontend/src/lib/api/types.gen.ts`

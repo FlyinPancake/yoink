@@ -1,0 +1,37 @@
+---
+title: Importing Music
+description: Import existing music into your yoink library.
+icon: FolderInput
+---
+
+yoink can scan directories and import music files into its database, matching them to artists and albums.
+
+<Callout type="warn">
+  Import currently works most reliably with folder structures created by yoink
+  itself. External folder structures (iTunes, manual organization) may not be
+  parsed correctly in all cases.
+
+yoink's folder structure is opinionated as `{{Artist}}/{{Album}}/{{Track Number}} - {{Track Title}}.{{ext}}`. If your existing music is organized differently, yoink may not be able to match files to the correct artists and albums, resulting in unlinked tracks or albums in the library.
+
+This may change in the future.
+
+</Callout>
+
+## Import from yoink Library
+
+{/* TODO: Describe the scan/preview/confirm flow for the MUSIC_ROOT directory */}
+
+Scanning the `MUSIC_ROOT` directory discovers files that yoink downloaded but that aren't yet tracked in the database (e.g., after a database reset).
+
+## External Import
+
+{/* TODO: Describe the browse/preview/confirm flow for arbitrary directories */}
+{/* TODO: Describe copy vs move behavior */}
+
+You can also import music from directories outside of `MUSIC_ROOT`. yoink will attempt to match the files to artists and albums based on folder structure and file metadata.
+
+## File Browser
+
+{/* TODO: Describe the browse-path UI for navigating the filesystem */}
+
+The import page includes a file browser that lets you navigate the container's filesystem to select directories for import.

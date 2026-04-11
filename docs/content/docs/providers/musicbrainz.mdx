@@ -1,0 +1,40 @@
+---
+title: MusicBrainz
+description: Use the open MusicBrainz database for metadata enrichment.
+icon: Database
+---
+
+MusicBrainz is a metadata-only provider backed by the open [MusicBrainz](https://musicbrainz.org/) database.
+No authentication is required.
+
+## Setup
+
+MusicBrainz is enabled by default. No configuration is needed.
+
+```bash
+MUSICBRAINZ_ENABLED=true # this is the default
+```
+
+## Capabilities
+
+- Artist search with disambiguation, type, country, and tags
+- Release group (album) listing
+- Track listing with recordings
+- Artist biographies (via linked Wikipedia/Wikidata)
+- Artist images (via linked external sources)
+
+<Callout type="info">
+  MusicBrainz is community-maintained. Coverage is excellent for well-known
+  artists and genres, but can vary for niche or very new releases. Using it
+  alongside Deezer or Tidal helps fill the gaps.
+
+MusicBrainz's is rate-limited on yoink's backend to respect their api usage guidelines.
+If you try to import an artist with only MusicBrainz as a source, it may take longer than expected to fetch all metadata, especially for artists with large discographies.
+
+</Callout>
+
+## Environment Variables
+
+| Variable              | Description                   | Default |
+| --------------------- | ----------------------------- | ------- |
+| `MUSICBRAINZ_ENABLED` | Enable or disable MusicBrainz | `true`  |

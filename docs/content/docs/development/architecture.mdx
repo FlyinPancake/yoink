@@ -1,0 +1,67 @@
+---
+title: Architecture
+description: Technical overview of yoink's backend and frontend architecture.
+icon: Boxes
+---
+
+## Tech Stack
+
+**Backend:**
+
+- Rust (2024 edition), Axum web framework, Tokio async runtime
+- SeaORM with SQLite (PostgreSQL support planned)
+- utoipa for OpenAPI spec generation
+- tracing for structured logging
+
+**Frontend:**
+
+- React 19, TanStack Start / Router / Query
+- shadcn/ui component library, Tailwind CSS v4
+- Bun runtime, Vite bundler
+- TypeScript with types generated from the backend's OpenAPI spec
+
+The frontend is built separately and embedded into the Rust binary via `rust-embed` for single-binary deployment.
+
+## Crate Layout
+
+| Crate                    | Purpose                                                                             |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| `crates/yoink-server`    | Main binary: API server, auth, providers, services, DB entities, background workers |
+| `crates/yoink-migration` | SeaORM database migrations                                                          |
+| `frontend/`              | React SPA (separate build, embedded at compile time)                                |
+
+## Provider System
+
+Providers implement one or both traits:
+
+- **`MetadataProvider`** — search artists/albums/tracks, fetch cover art, bios
+- **`DownloadSource`** — resolve playback URLs and download track audio
+
+A `ProviderRegistry` holds all enabled providers and dispatches operations. Searches fan out concurrently to all registered metadata providers.
+
+Providers are registered at startup based on environment variable toggles.
+
+## API Layer
+
+The REST API is built with Axum and uses utoipa for automatic OpenAPI documentation. Route modules:
+
+`album`, `artist`, `auth`, `dashboard`, `images`, `import`, `job`, `library`, `match-suggestion`, `provider`, `search`, `track`, `wanted`
+
+Real-time updates are streamed via Server-Sent Events (SSE) at `/api/events`.
+
+{/* TODO: Add a diagram showing request flow from frontend to backend */}
+
+## Data Model
+
+Core entities: `artist`, `album`, `track`, with many-to-many relations through `album_artist` and `track_artist` join tables.
+
+Each entity can be linked to external provider IDs through `artist_provider_link`, `album_provider_link`, and `track_provider_link` tables.
+
+Download state is tracked via `download_job` (with statuses: queued, resolving, downloading, completed, failed) and monitoring state via `wanted_status` (unmonitored, wanted, in_progress, acquired).
+
+{/* TODO: Add entity relationship diagram */}
+
+## Background Tasks
+
+- **Download worker** — continuously polls for queued download jobs, resolves playback info from download sources, writes tagged files to `MUSIC_ROOT`
+- **Library reconciliation** — runs periodically to sync the filesystem state with the database

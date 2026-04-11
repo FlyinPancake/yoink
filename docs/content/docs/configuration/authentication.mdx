@@ -1,0 +1,55 @@
+---
+title: Authentication
+description: Configure user authentication and admin bootstrapping.
+icon: Lock
+---
+
+Authentication is enabled by default. yoink uses session cookies to manage user sessions.
+
+## Session Secret
+
+<Callout type="warn">
+  `AUTH_SESSION_SECRET` is **required** when authentication is enabled. Without
+  it, yoink will fail to start.
+</Callout>
+
+Generate a secure random secret:
+
+```bash
+openssl rand -base64 32
+```
+
+Then set it in your environment:
+
+```bash
+AUTH_SESSION_SECRET="your-generated-secret-here"
+```
+
+## Admin Bootstrap
+
+On first boot — when no auth settings exist in the database yet — yoink reads two optional environment variables to create an initial admin account:
+
+| Variable                   | Description              |
+| -------------------------- | ------------------------ |
+| `AUTH_INIT_ADMIN_USERNAME` | Admin username to create |
+| `AUTH_INIT_ADMIN_PASSWORD` | Admin password to set    |
+
+Both must be provided together. After the first boot, these variables are ignored — change credentials through the web UI at **Settings > Security**.
+
+<Callout type="info">
+  If you lose access to your account, you need to reset the auth state in the
+  database.
+</Callout>
+
+## Disabling Authentication
+
+Set `AUTH_DISABLED=true` to skip authentication entirely. All API endpoints become accessible without login.
+
+<Callout type="warn">
+  Only disable authentication on **trusted local networks**. Anyone with network
+  access to yoink will have full control over your library.
+</Callout>
+
+## Future: OIDC
+
+External authentication via OIDC is planned for the beta release (0.2+). See the [roadmap](/docs/project/roadmap) for details.

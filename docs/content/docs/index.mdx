@@ -1,31 +1,47 @@
 ---
-title: Hello World
-description: Your favourite docs framework.
-icon: Rocket
+title: Welcome to yoink
+icon: Music
 ---
 
-Hey there! Fumadocs is the docs framework that also works on Tanstack Start!
+yoink is a self-hosted music library manager built to solve a simple problem: no single metadata source covers everything. By pulling in data from multiple providers, yoink lets you build a complete, high-quality music library without the gaps.
 
-## Heading
+<Callout type="warn">
+  yoink is under active development and is **not production ready**. Expect
+  breaking changes, incomplete features, and rough edges. **Do not point yoink
+  at your main music library** — use a separate copy or a fresh directory until
+  the project stabilizes.
+</Callout>
 
-Hello World!
+## Supported Providers
+
+| Provider        | Type                 | Notes                                                               |
+| --------------- | -------------------- | ------------------------------------------------------------------- |
+| **Tidal**       | Streaming / Download | Can use a [hifi-api](https://github.com/binimum/hifi-api) proxy     |
+| **Deezer**      | Metadata             | No configuration required                                           |
+| **MusicBrainz** | Metadata             | Open music database, no auth needed                                 |
+| **SoulSeek**    | P2P / Download       | Requires a running [slskd](https://github.com/slskd/slskd) instance |
+
+## Next Steps
 
 <Cards>
-  <Card title="Learn more about Tanstack Start" href="https://tanstack.com/start" />
-  <Card title="Learn more about Fumadocs" href="https://fumadocs.dev" />
+  <Card
+    title="Get Started"
+    href="/docs/getting-started"
+    description="Install yoink with Docker Compose or build from source."
+  />
+  <Card
+    title="Configuration"
+    href="/docs/configuration"
+    description="Environment variables and settings reference."
+  />
+  <Card
+    title="Providers"
+    href="/docs/providers"
+    description="Set up metadata and download providers."
+  />
+  <Card
+    title="Guides"
+    href="/docs/guides"
+    description="Learn how to use yoink's web interface."
+  />
 </Cards>
-
-### CodeBlock
-
-```ts
-console.log('Hello World');
-```
-
-#### Table
-
-| Head                            | Description                         |
-| ------------------------------- | ----------------------------------- |
-| `hello`                         | Hello World                         |
-| very **important**              | Hey                                 |
-| _Surprisingly_                  | Fumadocs                            |
-| very long text that looks weird | hello world hello world hello world |

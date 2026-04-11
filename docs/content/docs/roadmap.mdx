@@ -1,0 +1,71 @@
+---
+title: Roadmap
+description: Current status and planned features for yoink.
+icon: Map
+---
+
+This roadmap is not a guarantee.
+It's a place to track ideas with realistic implementation goals.
+No time estimates, since development happens as time allows.
+
+Have an idea that's not listed? [Open an issue](https://github.com/FlyinPancake/yoink/issues) to discuss it.
+
+## Alpha (`0.1.x`) - Current releases
+
+Early adopter phase. Expect a "developer UX" — flows may not be fully polished and database schema changes may require fresh installs.
+
+### Completed
+
+- [x] Download, search, and tag music
+- [x] slskd integration for SoulSeek downloads
+- [x] Multiple provider support
+- [x] Web UI with mobile-friendly layout
+- [x] Quality settings for downloads (prefer FLAC, hi-res, etc.)
+- [x] Deezer, MusicBrainz, and Tidal metadata support
+- [x] Automatic album art fetching and embedding
+- [x] Lyrics fetching and embedding (via LRCLib)
+- [x] Import from yoink's own folder structure
+
+### Remaining
+
+- [ ] Support mixes (in addition to albums and singles)
+- [ ] SoundCloud download support (via yt-dlp)
+- [ ] YouTube download support (via yt-dlp)
+- [ ] Automatic metadata enrichment across providers
+- [ ] Public API for third-party integrations
+- [ ] Changelog documentation
+
+## Beta (`0.2+`)
+
+Power user phase. UX will be ironed out so the app is usable without reading docs. Some breaking changes may still occur but will be documented.
+
+### Planned
+
+- [ ] Import from external folder structures (iTunes, other media managers, manual folders)
+- [ ] Playlist support (import/export m3u)
+- [ ] Import playlists from streaming services (Spotify, Tidal, Deezer, YouTube Music)
+- [ ] OIDC authentication
+- [ ] Update notifier (banner when a new version is available)
+- [ ] Scrobbling support (Last.fm / ListenBrainz)
+- [ ] Transcoding (e.g. WAV to FLAC)
+- [ ] Deduplication
+
+## Stable (`1.0+`)
+
+General availability. Polished UX, safe for main music collections, stable database with backup/recovery.
+
+Goals will be defined during beta.
+
+## Wishlist
+
+Features that are desirable but may not be feasible or high priority:
+
+- [ ] Local recommendations and new music discovery
+
+## Won't Implement
+
+These are out of scope for now, though they may be reconsidered if demand and feasibility change:
+
+- **Spotify metadata** — API requires a paid developer account; creates a fragile dependency
+- **YouTube Music metadata** — no stable public API; yt-dlp focuses on downloads, not metadata
+- **SoundCloud metadata** — API is gated behind an app registration; may be reconsidered for mix/DJ set support

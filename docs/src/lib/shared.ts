@@ -1,4 +1,4 @@
-export const appName = 'Yoink';
+export const appName = 'yoink';
 export const docsRoute = '/docs';
 export const docsImageRoute = '/og/docs';
 export const docsContentRoute = '/llms.mdx/docs';
