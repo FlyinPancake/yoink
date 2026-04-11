@@ -8,6 +8,7 @@ import {
   PencilIcon,
   PlusIcon,
   RefreshCwIcon,
+  SearchIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import {
   useDeleteArtist,
   useDismissMatchSuggestion,
   useFetchArtistBio,
+  useLinkArtistProvider,
   useRefreshArtistMatchSuggestions,
   useSetAlbumQuality,
   useSyncArtist,
@@ -73,6 +75,7 @@ import {
 type MonitoredArtist = components["schemas"]["MonitoredArtist"];
 type Album = components["schemas"]["Album"];
 type ProviderLink = components["schemas"]["ProviderLink"];
+type Provider = components["schemas"]["Provider"];
 type ArtistMatchSuggestion = components["schemas"]["ArtistMatchSuggestion"];
 type ArtistImageOption = components["schemas"]["ArtistImageOption"];
 type Quality = components["schemas"]["Quality"];
@@ -247,6 +250,7 @@ function ArtistDetailContent({
   );
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
 
   const deleteArtist = useDeleteArtist();
   const syncArtist = useSyncArtist();
@@ -297,7 +301,7 @@ function ArtistDetailContent({
       }
     }
     return [...buckets.entries()]
-      .sort(([a], [b]) => albumTypeRank(a) - albumTypeRank(b))
+      .sort(([a], [b]) => albumTypeRank(a as AlbumType) - albumTypeRank(b as AlbumType))
       .map(([type, items]) => ({
         type,
         label: ALBUM_TYPE_GROUP_LABELS[type] ?? type,
@@ -348,7 +352,11 @@ function ArtistDetailContent({
             )}
 
             {/* Provider link chips */}
-            <ProviderChips artistId={artist.id} providerLinks={providerLinks} />
+            <ProviderChips
+              artistId={artist.id}
+              providerLinks={providerLinks}
+              onLinkClick={() => setShowLinkDialog(true)}
+            />
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-1.5">
@@ -489,6 +497,13 @@ function ArtistDetailContent({
       />
 
       <EditArtistDialog open={showEditDialog} onOpenChange={setShowEditDialog} artist={artist} />
+      <LinkArtistProviderDialog
+        open={showLinkDialog}
+        onOpenChange={setShowLinkDialog}
+        artistId={artist.id}
+        artistName={artist.name}
+        providerLinks={providerLinks}
+      />
     </div>
   );
 }
@@ -498,9 +513,11 @@ function ArtistDetailContent({
 function ProviderChips({
   artistId,
   providerLinks,
+  onLinkClick,
 }: {
   artistId: string;
   providerLinks: Array<ProviderLink>;
+  onLinkClick: () => void;
 }) {
   const unlinkProvider = useUnlinkArtistProvider();
 
@@ -547,11 +564,257 @@ function ProviderChips({
       <button
         type="button"
         className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed bg-transparent px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-blue-500/30 hover:text-blue-500"
+        onClick={onLinkClick}
       >
         <PlusIcon className="size-3" />
         Link
       </button>
     </div>
+  );
+}
+
+function LinkArtistProviderDialog({
+  open,
+  onOpenChange,
+  artistId,
+  artistName,
+  providerLinks,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  artistId: string;
+  artistName: string;
+  providerLinks: Array<ProviderLink>;
+}) {
+  const [query, setQuery] = useState(artistName);
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [selectedProviders, setSelectedProviders] = useState<Provider[]>([]);
+  const linkArtistProvider = useLinkArtistProvider();
+  const {
+    data: providers,
+    isLoading: isLoadingProviders,
+    isError: isProvidersError,
+  } = $api.useQuery("get", "/api/provider");
+  const providerOptions = useMemo(() => (providers ?? []) as Provider[], [providers]);
+  const {
+    data: searchResults,
+    isLoading: isSearching,
+    isError: isSearchError,
+  } = $api.useQuery(
+    "get",
+    "/api/artist/search",
+    { params: { query: { query: submittedQuery } } },
+    { enabled: open && submittedQuery.length > 0 },
+  );
+
+  useEffect(() => {
+    if (!open) return;
+
+    setQuery(artistName);
+    setSubmittedQuery("");
+    setSelectedProviders(providerOptions);
+  }, [artistName, providerOptions, open]);
+
+  const filteredResults = useMemo(
+    () =>
+      (searchResults ?? []).filter(
+        (result) =>
+          selectedProviders.includes(result.provider as Provider) &&
+          !providerLinks.some(
+            (link) => link.provider === result.provider && link.external_id === result.external_id,
+          ),
+      ),
+    [providerLinks, searchResults, selectedProviders],
+  );
+
+  const toggleProvider = (provider: Provider) => {
+    setSelectedProviders((current) =>
+      current.includes(provider)
+        ? current.filter((candidate) => candidate !== provider)
+        : [...current, provider],
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Link Provider</DialogTitle>
+          <DialogDescription>
+            Search external providers for another artist identity to attach.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          {isProvidersError ? (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              Failed to load available providers.
+            </p>
+          ) : providerOptions.length === 0 && !isLoadingProviders ? (
+            <p className="text-sm text-muted-foreground">
+              All configured providers are already linked for this artist.
+            </p>
+          ) : (
+            <>
+              <div className="grid gap-1.5">
+                <Label>Providers</Label>
+                <div className="flex flex-wrap gap-2">
+                  {providerOptions.map((provider) => {
+                    const isSelected = selectedProviders.includes(provider);
+
+                    return (
+                      <Button
+                        key={provider}
+                        type="button"
+                        size="sm"
+                        variant={isSelected ? "default" : "outline"}
+                        aria-pressed={isSelected}
+                        className="h-8 rounded-full px-3"
+                        onClick={() => toggleProvider(provider)}
+                      >
+                        {providerDisplayName(provider)}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Choose which providers to include in the artist search.
+                </p>
+              </div>
+              <form
+                className="grid gap-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+
+                  const trimmed = query.trim();
+                  if (trimmed.length === 0 || selectedProviders.length === 0) return;
+                  setSubmittedQuery(trimmed);
+                }}
+              >
+                <div className="grid gap-1.5">
+                  <Label htmlFor="artist-provider-search">Search</Label>
+                  <div className="relative">
+                    <SearchIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="artist-provider-search"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Search for an artist"
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    The search box is prefilled with the local artist name. Adjust it if needed.
+                  </p>
+                  <Button
+                    type="submit"
+                    disabled={query.trim().length === 0 || selectedProviders.length === 0}
+                  >
+                    <SearchIcon className="mr-1.5 size-4" />
+                    Search
+                  </Button>
+                </div>
+              </form>
+              <div className="max-h-96 overflow-y-auto rounded-xl border bg-muted/10">
+                {isSearching ? (
+                  <div className="p-6 text-sm text-muted-foreground">Searching providers...</div>
+                ) : isSearchError ? (
+                  <div className="p-6 text-sm text-red-600 dark:text-red-400">
+                    Artist search failed.
+                  </div>
+                ) : submittedQuery.length === 0 ? (
+                  <div className="p-6 text-sm text-muted-foreground">
+                    Search for an artist to see provider results.
+                  </div>
+                ) : filteredResults.length === 0 ? (
+                  <div className="p-6 text-sm text-muted-foreground">
+                    No matching artists found for the selected providers.
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {filteredResults.map((result) => (
+                      <div
+                        key={`${result.provider}-${result.external_id}`}
+                        className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+                      >
+                        <div className="size-12 shrink-0 overflow-hidden rounded-full bg-muted">
+                          {result.image_url ? (
+                            <img src={result.image_url} alt="" className="size-full object-cover" />
+                          ) : (
+                            <div className="flex size-full items-center justify-center text-lg font-bold text-muted-foreground/40">
+                              {fallbackInitial(result.name)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate font-medium">{result.name}</span>
+                            <Badge variant="outline" className="text-[10px]">
+                              {providerDisplayName(result.provider)}
+                            </Badge>
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            {result.disambiguation && <span>{result.disambiguation}</span>}
+                            {result.country && <span>{result.country}</span>}
+                            {result.popularity != null && (
+                              <span>{result.popularity}% popularity</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {result.url && (
+                            <Button variant="outline" size="icon" asChild>
+                              <a
+                                href={result.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                aria-label={`Open ${result.name} on ${providerDisplayName(result.provider)}`}
+                              >
+                                <ExternalLinkIcon className="size-3.5" />
+                              </a>
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            disabled={linkArtistProvider.isPending}
+                            onClick={() =>
+                              linkArtistProvider.mutate(
+                                {
+                                  params: { path: { artist_id: artistId } },
+                                  body: {
+                                    provider: result.provider,
+                                    external_id: result.external_id,
+                                    external_name: result.name,
+                                    external_url: result.url ?? null,
+                                    image_ref: null,
+                                  },
+                                },
+                                {
+                                  onSuccess: () => onOpenChange(false),
+                                },
+                              )
+                            }
+                          >
+                            <PlusIcon className="mr-1 size-3.5" />
+                            {linkArtistProvider.isPending ? "Linking..." : "Add"}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -988,7 +1251,8 @@ function EditArtistDialog({
               <Label>Suggested Images</Label>
               {imageOptions.length > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  {imageOptions.length} provider option{imageOptions.length === 1 ? "" : "s"}
+                  {imageOptions.length} provider option
+                  {imageOptions.length === 1 ? "" : "s"}
                 </span>
               )}
             </div>
