@@ -1,0 +1,38 @@
+---
+title: Deezer
+description: Use Deezer as a metadata enrichment source.
+icon: Disc3
+---
+
+Deezer is a metadata-only provider.
+It uses the public Deezer API.
+No authentication or API keys are required.
+
+## Setup
+
+Deezer is enabled by default. No configuration is needed.
+
+```bash
+DEEZER_ENABLED=true # this is the default
+```
+
+## Capabilities
+
+- Artist search
+- Album listing with cover art
+- Track listing with durations
+- Album search
+- Track search
+
+<Callout type="info">
+  Deezer has excellent coverage for mainstream and European music catalogs. It
+  complements Tidal and MusicBrainz well for filling metadata gaps. It has
+  generous rate limits, useful when you don't want to rely on the Tidal
+  provider.
+</Callout>
+
+## Environment Variables
+
+| Variable         | Description              | Default |
+| ---------------- | ------------------------ | ------- |
+| `DEEZER_ENABLED` | Enable or disable Deezer | `true`  |

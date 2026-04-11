@@ -1,0 +1,37 @@
+---
+title: Getting Started
+description: Get yoink up and running in minutes.
+icon: Rocket
+---
+
+There are two ways to deploy yoink:
+
+<Cards>
+  <Card
+    title="Docker Compose"
+    href="/docs/getting-started/docker"
+    description="Recommended. One command to get everything running."
+  />
+  <Card
+    title="From Source"
+    href="/docs/getting-started/from-source"
+    description="Build and run locally for development or custom deployments."
+  />
+</Cards>
+
+## Before You Start
+
+yoink needs at least one **download source** to be useful:
+
+- **Tidal** - accepts a self-hosted [hifi-api](https://github.com/binimum/hifi-api) proxy or uses publicly available instances
+- **SoulSeek** - requires a running [slskd](https://github.com/slskd/slskd) instance
+
+Metadata-only providers (Deezer, MusicBrainz) enrich your library with additional artist and album information but cannot download audio files. They are enabled by default and require no configuration.
+
+## After Installation
+
+Once yoink is running, you'll want to:
+
+1. [Configure your providers](/docs/providers) - especially your download sources
+2. [Review your settings](/docs/configuration) - audio quality, parallel downloads, lyrics
+3. [Search for music](/docs/guides/searching) - find and add artists to your library

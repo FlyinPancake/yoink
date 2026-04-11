@@ -1,0 +1,56 @@
+---
+title: Providers
+description: How yoink's multi-provider architecture works.
+icon: PlugZap
+---
+
+import { X, Check } from "lucide-react";
+
+yoink's core idea is simple: no single music service has everything. By combining multiple providers, you get better metadata coverage and more download options.
+
+## How Providers Work
+
+Each provider implements one or both of two roles:
+
+- **Metadata Provider**: searches for artists, albums, and tracks; fetches cover art and biographies
+- **Download Source**: resolves and downloads track audio files (may depend on metadata from the same provider)
+
+## Provider Comparison
+
+| Provider        | Metadata | Download | Setup Required | Notes                                                    |
+| --------------- | -------- | -------- | -------------- | -------------------------------------------------------- |
+| **Tidal**       | <Check/> | <Check/> | Optional       | Best for hi-res audio downloads                          |
+| **Deezer**      | <Check/> | <X/>     | None           | Public API, great mainstream coverage                    |
+| **MusicBrainz** | <Check/> | <X/>     | None           | Open database, community-maintained                      |
+| **SoulSeek**    | <X/>     | <Check/> | slskd instance | P2P, searches by text (works with any metadata provider) |
+
+<Callout type="info">
+  At minimum, you need **one download source** (Tidal or SoulSeek) for yoink to
+  download music. Metadata-only providers enrich your library but cannot fetch
+  audio files.
+</Callout>
+
+## Setup Guides
+
+<Cards>
+  <Card
+    title="Tidal"
+    href="/docs/providers/tidal"
+    description="Streaming metadata and hi-res downloads via hifi-api."
+  />
+  <Card
+    title="Deezer"
+    href="/docs/providers/deezer"
+    description="Metadata enrichment from the Deezer catalog."
+  />
+  <Card
+    title="MusicBrainz"
+    href="/docs/providers/musicbrainz"
+    description="Open music database for metadata and artist info."
+  />
+  <Card
+    title="SoulSeek"
+    href="/docs/providers/soulseek"
+    description="P2P downloads via slskd."
+  />
+</Cards>

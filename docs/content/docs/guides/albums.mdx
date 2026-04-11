@@ -1,0 +1,44 @@
+---
+title: Album Management
+description: Browse albums, manage tracks, set quality, and trigger downloads.
+icon: Disc
+---
+
+Albums contain tracks and are linked to one or more artists. You can monitor entire albums, set quality overrides, and trigger downloads.
+
+## Album Detail Page
+
+{/* TODO: Screenshot and description of the album detail view */}
+
+The album detail page shows:
+
+- Album metadata (title, release date, cover art, type)
+- Track list with individual monitoring and quality controls
+- Provider links for the album
+- Download status for each track
+
+## Downloading
+
+{/* TODO: Describe how downloads are triggered */}
+{/* TODO: Describe the download queue and progress tracking */}
+
+Downloads are triggered when tracks are marked as **wanted**.
+yoink resolves the best available source and quality, then downloads and tags the files automatically.
+
+Failed downloads can be retried from the album detail page.
+
+## Quality Overrides
+
+The global [default quality](/docs/configuration/quality) can be overridden at the album or track level. This lets you request hi-res for your favorite albums while keeping lossless as the default.
+
+{/* TODO: Describe the quality selector UI */}
+
+## Merging Albums
+
+{/* TODO: Describe the merge albums feature — combining duplicates from different providers */}
+
+When the same album appears from multiple providers, you can merge them into a single entry.
+
+## Album Artists
+
+{/* TODO: Describe adding/removing artists from an album */}

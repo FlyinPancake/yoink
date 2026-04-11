@@ -1,0 +1,83 @@
+---
+title: From Source
+description: Build and run yoink from source for development or custom deployments.
+icon: Code
+---
+
+Building from source is useful for development or if you want to run yoink without Docker.
+If you just want to run the app, Docker Compose is still the recommended option for most users.
+
+## Prerequisites
+
+- [Rust](https://rustup.rs/): stable toolchain
+- [mise](https://mise.jdx.dev/): manages bun, sea-orm-cli, and other dev tools
+- [bun](https://bun.sh/): installed automatically by mise
+
+## Setup
+
+<Steps>
+<Step>
+### Clone the repository
+
+```bash
+git clone https://github.com/FlyinPancake/yoink.git
+cd yoink
+```
+
+</Step>
+
+<Step>
+### Install build dependencies
+
+You need to have Rust installed (via rustup) and then run:
+
+```bash
+mise install
+```
+
+This installs bun and other development tools defined in `mise.toml`.
+
+</Step>
+
+<Step>
+### Install frontend dependencies and build frontend
+
+```bash
+cd frontend && bun install && cd ..
+```
+
+</Step>
+
+<Step>
+### Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` to configure your providers and settings. See the [configuration reference](/docs/configuration) for all available variables.
+
+</Step>
+
+<Step>
+### Run in development mode
+
+```bash
+mise run dev
+```
+
+This starts both the backend (with auto-rebuild on changes) and the frontend dev server. The UI is available at [http://localhost:5173](http://localhost:5173).
+
+</Step>
+</Steps>
+
+## Release Build
+
+For a production build without Docker:
+
+```bash
+mise run build-frontend
+mise run run-server --release
+```
+
+The UI will be available at [http://localhost:3000](http://localhost:3000). The frontend is embedded into the server binary.

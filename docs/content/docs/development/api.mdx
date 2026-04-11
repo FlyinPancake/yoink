@@ -1,0 +1,56 @@
+---
+title: API Reference
+description: Explore yoink's REST API via the built-in OpenAPI documentation.
+icon: FileBraces
+---
+
+yoink auto-generates OpenAPI documentation from its route definitions using [utoipa](https://github.com/juhaku/utoipa).
+
+## Accessing the API Docs
+
+When yoink is running, the interactive API explorer (Scalar) is available at:
+
+```
+http://localhost:3000/docs
+```
+
+The raw OpenAPI JSON spec can be fetched from:
+
+```
+http://localhost:3000/docs/openapi.json
+```
+
+## API Groups
+
+| Group                | Description                                                    |
+| -------------------- | -------------------------------------------------------------- |
+| **Album**            | List, create, update, monitor, merge, and download albums      |
+| **Artist**           | List, create, update, monitor, sync, and link artist providers |
+| **Authentication**   | Login, logout, status check, and credential management         |
+| **Dashboard**        | Overview data for the dashboard page                           |
+| **Images**           | Proxy cover art from external providers                        |
+| **Import**           | Scan, preview, and confirm library imports                     |
+| **Job**              | Track download job status                                      |
+| **Library**          | Browse the local filesystem and trigger scans                  |
+| **Match Suggestion** | View and manage provider match suggestions                     |
+| **Provider**         | List enabled providers                                         |
+| **Search**           | Unified search across all metadata providers                   |
+| **Track**            | List, create, monitor, and set quality for tracks              |
+| **Wanted**           | View unacquired / wanted tracks and albums                     |
+
+## Server-Sent Events
+
+`GET /api/events` provides a real-time SSE stream for UI updates. Events:
+
+- `connected`: sent on initial connection
+- `update`: sent when library state changes (downloads complete, imports finish, etc.)
+
+## Frontend Type Generation
+
+TypeScript types are generated from the OpenAPI spec to keep the frontend in sync:
+
+```bash
+mise run gen-frontend-types
+```
+
+This fetches the spec from the running backend (port 3000) and writes types to `frontend/src/lib/api/types.gen.ts`.

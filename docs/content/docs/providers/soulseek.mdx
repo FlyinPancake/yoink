@@ -1,0 +1,98 @@
+---
+title: SoulSeek
+description: Configure SoulSeek as a P2P download source via slskd.
+icon: Share2
+---
+
+import { X } from "lucide-react";
+
+SoulSeek is a download-only provider. It works through [slskd](https://github.com/slskd/slskd), a web-based SoulSeek client that exposes a REST API.
+
+<Callout type="info">
+  SoulSeek doesn't use provider-specific IDs. It searches by artist name, album
+  title, and track title. This means it can download music discovered through
+  **any** metadata provider, not just tracks linked to a specific service.
+</Callout>
+
+## Prerequisites
+
+- A running [slskd](https://github.com/slskd/slskd) instance
+- A SoulSeek account (create one in slskd's settings or at [slsknet.org](https://www.slsknet.org/))
+
+## Setup with Docker Compose
+
+<Steps>
+<Step>
+### Add slskd to your compose file
+
+```yaml title="compose.yaml"
+services:
+  slskd:
+    image: slskd/slskd
+    container_name: slskd
+    restart: unless-stopped
+    ports:
+      - "5030:5030"
+    environment:
+      SLSKD_REMOTE_CONFIGURATION: true
+      SLSKD_SLSK_USERNAME: your_slsk_username
+      SLSKD_SLSK_PASSWORD: your_slsk_password
+    volumes:
+      - slskd-data:/app
+      - ./music:/music
+```
+
+</Step>
+
+<Step>
+### Mount slskd's downloads into the yoink container
+
+yoink needs to read completed downloads from slskd's download directory:
+
+```yaml title="compose.yaml (yoink service)"
+volumes:
+  - yoink-data:/data
+  - ./music:/music
+  - slskd-data:/slskd-downloads:ro
+```
+
+</Step>
+
+<Step>
+### Enable SoulSeek in yoink
+
+```yaml title="compose.yaml (yoink service)"
+environment:
+  SOULSEEK_ENABLED: true
+  SLSKD_BASE_URL: http://slskd:5030
+  SLSKD_DOWNLOADS_DIR: /slskd-downloads
+  # If slskd has web auth enabled:
+  # SLSKD_USERNAME: your_web_username
+  # SLSKD_PASSWORD: your_web_password
+```
+
+</Step>
+</Steps>
+
+## How It Works
+
+1. yoink sends a search query to slskd's REST API (artist + album + track name)
+2. slskd searches the SoulSeek network for matching files
+3. yoink scores the candidates and picks the best match
+4. slskd downloads the file from the SoulSeek peer
+5. yoink reads the completed file, tags it with metadata, and moves it to `MUSIC_ROOT`
+
+<Callout type="warn">
+  SoulSeek downloads depend on peer availability. Downloads may be slow or fail
+  if no online peer is sharing the file you need.
+</Callout>
+
+## Environment Variables
+
+| Variable              | Description                                 | Default                 |
+| --------------------- | ------------------------------------------- | ----------------------- |
+| `SOULSEEK_ENABLED`    | Enable or disable SoulSeek                  | `false`                 |
+| `SLSKD_BASE_URL`      | slskd REST API endpoint                     | `http://127.0.0.1:5030` |
+| `SLSKD_USERNAME`      | slskd web auth username                     | <X/>                    |
+| `SLSKD_PASSWORD`      | slskd web auth password                     | <X/>                    |
+| `SLSKD_DOWNLOADS_DIR` | Path where slskd stores completed downloads | `slskd-data/downloads`  |

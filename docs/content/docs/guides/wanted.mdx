@@ -1,0 +1,39 @@
+---
+title: Wanted & Downloads
+description: Track what you want and monitor download progress.
+icon: Download
+---
+
+The Wanted page gives you an overview of everything you've marked for download and the status of active download jobs.
+
+## Wanted Statuses
+
+Each track in your library has one of these statuses:
+
+| Status          | Meaning                                                         |
+| --------------- | --------------------------------------------------------------- |
+| **Unmonitored** | Track exists in the database but is not tracked for download    |
+| **Wanted**      | Track is marked for download — yoink will attempt to acquire it |
+| **In Progress** | Download is currently active                                    |
+| **Acquired**    | Track has been downloaded and tagged                            |
+
+{/* TODO: Describe how each status appears in the UI */}
+
+## Download Jobs
+
+{/* TODO: Describe the jobs view — queued, in progress, completed, failed */}
+{/* TODO: Describe canceling and retrying jobs */}
+
+Download jobs progress through these stages: **queued** → **resolving** (finding the best source) → **downloading** → **completed** or **failed**.
+
+## How the Download Worker Works
+
+yoink runs a background download worker that:
+
+1. Polls for queued download jobs
+2. Resolves playback info from the best available download source (Tidal or SoulSeek)
+3. Downloads the audio file
+4. Tags it with metadata (title, artist, album, cover art, lyrics if enabled)
+5. Moves the tagged file to `MUSIC_ROOT`
+
+Library reconciliation runs periodically to sync the filesystem state with the database, ensuring the UI reflects what's actually on disk.

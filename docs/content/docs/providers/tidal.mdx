@@ -1,0 +1,53 @@
+---
+title: Tidal
+description: Configure Tidal for metadata and hi-res downloads via hifi-api.
+icon: Music2
+---
+
+import { X } from "lucide-react";
+
+Tidal serves as both a metadata provider and a download source. It uses [hifi-api](https://github.com/binimum/hifi-api) proxy, not the official Tidal API.
+
+## Setup
+
+If you want to self host your own hifi-api instance for better performance and reliability, follow the steps below. Otherwise, you can use publicly available hifi-api instances, but they may have rate limits or downtime.
+
+<Steps>
+<Step>
+### Deploy hifi-api
+
+Follow the [hifi-api setup guide](https://github.com/binimum/hifi-api) to get a running instance. By default it listens on port 8000.
+
+</Step>
+
+<Step>
+### Point yoink to your hifi-api instance
+
+Tidal is enabled by default (`TIDAL_ENABLED=true`). Set the API URL to point to your hifi-api instance:
+
+```bash
+TIDAL_API_BASE_URL=http://host.docker.internal:8000
+```
+
+If hifi-api is running on the same Docker network, use the service name instead:
+
+```bash
+TIDAL_API_BASE_URL=http://hifi-api:8000
+```
+
+</Step>
+</Steps>
+
+## Capabilities
+
+- Artist search and metadata
+- Album listing with release dates and cover art
+- Track listing with durations and ISRCs
+- Hi-res audio downloads (quality depends on your Tidal subscription tier)
+
+## Environment Variables
+
+| Variable             | Description                | Default |
+| -------------------- | -------------------------- | ------- |
+| `TIDAL_ENABLED`      | Enable or disable Tidal    | `true`  |
+| `TIDAL_API_BASE_URL` | URL of your hifi-api proxy | <X/>    |

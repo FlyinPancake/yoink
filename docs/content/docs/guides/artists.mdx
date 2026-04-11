@@ -1,0 +1,55 @@
+---
+title: Artist Management
+description: Add, monitor, link, and manage artists in your library.
+icon: Users
+---
+
+Artists are the top-level organizational unit in yoink. You add artists from search results, link them to multiple providers.
+yoink automatically performs a full sync of an artist's discography when you add them, pulling in all albums and tracks from linked providers.
+
+## Adding an Artist
+
+{/* TODO: Describe the flow from search results to creating a local artist */}
+{/* TODO: Describe lightweight vs monitored artist states */}
+
+Artists can be added from the [search page](/docs/guides/searching).
+
+## Artist Detail Page
+
+{/* TODO: Screenshot and description of the artist detail view */}
+
+The artist detail page shows:
+
+- Artist info (name, bio, image)
+- Discography: all albums linked to this artist
+- Provider links: which external services this artist is linked to
+- Match suggestions: automatically generated suggestions for linking to other providers
+
+## Linking Providers
+
+A single local artist can be linked to identities on Tidal, Deezer, and MusicBrainz. This lets yoink combine metadata from all sources into one unified artist page.
+
+{/* TODO: Describe the link artist dialog */}
+
+## Monitoring
+
+If you add a track or album whose artist is not yet in your library, yoink creates a new artist in an **unmonitored** state.
+This means the artist exists in your library but their discography is not tracked or synced.
+
+- **Unmonitored**: artist exists in your library but their discography is not tracked
+- **Monitored**: yoink syncs the artist's full discography and tracks new releases
+
+You can promote an unmonitored artist to monitored from the artist detail page.
+This triggers a full sync of their discography and starts tracking for new releases.
+
+## Syncing Discography
+
+{/* TODO: Describe the sync button and what it fetches */}
+
+When you sync an artist, yoink pulls album and track data from all linked providers and merges it into the local database.
+
+## Match Suggestions
+
+{/* TODO: Describe auto-generated match suggestions and the accept/dismiss flow */}
+
+yoink can automatically suggest provider matches for artists based on fuzzy name matching and other heuristics.

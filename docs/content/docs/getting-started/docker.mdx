@@ -1,0 +1,174 @@
+---
+title: Docker Compose
+description: Deploy yoink with Docker Compose (recommended).
+icon: Container
+---
+
+Docker Compose is the recommended way to run yoink. You'll have it running in under a minute.
+
+## Quick Start
+
+<Steps>
+<Step>
+### Create a project directory
+
+```bash
+mkdir yoink && cd yoink
+```
+
+</Step>
+
+<Step>
+### Create a `compose.yaml`
+
+```yaml title="compose.yaml"
+services:
+  yoink:
+    image: ghcr.io/flyinpancake/yoink:latest
+    container_name: yoink
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - yoink-data:/data
+      - ./music:/music
+    environment:
+      PUID: 1000
+      PGID: 1000
+      DEFAULT_QUALITY: LOSSLESS
+      DOWNLOAD_MAX_PARALLEL_TRACKS: 4
+      DOWNLOAD_LYRICS: true
+      # Providers
+      DEEZER_ENABLED: true
+      MUSICBRAINZ_ENABLED: true
+      # Tidal — set your hifi-api proxy URL to use your private Tidal account.
+      # If not set, yoink will use public proxies but may be rate-limited.
+      # TIDAL_API_BASE_URL: http://host.docker.internal:8000
+      # SoulSeek — requires a running slskd instance:
+      # SOULSEEK_ENABLED: true
+      # SLSKD_BASE_URL: http://slskd:5030
+      # SLSKD_DOWNLOADS_DIR: /slskd-downloads
+
+      # Authentication
+      # if you have an auth proxy set up in front of yoink, you can disable the built-in auth system. Not recommended.
+      # AUTH_DISABLED: true
+      # Required when auth is enabled. Use a long random secret like `openssl rand -base64 32`.
+      AUTH_SESSION_SECRET:
+      # Optional init-only admin bootstrap credentials. Only applies to instances with no existing auth setup
+      # AUTH_INIT_ADMIN_USERNAME=
+      # AUTH_INIT_ADMIN_PASSWORD=
+
+volumes:
+  yoink-data:
+```
+
+Set `AUTH_SESSION_SECRET` to a long random string to enable authentication (recommended). You can generate one with:
+
+```bash
+openssl rand -base64 32
+```
+
+</Step>
+
+<Step>
+### Start yoink
+
+```bash
+docker compose up -d
+```
+
+</Step>
+
+<Step>
+### Open the web UI
+
+Visit [http://localhost:3000](http://localhost:3000) in your browser.
+
+If you have auth enabled (default), you'll be prompted to create an admin account on first visit. After that, log in with your new credentials.
+
+</Step>
+</Steps>
+
+## Volumes
+
+| Volume             | Purpose                                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| `yoink-data:/data` | Named volume for the SQLite database and internal state. Persisted across container restarts and updates. |
+| `./music:/music`   | Bind mount where tagged downloads are written. This is your music library.                                |
+
+If you're using SoulSeek, you'll also need to mount slskd's downloads directory so yoink can read completed files:
+
+```yaml
+volumes:
+  - yoink-data:/data
+  - ./music:/music
+  - ./slskd-data/downloads:/slskd-downloads:ro
+```
+
+## PUID / PGID
+
+yoink's Docker entrypoint creates a `yoink` user with the UID/GID you specify. This ensures files written to your music directory have the correct ownership. Set these to match your host user:
+
+```bash
+# Find your UID and GID
+id -u  # PUID
+id -g  # PGID
+```
+
+## Image Tags
+
+| Tag               | Description                                                            |
+| ----------------- | ---------------------------------------------------------------------- |
+| `latest`          | Latest stable release                                                  |
+| `0.1.4` (version) | Pinned to a specific release                                           |
+| `main`            | Bleeding edge from the main branch. Not recommended. You _will_ bleed. |
+
+<Callout type="warn">
+  The `0.x` tags are **not recommended** as they may include breaking changes
+  without a major version bump. Use a specific version tag for stability.
+</Callout>
+
+## Adding SoulSeek
+
+To use SoulSeek as a download source, add the slskd service to your compose file:
+
+```yaml title="compose.yaml"
+services:
+  yoink:
+    image: ghcr.io/flyinpancake/yoink:latest
+    # ... (same as above, plus:)
+    volumes:
+      - yoink-data:/data
+      - ./music:/music
+      - slskd-data:/slskd-downloads:ro
+    environment:
+      # ... (same as above, plus:)
+      SOULSEEK_ENABLED: true
+      SLSKD_BASE_URL: http://slskd:5030
+      SLSKD_DOWNLOADS_DIR: /slskd-downloads
+
+  slskd:
+    image: slskd/slskd
+    container_name: slskd
+    restart: unless-stopped
+    ports:
+      - "5030:5030"
+    environment:
+      SLSKD_REMOTE_CONFIGURATION: true
+      SLSKD_SLSK_USERNAME: your_slsk_username
+      SLSKD_SLSK_PASSWORD: your_slsk_password
+    volumes:
+      - slskd-data:/app
+      - ./music:/music
+
+volumes:
+  yoink-data:
+  slskd-data:
+```
+
+See the [SoulSeek provider page](/docs/providers/soulseek) for more details.
+
+## Next Steps
+
+- [Configure yoink](/docs/configuration) — review all environment variables
+- [Set up providers](/docs/providers) — configure Tidal, SoulSeek, and metadata sources

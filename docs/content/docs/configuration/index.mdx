@@ -1,0 +1,66 @@
+---
+title: Configuration
+description: Complete environment variable reference for yoink.
+icon: Settings
+---
+
+import { X } from "lucide-react";
+
+All configuration is done via environment variables. In Docker, set them in the `environment:` block of your `compose.yaml`. When running from source, use a `.env` file.
+
+## Core Settings
+
+| Variable                       | Description                                                                 | Default                                                                 |
+| ------------------------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `MUSIC_ROOT`                   | Directory where tagged downloads are saved                                  | `./music` (Docker: `/music`)                                            |
+| `DATABASE_URL`                 | SQLite connection string                                                    | `sqlite:./yoink.db?mode=rwc` (Docker: `sqlite:/data/yoink.db?mode=rwc`) |
+| `DEFAULT_QUALITY`              | Preferred audio quality. See [quality levels](/docs/configuration/quality). | `LOSSLESS`                                                              |
+| `DOWNLOAD_MAX_PARALLEL_TRACKS` | Concurrent track downloads per album job (1–16)                             | `1`                                                                     |
+| `DOWNLOAD_LYRICS`              | Auto-fetch lyrics from LRCLib and embed in files                            | `false`                                                                 |
+| `LOG_FORMAT`                   | Log output format: `pretty` or `json`                                       | `pretty`                                                                |
+
+## Provider Toggles
+
+Each provider can be independently enabled or disabled.
+
+| Variable              | Default |
+| --------------------- | ------- |
+| `TIDAL_ENABLED`       | `true`  |
+| `DEEZER_ENABLED`      | `true`  |
+| `MUSICBRAINZ_ENABLED` | `true`  |
+| `SOULSEEK_ENABLED`    | `false` |
+
+See the [Providers](/docs/providers) section for provider-specific configuration.
+
+## Tidal
+
+| Variable             | Description                                                       | Default |
+| -------------------- | ----------------------------------------------------------------- | ------- |
+| `TIDAL_API_BASE_URL` | URL of your [hifi-api](https://github.com/binimum/hifi-api) proxy | <X/>    |
+
+## SoulSeek / slskd
+
+| Variable              | Description                                               | Default                 |
+| --------------------- | --------------------------------------------------------- | ----------------------- |
+| `SLSKD_BASE_URL`      | slskd REST API endpoint                                   | `http://127.0.0.1:5030` |
+| `SLSKD_USERNAME`      | slskd web auth username (leave blank if auth is disabled) | <X/>                    |
+| `SLSKD_PASSWORD`      | slskd web auth password                                   | <X/>                    |
+| `SLSKD_DOWNLOADS_DIR` | Local path where slskd stores completed downloads         | `slskd-data/downloads`  |
+
+## Authentication
+
+| Variable                   | Description                                                | Default |
+| -------------------------- | ---------------------------------------------------------- | ------- |
+| `AUTH_DISABLED`            | Disable authentication entirely                            | `false` |
+| `AUTH_SESSION_SECRET`      | Session signing secret. **Required** when auth is enabled. | <X/>    |
+| `AUTH_INIT_ADMIN_USERNAME` | Bootstrap admin username (first boot only)                 | <X/>    |
+| `AUTH_INIT_ADMIN_PASSWORD` | Bootstrap admin password (first boot only)                 | <X/>    |
+
+See the [authentication page](/docs/configuration/authentication) for setup details.
+
+## Docker-Only Settings
+
+| Variable | Description                        | Default |
+| -------- | ---------------------------------- | ------- |
+| `PUID`   | User ID for the container process  | `1000`  |
+| `PGID`   | Group ID for the container process | `1000`  |

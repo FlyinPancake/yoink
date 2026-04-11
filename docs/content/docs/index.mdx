@@ -1,0 +1,47 @@
+---
+title: Welcome to yoink
+icon: Music
+---
+
+yoink is a self-hosted music library manager built to solve a simple problem: no single metadata source covers everything. By pulling in data from multiple providers, yoink lets you build a complete, high-quality music library without the gaps.
+
+<Callout type="warn">
+  yoink is under active development and is **not production ready**. Expect
+  breaking changes, incomplete features, and rough edges. **Do not point yoink
+  at your main music library** — use a separate copy or a fresh directory until
+  the project stabilizes.
+</Callout>
+
+## Supported Providers
+
+| Provider        | Type                 | Notes                                                               |
+| --------------- | -------------------- | ------------------------------------------------------------------- |
+| **Tidal**       | Streaming / Download | Can use a [hifi-api](https://github.com/binimum/hifi-api) proxy     |
+| **Deezer**      | Metadata             | No configuration required                                           |
+| **MusicBrainz** | Metadata             | Open music database, no auth needed                                 |
+| **SoulSeek**    | P2P / Download       | Requires a running [slskd](https://github.com/slskd/slskd) instance |
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Get Started"
+    href="/docs/getting-started"
+    description="Install yoink with Docker Compose or build from source."
+  />
+  <Card
+    title="Configuration"
+    href="/docs/configuration"
+    description="Environment variables and settings reference."
+  />
+  <Card
+    title="Providers"
+    href="/docs/providers"
+    description="Set up metadata and download providers."
+  />
+  <Card
+    title="Guides"
+    href="/docs/guides"
+    description="Learn how to use yoink's web interface."
+  />
+</Cards>

@@ -1,0 +1,36 @@
+---
+title: Audio Quality
+description: Understanding quality levels and download preferences.
+icon: AudioLines
+---
+
+yoink supports four quality levels for audio downloads. Set your preferred default with the `DEFAULT_QUALITY` environment variable.
+
+## Quality Levels
+
+| Level             | Description          | Typical Format      |
+| ----------------- | -------------------- | ------------------- |
+| `LOW`             | Low quality lossy    | MP3 ~128kbps        |
+| `HIGH`            | High quality lossy   | MP3/AAC ~320kbps    |
+| `LOSSLESS`        | CD quality, lossless | FLAC 16-bit/44.1kHz |
+| `HI_RES_LOSSLESS` | Hi-res lossless      | FLAC 24-bit/96kHz+  |
+
+<Callout type="info">
+  The actual quality depends on what the download source offers. yoink requests
+  the configured quality but falls back to the best available if the preferred
+  level isn't offered for a given track.
+</Callout>
+
+## Default Quality
+
+Set globally via the `DEFAULT_QUALITY` environment variable:
+
+```bash
+DEFAULT_QUALITY="LOSSLESS"
+```
+
+This applies to all new downloads unless overridden.
+
+## Per-Album and Per-Track Overrides
+
+The default quality can be overridden at the album or track level through the web UI. This is useful when you want hi-res for certain albums but are fine with lossy for the rest of your library.
