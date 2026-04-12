@@ -6,7 +6,7 @@ import mdx from 'fumadocs-mdx/vite';
 import { nitro } from 'nitro/vite';
 
 export default defineConfig({
-  publicDir: '../public',
+  publicDir: 'public',
   server: {
     port: 3000,
   },
