@@ -159,8 +159,8 @@ export function Landing() {
         </h2>
         <div className="flex items-center justify-center gap-3">
           <Link
-            to="/docs/getting-started"
-            params={{ _splat: "" }}
+            to="/docs/$"
+            params={{ _splat: "getting-started" }}
             className="px-5 py-2.5 rounded-lg bg-blue-500 text-white font-medium text-sm hover:bg-blue-600 transition-colors"
           >
             Get Started
