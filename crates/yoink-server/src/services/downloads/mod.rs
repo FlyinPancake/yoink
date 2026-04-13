@@ -456,6 +456,10 @@ pub(crate) async fn clear_completed_jobs(state: &AppState) -> AppResult<()> {
 pub(crate) async fn download_worker_loop(state: AppState) -> AppResult<()> {
     tracing::warn!("download worker started");
     loop {
+        if state.shutdown.is_cancelled() {
+            tracing::warn!("download worker shutting down");
+            return Ok(());
+        }
         let Some(job) = download_job::Entity::load()
             .with(db::album::Entity)
             .with((db::album::Entity, db::album_provider_link::Entity))
@@ -465,7 +469,10 @@ pub(crate) async fn download_worker_loop(state: AppState) -> AppResult<()> {
             .one(&state.db)
             .await?
         else {
-            state.download_notify.notified().await;
+            tokio::select! {
+                _ = state.download_notify.notified() => {}
+                _ = state.shutdown.cancelled() => return Ok(()),
+            }
             continue;
         };
 

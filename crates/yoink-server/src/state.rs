@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use migration::MigratorTrait;
 use sea_orm::DatabaseConnection;
 use tokio::sync::{Notify, broadcast};
+use tokio_util::sync::CancellationToken;
 
 use crate::app_config::AuthConfig;
 use crate::{auth::AuthService, db::quality::Quality, providers::registry::ProviderRegistry};
@@ -12,6 +13,7 @@ pub(crate) struct AppState {
     pub(crate) http: reqwest::Client,
     pub(crate) db: DatabaseConnection,
     pub(crate) download_notify: Arc<Notify>,
+    pub(crate) shutdown: CancellationToken,
     pub(crate) sse_tx: broadcast::Sender<()>,
     pub(crate) music_root: PathBuf,
     pub(crate) default_quality: Quality,
@@ -56,6 +58,7 @@ impl AppState {
             http: reqwest::Client::new(),
             db: conn,
             download_notify: Arc::new(Notify::new()),
+            shutdown: CancellationToken::new(),
             sse_tx,
             music_root,
             default_quality,
