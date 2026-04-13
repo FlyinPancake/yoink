@@ -21,6 +21,7 @@ mod util;
 use std::{sync::Arc, time::Duration};
 
 use axum::{middleware, routing::get};
+use tokio::task::JoinSet;
 use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
 use tower_http::trace::TraceLayer;
@@ -99,7 +100,7 @@ async fn main() {
     }
 
     // ── Background tasks ────────────────────────────────────────
-    spawn_background_tasks(&state);
+    let mut background_tasks = spawn_background_tasks(&state);
 
     // ── Axum app ────────────────────────────────────────────────
     let (router, openapi) = build_router(state.clone()).split_for_parts();
@@ -151,6 +152,8 @@ async fn main() {
         .await
         .expect("failed to bind to 0.0.0.0:3000");
 
+    let shutdown = shutdown_signal();
+
     info!(
         bind = "0.0.0.0:3000",
         database = %db_url,
@@ -164,8 +167,20 @@ async fn main() {
         listener,
         axum::ServiceExt::<axum::http::Request<axum::body::Body>>::into_make_service(app),
     )
+    .with_graceful_shutdown(async move {
+        shutdown.await;
+        info!("Shutdown signal received, shutting down server...");
+        state.shutdown.cancel();
+        state.download_notify.notify_waiters();
+    })
     .await
     .expect("server error");
+
+    while let Some(join_result) = background_tasks.join_next().await {
+        if let Err(err) = join_result {
+            error!(error = %err, "Background task encountered an error during shutdown");
+        }
+    }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -218,9 +233,10 @@ fn build_registry(app_config: &AppConfig) -> ProviderRegistry {
     registry
 }
 
-fn spawn_background_tasks(state: &AppState) {
+fn spawn_background_tasks(state: &AppState) -> JoinSet<()> {
+    let mut join_set = JoinSet::new();
     let worker_state = state.clone();
-    tokio::spawn(async move {
+    join_set.spawn(async move {
         loop {
             let worker_state = worker_state.clone();
             match download_worker_loop(worker_state).await {
@@ -229,22 +245,54 @@ fn spawn_background_tasks(state: &AppState) {
                     continue;
                 }
                 _ => {
-                    debug!("Download worker loop exited gracefully, restarting");
-                    continue;
+                    debug!("Download worker loop exited gracefully, exiting");
+                    break;
                 }
             }
         }
     });
 
     let reconcile_state = state.clone();
-    tokio::spawn(async move {
+    join_set.spawn(async move {
         let mut ticker = tokio::time::interval(Duration::from_secs(45));
-        ticker.tick().await;
         loop {
-            ticker.tick().await;
-            if let Err(err) = reconcile_library_files(&reconcile_state).await {
-                warn!(error = %err, "Periodic library reconciliation failed");
+            tokio::select! {
+                _ = ticker.tick() => {
+                    if let Err(err) = reconcile_library_files(&reconcile_state).await {
+                        warn!(error = %err, "Periodic library reconciliation failed");
+                    }
+                }
+                _ = reconcile_state.shutdown.cancelled() => break,
+
             }
         }
     });
+
+    join_set
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to listen for ctrl-c signal");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to listen for terminate signal")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = async {
+        std::future::pending::<()>().await;
+    };
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
