@@ -23,6 +23,7 @@ export const Route = createRootRoute({
       },
     ],
     links: [
+      { rel: "icon", href: "/yoink.svg", type: "image/svg+xml" },
       { rel: "stylesheet", href: appCss },
       {
         rel: "stylesheet",

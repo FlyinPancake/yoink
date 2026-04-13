@@ -8,3 +8,4 @@
 .env*
 !.env.example
 .ant-colony/
+.vercel
