@@ -1,0 +1,37 @@
+---
+title: Database
+description: Configure database connection settings and storage options.
+icon: Database
+---
+
+yoink uses [SeaORM](https://www.sea-ql.org/SeaORM/) as its Object-Relational Mapping (ORM) layer.
+This allows you to use either SQLite or PostgreSQL as your database backend.
+
+### Database Connection
+
+The database connection is configured via the `DATABASE_URL` environment variable.
+The format of the URL depends on the database you choose:
+
+- For SQLite:
+  ```
+  DATABASE_URL=sqlite://path/to/database.db
+  # By default:
+  DATABASE_URL=sqlite:/data/yoink.db?mode=rwc
+  ```
+- For PostgreSQL:
+
+  ```
+  DATABASE_URL=postgres://username:password@host:port/database_name
+  ```
+
+<Callout type="info">
+  If you want to learn more about the database connection URL format and
+  options, check out the [SeaORM
+  documentation](https://www.sea-ql.org/SeaORM/docs/install-and-config/connection/#connection-string).
+</Callout>
+
+### Updates
+
+yoink automatically runs database updates on startup.
+
+This happens on application startup, so you may experience a delay if you have a large database or weaker hardware.

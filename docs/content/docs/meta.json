@@ -1,12 +1,13 @@
 {
   "pages": [
     "index",
-    "---[Wrench]Setting up---",
+    "---[Wrench]Quick Reference---",
     "getting-started",
     "configuration",
     "providers",
     "---Using yoink---",
-    "guides",
+    "usage-guides",
+    "setup-guides",
     "---[Info]Project---",
     "development",
     "roadmap"
