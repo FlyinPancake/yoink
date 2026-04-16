@@ -46,40 +46,11 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }
 
-pub enum SettingsResult {
-    Bootstrapped(Model),
-    Existing(Model),
-}
-
-impl SettingsResult {
-    pub fn into_model(self) -> Model {
-        match self {
-            SettingsResult::Bootstrapped(model) => model,
-            SettingsResult::Existing(model) => model,
-        }
-    }
-}
-
 impl Entity {
-    pub async fn get_settings<C>(db: &C) -> Result<SettingsResult, DbErr>
+    pub async fn get<C>(db: &C) -> Result<Option<Model>, DbErr>
     where
         C: ConnectionTrait,
     {
-        // There should only ever be one row in this table, so we can just get the first one
-        match Self::find().one(db).await? {
-            Some(settings) => Ok(SettingsResult::Existing(settings)),
-            None => {
-                // If there are no settings, we need to create the default settings row
-                let new_settings = ActiveModel {
-                    admin_username: Set("admin".to_string()),
-                    admin_password_hash: Set(String::new()),
-                    must_change_password: Set(true),
-                    ..Default::default()
-                };
-                let new_settings = new_settings.insert(db).await?;
-                super::auth_session::Entity::delete_many().exec(db).await?;
-                Ok(SettingsResult::Bootstrapped(new_settings))
-            }
-        }
+        Self::find().one(db).await
     }
 }

@@ -138,4 +138,5 @@ async fn test_state_with_music_root_and_registry(
         },
     )
     .await
+    .expect("auth state should be ok")
 }

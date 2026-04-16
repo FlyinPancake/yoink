@@ -15,6 +15,7 @@ axum = { version = "0.8", features = ["form", "json", "macros"] }
 base64 = "0.22"
 chrono = { version = "0.4", features = ["clock", "serde"] }
 clap = { version = "4", features = ["derive", "env"] }
+color-eyre = "0.6.5"
 cookie = "0.18"
 dotenvy = "0.15.7"
 envious = "0.2.2"

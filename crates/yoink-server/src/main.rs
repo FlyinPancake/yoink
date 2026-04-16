@@ -63,11 +63,13 @@ use crate::{
 struct ApiDoc;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> color_eyre::Result<()> {
     dotenvy::dotenv().ok();
-    let app_config = AppConfig::from_env().unwrap_or_else(|err| {
-        panic!("Failed to parse configuration from environment: {err}");
-    });
+    let app_config = AppConfig::from_env()?;
+
+    //     .unwrap_or_else(|err| {
+    //     panic!("Failed to parse configuration from environment: {err}");
+    // });
 
     init_logging(&app_config.log_format);
 
@@ -94,7 +96,7 @@ async fn main() {
         registry,
         app_config.auth.clone(),
     )
-    .await;
+    .await?;
 
     if let Err(err) = reconcile_library_files(&state).await {
         warn!(error = %err, "Initial library reconciliation failed");
@@ -174,14 +176,15 @@ async fn main() {
         state.shutdown.cancel();
         state.download_notify.notify_waiters();
     })
-    .await
-    .expect("server error");
+    .await?;
 
     while let Some(join_result) = background_tasks.join_next().await {
         if let Err(err) = join_result {
             error!(error = %err, "Background task encountered an error during shutdown");
         }
     }
+
+    Ok(())
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
