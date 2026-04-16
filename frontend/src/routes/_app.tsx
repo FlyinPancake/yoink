@@ -5,13 +5,25 @@ import { Breadcrumbs } from "@/components/app-breadcrumbs";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { connectSSE, getCollections } from "@/lib/api";
-import { fetchClient } from "@/lib/api";
+import { queryKeys } from "@/lib/api/queries";
+import type { components } from "@/lib/api";
+
+type AuthStatus = components["schemas"]["AuthStatus"];
 
 export const Route = createFileRoute("/_app")({
-  beforeLoad: async ({ location }) => {
-    const { data, error } = await fetchClient.GET("/api/auth/status");
+  beforeLoad: async ({ context, location }) => {
+    let data: AuthStatus | undefined;
 
-    if (error || !data) {
+    try {
+      data = await context.queryClient.ensureQueryData(queryKeys.authStatus());
+    } catch {
+      throw redirect({
+        to: "/login",
+        search: { next: location.pathname },
+      });
+    }
+
+    if (!data) {
       throw redirect({
         to: "/login",
         search: { next: location.pathname },
