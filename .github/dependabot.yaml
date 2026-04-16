@@ -17,10 +17,10 @@ updates:
       day: monday
       time: "00:00"
       timezone: Europe/Budapest
-      groups:
-        "all dependencies":
-          patterns:
-            - "*"
+    groups:
+      "all dependencies":
+        patterns:
+          - "*"
 
   - package-ecosystem: bun
     directory: /frontend
