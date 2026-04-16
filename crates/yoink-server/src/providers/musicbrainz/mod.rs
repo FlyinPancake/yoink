@@ -400,7 +400,7 @@ impl MetadataProvider for MusicBrainzProvider {
                     .filter(|t| t.count.unwrap_or(0) > 0)
                     .map(|t| (t.count.unwrap_or(0), t.name))
                     .collect();
-                tag_pairs.sort_by(|a, b| b.0.cmp(&a.0));
+                tag_pairs.sort_by_key(|b| std::cmp::Reverse(b.0));
                 let tags: Vec<String> = tag_pairs.into_iter().take(5).map(|(_, n)| n).collect();
 
                 ProviderArtist {
