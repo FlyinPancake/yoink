@@ -1,0 +1,82 @@
+---
+title: "PostgreSQL"
+description: "Configure yoink to use PostgreSQL as the database backend."
+icon: Database
+---
+
+Due to implementation differences between SQLite and PostgreSQL there is no clear migration path for existing databases.
+If you want to switch from SQLite to PostgreSQL, you'll need to start with a fresh database and re-add your artists and import your library.
+
+### Setting Up yoink with Postgres
+
+<Steps>
+
+<Step>
+
+### Add a Postgres service to your deployment
+
+For Docker Compose it might look something like this:
+
+```yaml title="compose.yaml"
+services:
+  yoink: ...
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: yoink
+      POSTGRES_DB: yoink
+      POSTGRES_PASSWORD: ${YOINK_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+volumes:
+  postgres-data:
+  ...
+```
+
+</Step>
+
+<Step>
+### Configure the database password
+
+Set the `YOINK_DB_PASSWORD` environment variable to a strong password of your choice.
+
+This will be used by the Postgres service and yoink to authenticate.
+
+You might want to use `openssl rand -base64 32` to generate a secure random password.
+
+```bash title=".env"
+YOINK_DB_PASSWORD=your_strong_password_here
+```
+
+</Step>
+
+<Step>
+### Update yoink's database connection URL
+
+Set the `DATABASE_URL` environment variable to point to your Postgres instance. The format should be:
+
+```yaml title="compose.yaml"
+services:
+  yoink:
+    ...
+    environment:
+      DATABASE_URL: postgres://yoink:${YOINK_DB_PASSWORD}@postgres:5432/yoink
+      ...
+```
+
+</Step>
+
+</Steps>
+
+### Postgres version compatibility
+
+yoink is tested against Postgres 18, but should be compatible with any version that supports the features used by SeaORM.
+
+### Troubleshooting
+
+If you run into issues connecting to Postgres, check the following:
+
+- Ensure Postgres is running in the same docker network as yoink (if using Docker Compose, they should be by default).
+- Verify the `DATABASE_URL` is correctly formatted and matches your Postgres credentials.
+- Check the logs of both the yoink and Postgres containers for any error messages that might indicate connection issues.
+- Make sure the migrations have run successfully on startup, as yoink will attempt to create the necessary tables if they don't exist.

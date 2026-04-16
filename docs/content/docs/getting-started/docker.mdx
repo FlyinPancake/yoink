@@ -87,6 +87,18 @@ Visit [http://localhost:3000](http://localhost:3000) in your browser.
 If you have auth enabled (default), you'll be prompted to create an admin account on first visit. After that, log in with your new credentials.
 
 </Step>
+
+<Step>
+### Configure to production standards
+    
+The above configuration is suitable for getting your feet wet, but for a scalable, production-ready setup you'll want to consider a few things:
+
+1. The built-in authentication system is quite basic. It's recommended to put an authentication proxy like [Authentik](https://goauthentik.io/) or [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) in front of yoink for better security and flexibility.
+   You'll want to disable yoink's built-in auth with `AUTH_DISABLED: true` when using an external proxy.
+2. yoink uses an SQLite database by default, which is perfectly fine for most use-cases. However for very large libraries you might want to use an external Postgres database. This is supported but requires some manual configuration. See the [database configuration docs](/docs/configuration/database) for details.
+
+</Step>
+
 </Steps>
 
 ## Volumes
