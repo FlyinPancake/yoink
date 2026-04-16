@@ -1,0 +1,83 @@
+# yaml-language-server: $schema=https://www.schemastore.org/dependabot-2.0.json
+
+version: 2
+updates:
+  - package-ecosystem: rust-toolchain
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: monday
+      time: "00:00"
+      timezone: Europe/Budapest
+
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: monday
+      time: "00:00"
+      timezone: Europe/Budapest
+      groups:
+        "all dependencies":
+          patterns:
+            - "*"
+
+  - package-ecosystem: bun
+    directory: /frontend
+    schedule:
+      interval: "weekly"
+      day: monday
+      time: "00:00"
+      timezone: Europe/Budapest
+    groups:
+      "all dependencies":
+        patterns:
+          - "*"
+
+  - package-ecosystem: bun
+    directory: /docs
+    schedule:
+      interval: "weekly"
+      day: monday
+      time: "00:00"
+      timezone: Europe/Budapest
+    groups:
+      "all dependencies":
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: monday
+      time: "00:00"
+      timezone: Europe/Budapest
+    groups:
+      "all dependencies":
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: monday
+      time: "00:00"
+      timezone: Europe/Budapest
+    groups:
+      "all dependencies":
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: monday
+      time: "00:00"
+      timezone: Europe/Budapest
+    groups:
+      "all dependencies":
+        patterns:
+          - "*"
