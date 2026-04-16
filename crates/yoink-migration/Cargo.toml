@@ -1,8 +1,8 @@
 [package]
-edition      = "2024"
-name         = "migration"
-publish      = false
-rust-version = "1.85.0"
+edition           = "2024"
+name              = "migration"
+publish           = false
+rust-version      = "1.85.0"
 version.workspace = true
 
 [lib]
