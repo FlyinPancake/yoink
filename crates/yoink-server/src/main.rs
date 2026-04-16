@@ -63,6 +63,7 @@ struct ApiDoc;
 
 #[tokio::main]
 async fn main() {
+    dotenvy::dotenv().ok();
     let app_config = AppConfig::from_env().unwrap_or_else(|err| {
         panic!("Failed to parse configuration from environment: {err}");
     });

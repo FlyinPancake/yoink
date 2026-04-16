@@ -16,6 +16,7 @@ base64 = "0.22"
 chrono = { version = "0.4", features = ["clock", "serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 cookie = "0.18"
+dotenvy = "0.15.7"
 envious = "0.2.2"
 governor = "0.10"
 lofty = "0.23"

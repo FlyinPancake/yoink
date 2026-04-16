@@ -5021,6 +5021,7 @@ dependencies = [
  "chrono",
  "clap",
  "cookie",
+ "dotenvy",
  "envious",
  "governor",
  "lofty",
