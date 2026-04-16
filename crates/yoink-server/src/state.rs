@@ -6,6 +6,7 @@ use tokio::sync::{Notify, broadcast};
 use tokio_util::sync::CancellationToken;
 
 use crate::app_config::AuthConfig;
+use crate::error::AppResult;
 use crate::{auth::AuthService, db::quality::Quality, providers::registry::ProviderRegistry};
 
 #[derive(Clone)]
@@ -32,11 +33,9 @@ impl AppState {
         db_url: &str,
         registry: ProviderRegistry,
         auth_config: AuthConfig,
-    ) -> Self {
+    ) -> AppResult<Self> {
         let db_conn_opts = sea_orm::ConnectOptions::new(db_url);
-        let conn = sea_orm::Database::connect(db_conn_opts)
-            .await
-            .expect("failed to connect to database");
+        let conn = sea_orm::Database::connect(db_conn_opts).await?;
 
         // TODO: remove this once proper migrations are in place
         // conn.get_schema_registry("yoink_server::db::entities::*")
@@ -44,17 +43,13 @@ impl AppState {
         //     .await
         //     .expect("failed to sync database schema");
 
-        migration::Migrator::up(&conn, None)
-            .await
-            .expect("failed to run database migrations");
+        migration::Migrator::up(&conn, None).await?;
 
-        let auth = AuthService::new(auth_config, conn.clone())
-            .await
-            .expect("failed to initialize authentication");
+        let auth = AuthService::new(auth_config, conn.clone()).await?;
 
         let (sse_tx, _) = broadcast::channel(64);
 
-        Self {
+        Ok(Self {
             http: reqwest::Client::new(),
             db: conn,
             download_notify: Arc::new(Notify::new()),
@@ -66,7 +61,7 @@ impl AppState {
             download_max_parallel_tracks,
             registry: Arc::new(registry),
             auth: Arc::new(auth),
-        }
+        })
     }
 
     /// Signal all SSE clients that state has changed.

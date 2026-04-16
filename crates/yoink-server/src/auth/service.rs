@@ -13,11 +13,9 @@ use tracing::warn;
 
 use crate::{
     app_config::AuthConfig,
-    db::{self, auth_settings::SettingsResult},
+    db,
     error::{AppError, AppResult},
 };
-
-const DEFAULT_BOOTSTRAP_USERNAME: &str = "admin";
 
 #[derive(Debug, Clone)]
 pub(crate) struct AuthenticatedSession {
@@ -37,6 +35,8 @@ pub(crate) struct AuthService {
     session_secret: String,
     db: DatabaseConnection,
 }
+
+const DEFAULT_ADMIN_USERNAME: &str = "admin";
 
 impl AuthService {
     pub(crate) async fn new(config: AuthConfig, db: DatabaseConnection) -> AppResult<Self> {
@@ -72,7 +72,9 @@ impl AuthService {
 
         db::auth_session::Entity::delete_expired_sessions(&self.db).await?;
 
-        let settings = self.load_settings().await?;
+        let Some(settings) = self.load_settings().await? else {
+            return Ok(None);
+        };
 
         if settings.admin_username != username.trim() {
             return Ok(None);
@@ -95,7 +97,7 @@ impl AuthService {
     ) -> AppResult<Option<AuthenticatedSession>> {
         if !self.enabled {
             return Ok(Some(AuthenticatedSession {
-                username: DEFAULT_BOOTSTRAP_USERNAME.to_string(),
+                username: DEFAULT_ADMIN_USERNAME.to_string(),
                 must_change_password: false,
             }));
         }
@@ -107,7 +109,9 @@ impl AuthService {
 
         db::auth_session::Entity::delete_expired_sessions(&self.db).await?;
 
-        let settings = self.load_settings().await?;
+        let Some(settings) = self.load_settings().await? else {
+            return Ok(None);
+        };
 
         let Some(session) =
             db::auth_session::Entity::find_by_session_token_hash(&self.db, &hash_value(&raw_token))
@@ -154,7 +158,12 @@ impl AuthService {
         username: &str,
         new_password: &str,
     ) -> AppResult<LoginOutcome> {
-        let settings = self.load_settings().await?;
+        let Some(settings) = self.load_settings().await? else {
+            return Err(AppError::unavailable(
+                "auth",
+                "Failed to load authentication settings",
+            ));
+        };
 
         let trimmed_username = username.trim();
         if trimmed_username.is_empty() {
@@ -198,21 +207,36 @@ impl AuthService {
     }
 
     pub(crate) async fn verify_current_password(&self, password: &str) -> AppResult<bool> {
-        let settings = self.load_settings().await?;
+        let Some(settings) = self.load_settings().await? else {
+            return Ok(false);
+        };
         self.verify_password(password, &settings.admin_password_hash)
+    }
+
+    async fn load_settings(&self) -> AppResult<Option<db::auth_settings::Model>> {
+        let settings = db::auth_settings::Entity::get(&self.db).await?;
+        Ok(settings)
     }
 
     async fn bootstrap_if_needed(&self, config: &AuthConfig) -> AppResult<()> {
         let tx = self.db.begin().await?;
-        let settings = db::auth_settings::Entity::get_settings(&tx).await?;
+        let settings = db::auth_settings::Entity::get(&tx).await?;
         let settings = match settings {
-            SettingsResult::Existing(model) => model,
-            SettingsResult::Bootstrapped(model) => {
-                let mut model = model.into_active_model();
-                if let Some(user) = config.init_admin_username.as_deref() {
-                    model.admin_username = Set(user.to_string());
-                }
-                model.save(&tx).await?.try_into_model()?
+            Some(model) => model,
+            None => {
+                let model = db::auth_settings::ActiveModel {
+                    admin_username: Set(config
+                        .init_admin_username
+                        .as_ref()
+                        .map(|s| s.trim().to_string())
+                        .unwrap_or_else(|| DEFAULT_ADMIN_USERNAME.to_string())),
+                    admin_password_hash: Set(String::new()),
+                    must_change_password: Set(true),
+                    ..Default::default()
+                };
+                let model = model.insert(&tx).await?.try_into_model()?;
+                db::auth_session::Entity::delete_many().exec(&tx).await?;
+                model
             }
         };
 
@@ -221,7 +245,13 @@ impl AuthService {
             if let Some(password) = config.init_admin_password.as_deref() {
                 settings.admin_password_hash = Set(hash_password(password)?);
             } else {
-                settings.admin_password_hash = Set(hash_password(&random_token(18))?);
+                let new_password = random_token(18);
+                warn!(
+                    ?new_password,
+                    "Password Must be changed. A temporary password has been set"
+                );
+
+                settings.admin_password_hash = Set(hash_password(&new_password)?);
             }
             settings.save(&tx).await?;
             tx.commit().await?;
@@ -232,11 +262,6 @@ impl AuthService {
         tx.commit().await?;
 
         Ok(())
-    }
-
-    async fn load_settings(&self) -> AppResult<db::auth_settings::Model> {
-        let settings = db::auth_settings::Entity::get_settings(&self.db).await?;
-        Ok(settings.into_model())
     }
 
     fn sign_cookie_value(&self, raw_token: &str) -> String {
