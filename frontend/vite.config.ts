@@ -6,14 +6,9 @@ import tailwindcss from "@tailwindcss/vite";
 
 const config = defineConfig({
   resolve: {
-    tsconfigPaths: true
+    tsconfigPaths: true,
   },
-  plugins: [
-    devtools(),
-    tanstackRouter(),
-    tailwindcss(),
-    viteReact(),
-  ],
+  plugins: [devtools(), tanstackRouter(), tailwindcss(), viteReact()],
   server: {
     proxy: {
       "/api": "http://localhost:3000",
