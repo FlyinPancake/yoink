@@ -39,90 +39,9 @@ Other features and their status can be found in the [roadmap](ROADMAP.md).
 | **MusicBrainz** | Metadata             | Open music database for enrichment                           |
 | **SoulSeek**    | P2P / Download       | Via [slskd](https://github.com/slskd/slskd)                  |
 
-## Installation
+## Usage
 
-### Docker Compose (Recommended)
-
-Create a `compose.yaml` (or use the [example](compose.yaml) included in the repo) and run:
-
-```bash
-docker compose up -d
-```
-
-The web UI will be available at **[http://localhost:3000](http://localhost:3000)**. Data is persisted in a named volume and your music library is mounted at `/music`.
-
-See the [compose.yaml](compose.yaml) for all available environment variables and optional slskd integration.
-
-### From Source
-
-#### Prerequisites
-
-- [Rust](https://rustup.rs/) (stable toolchain)
-- [bun](https://bun.sh/) (installed through mise)
-- [mise](https://mise.jdx.dev/) (manages sqlx-cli automatically)
-
-#### Setup
-
-```bash
-git clone https://github.com/FlyinPancake/yoink.git
-cd yoink
-mise install # this installs bun which is required for development and running the app from source
-cd frontend && bun install # installs frontend dependencies
-```
-
-Copy the example environment file and configure your providers:
-
-```bash
-cp .env.example .env
-```
-
-Then start yoink dev server:
-
-```bash
-mise run dev
-```
-
-The web UI will be available at **[http://localhost:5173](http://localhost:5173)**.
-
-If you want to run the release version you need to build the frontend first
-
-```bash
-mise build-frontend
-mise run-server --release
-```
-
-The web UI will be available at **[http://localhost:3000](http://localhost:3000)**.
-
-### SoulSeek / slskd
-
-To use SoulSeek as a download source, you'll need a running [slskd](https://github.com/slskd/slskd) instance. A convenience compose file is included:
-
-```bash
-docker compose -f compose.dev.yaml up -d
-```
-
-Then enable SoulSeek in your `.env`:
-
-```env
-SOULSEEK_ENABLED=true
-SLSKD_BASE_URL=http://127.0.0.1:5030
-```
-
-## Configuration
-
-All configuration is done via environment variables. See [`.env.example`](.env.example) for the full list. Here are the highlights:
-
-| Variable                       | Description                       | Default    |
-| ------------------------------ | --------------------------------- | ---------- |
-| `MUSIC_ROOT`                   | Where tagged downloads are saved  | `./music`  |
-| `DEFAULT_QUALITY`              | Preferred audio quality           | `LOSSLESS` |
-| `DOWNLOAD_LYRICS`              | Auto-fetch lyrics from LRCLib     | `false`    |
-| `DOWNLOAD_MAX_PARALLEL_TRACKS` | Concurrent track downloads (1–16) | `1`        |
-| `TIDAL_ENABLED`                | Enable Tidal provider             | `true`     |
-| `DEEZER_ENABLED`               | Enable Deezer provider            | `true`     |
-| `MUSICBRAINZ_ENABLED`          | Enable MusicBrainz provider       | `true`     |
-| `TIDAL_API_BASE_URL`           | hifi-api URL                      | —          |
-| `SOULSEEK_ENABLED`             | Enable SoulSeek via slskd         | `false`    |
+You can learn how to set up yoink for yourself in the documentation at <https://yoink-docs.vercel.app>.
 
 ## Built With
 
