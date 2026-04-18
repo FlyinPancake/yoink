@@ -19,6 +19,10 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: flyinpancake/yoink
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     name: Build Docker Image (${{ matrix.platform }})

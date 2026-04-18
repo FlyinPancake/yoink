@@ -8,6 +8,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   bun:
     runs-on: ubuntu-latest
@@ -36,6 +39,8 @@ jobs:
   bun-build:
     runs-on: ubuntu-latest
     name: Bun Build
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
