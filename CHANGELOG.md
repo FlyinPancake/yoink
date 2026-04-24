@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/FlyinPancake/yoink/compare/v0.1.5...v0.1.6) (2026-04-24)
+
+
+### Bug Fixes
+
+* update instances list provider ([eacee90](https://github.com/FlyinPancake/yoink/commit/eacee90ec9f35419fc4d5d615cc7676f832435ad))
+
 ## [0.1.5](https://github.com/FlyinPancake/yoink/compare/v0.1.4...v0.1.5) (2026-04-20)
 
 
