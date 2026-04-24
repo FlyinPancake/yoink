@@ -19,10 +19,7 @@ use super::models::{DownInstance, FeedInstance, RankedInstance, UptimeFeed};
 const INSTANCE_CACHE_TTL: Duration = Duration::from_secs(300);
 
 /// Known uptime feed URLs polled to discover hifi-api instances.
-pub(crate) const UPTIME_FEEDS: [&str; 2] = [
-    "https://tidal-uptime.jiffy-puffs-1j.workers.dev/",
-    "https://tidal-uptime.props-76styles.workers.dev/",
-];
+pub(crate) const UPTIME_FEEDS: [&str; 1] = ["https://tidal-uptime.geeked.wtf/"];
 
 // ── Instance cache ──────────────────────────────────────────────────
 
