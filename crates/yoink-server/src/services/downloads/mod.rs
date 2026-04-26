@@ -1,6 +1,6 @@
-mod io;
-mod lyrics;
-mod metadata;
+pub(crate) mod io;
+pub(crate) mod lyrics;
+pub(crate) mod metadata;
 mod worker;
 
 pub(crate) use io::sanitize_path_component;
@@ -19,10 +19,7 @@ use uuid::Uuid;
 
 use crate::{
     api::{DownloadJob, DownloadJobKind},
-    db::{
-        self, download_job, download_status::DownloadStatus, provider::Provider,
-        wanted_status::WantedStatus,
-    },
+    db::{self, download_status::DownloadStatus, provider::Provider, wanted_status::WantedStatus},
     error::{AppError, AppResult},
     services::downloads::worker::{download_album_job, download_track_job},
     state::AppState,

@@ -1,6 +1,7 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use chrono::{Datelike, NaiveDate};
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt},
@@ -200,6 +201,25 @@ pub(crate) fn extract_year(release_date: &str) -> String {
     } else {
         String::new()
     }
+}
+
+pub fn get_artist_dir(root_dir: &Path, aritst_name: &str) -> PathBuf {
+    root_dir.join(sanitize_path_component(aritst_name))
+}
+
+pub fn get_album_dir(
+    root_dir: &Path,
+    artist_name: &str,
+    album_title: &str,
+    album_date: Option<NaiveDate>,
+) -> PathBuf {
+    let artist_dir = get_artist_dir(root_dir, artist_name);
+    let release_year = album_date
+        .map(|d| d.year().to_string())
+        .unwrap_or("Unknown".to_string());
+    artist_dir.join(sanitize_path_component(&format!(
+        "{album_title} ({release_year})"
+    )))
 }
 
 #[cfg(test)]

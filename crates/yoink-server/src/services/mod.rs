@@ -2,6 +2,7 @@ pub(crate) mod album;
 pub(crate) mod artist;
 pub(crate) mod downloads;
 pub(crate) mod helpers;
+pub(crate) mod jobs;
 pub(crate) mod library;
 pub(crate) mod matching;
 pub(crate) mod search;

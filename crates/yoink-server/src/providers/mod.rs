@@ -393,6 +393,7 @@ pub(crate) trait DownloadSource: Send + Sync {
         true
     }
 
+    // TODO: separate resolve from DL
     /// Resolve playback info (download URL / segments) for a track.
     async fn resolve_playback(
         &self,
@@ -400,6 +401,25 @@ pub(crate) trait DownloadSource: Send + Sync {
         quality: &Quality,
         context: Option<&DownloadTrackContext>,
     ) -> Result<PlaybackInfo, ProviderError>;
+
+    // TODO: reimplement for all providers
+    async fn resolve_by_id(
+        &self,
+        external_track_ids: &[String],
+        quality: &Quality,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        // TODO: handle multiple IDs (for providers that have different IDs for different qualities)
+        self.resolve_playback(&external_track_ids[0], quality, None)
+            .await
+    }
+
+    async fn resolve_by_metadata(
+        &self,
+        metadata: &DownloadTrackContext,
+        quality: &Quality,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        self.resolve_playback("", quality, Some(metadata)).await
+    }
 }
 
 /// Build an image proxy URL for a given provider and image reference.
