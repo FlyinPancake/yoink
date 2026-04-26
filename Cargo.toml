@@ -23,7 +23,7 @@ governor = "0.10"
 lofty = "0.24"
 lrclib-api-rs = "0.3"
 mime_guess = "2"
-musicbrainz_rs = { version = "0.12", features = [
+musicbrainz_rs = { version = "0.13", features = [
   "rate_limit",
   "async",
   "rustls",
