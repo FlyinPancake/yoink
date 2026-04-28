@@ -29,7 +29,7 @@ use crate::{
 use chrono::Utc;
 use sea_orm::{
     ColumnTrait, EntityLoaderTrait, EntityTrait, ExprTrait, IntoActiveModel, QueryFilter,
-    QuerySelect, sea_query,
+    QueryOrder, QuerySelect, sea_query,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{io, task::JoinSet};
@@ -644,6 +644,7 @@ pub(crate) async fn download_worker(state: AppState) -> AppResult<()> {
                 sea_query::Expr::col(job::Column::Attempts)
                     .lt(sea_query::Expr::col(job::Column::MaxAttempts)),
             )
+            .order_by_asc(job::Column::CreatedAt)
             .one(&state.db)
             .await?
         else {
