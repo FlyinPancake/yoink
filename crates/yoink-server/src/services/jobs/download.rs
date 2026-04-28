@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -7,7 +7,7 @@ use std::{
 use crate::{
     api::{Quality, WantedStatus},
     db::{
-        album, album_provider_link, artist, job, job_kind::JobKind, job_status::JobStatus,
+        self, album, album_provider_link, artist, job, job_kind::JobKind, job_status::JobStatus,
         provider::Provider, track, track_artist, track_provider_link,
     },
     error::{AppError, AppResult},
@@ -21,18 +21,20 @@ use crate::{
             metadata::build_full_artist_string,
             write_audio_metadata,
         },
-        jobs::{Job, metadata::fetch_album_cover_art},
+        jobs::{Job, enqueue_job, metadata::fetch_album_cover_art},
     },
     state::AppState,
     util::provider_priority,
 };
 use chrono::Utc;
 use sea_orm::{
-    ColumnTrait, EntityLoaderTrait, EntityTrait, ExprTrait, IntoActiveModel, QueryFilter, sea_query,
+    ColumnTrait, EntityLoaderTrait, EntityTrait, ExprTrait, IntoActiveModel, QueryFilter,
+    QuerySelect, sea_query,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{io, task::JoinSet};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub(crate) struct DownloadAlbumJobPayload {
@@ -82,6 +84,101 @@ impl PlannedTrackDownload {
             PlannedTrackDownload::Metadata { quality, .. } => *quality,
         }
     }
+}
+
+pub(crate) async fn enqueue_download_album_job(
+    state: &AppState,
+    album_id: Uuid,
+) -> AppResult<job::Model> {
+    let providers: HashSet<_> = db::album_provider_link::Entity::find()
+        .select_only()
+        .column(db::album_provider_link::Column::Provider)
+        .filter(db::album_provider_link::Column::AlbumId.eq(album_id))
+        .distinct()
+        .all(&state.db)
+        .await?
+        .into_iter()
+        .map(|r| r.provider)
+        .collect();
+
+    let mut providers = state
+        .registry
+        .download_sources()
+        .iter()
+        .filter_map(|s| {
+            let p = s.id();
+            if providers.contains(&p) || !s.requires_linked_provider() {
+                Some(p)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    providers.sort_by_key(|p| provider_priority(*p));
+
+    let provider = providers
+        .first()
+        .copied()
+        .ok_or(AppError::download("provider", "no providers available"))?;
+
+    let payload = DownloadAlbumJobPayload { album_id, provider };
+    let job = Job::DownloadAlbum { payload };
+    enqueue_job(state, job).await
+}
+
+pub(crate) async fn enqueue_download_track_job(
+    state: &AppState,
+    track_id: Uuid,
+) -> AppResult<job::Model> {
+    let providers: HashSet<_> = db::track_provider_link::Entity::find()
+        .select_only()
+        .column(db::track_provider_link::Column::Provider)
+        .distinct()
+        .filter(db::track_provider_link::Column::TrackId.eq(track_id))
+        .all(&state.db)
+        .await?
+        .into_iter()
+        .map(|m| m.provider)
+        .collect();
+
+    let mut providers: Vec<_> = state
+        .registry
+        .download_sources()
+        .iter()
+        .filter_map(|s| {
+            let p = s.id();
+            if providers.contains(&p) || !s.requires_linked_provider() {
+                Some(p)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    providers.sort_by_key(|p| provider_priority(*p));
+
+    let provider = providers
+        .first()
+        .copied()
+        .expect("at least one provider expected");
+
+    let payload = DownloadTrackJobPayload { track_id, provider };
+    let job = Job::DownloadTrack { payload };
+    enqueue_job(state, job).await
+}
+
+pub(crate) async fn retry_album_download(state: &AppState, album_id: Uuid) -> AppResult<()> {
+    // delete DL jobs for the album
+    job::Entity::delete_many()
+        .filter(job::Column::JobKind.eq(JobKind::DownloadAlbum))
+        .filter(job::Column::DeduplicationKey.contains(format!("album:{}", album_id)))
+        .exec(&state.db)
+        .await?;
+
+    // enqueue a new DL job for the album
+    enqueue_download_album_job(state, album_id).await?;
+    Ok(())
 }
 
 async fn process_album_download_job(state: AppState, job: &mut job::Model) -> AppResult<()> {

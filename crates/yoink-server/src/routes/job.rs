@@ -53,10 +53,9 @@ async fn list_jobs(State(state): State<AppState>) -> ApiResult<Vec<JobResponse>>
 )]
 /// Cancel Job
 async fn cancel_job(State(state): State<AppState>, Path(job_id): Path<Uuid>) -> ApiStatusResult {
-    // FIXME: implement cancel job
-    // crate::services::downloads::cancel_job(&state, job_id)
-    //     .await
-    //     .map_err(app_error_response)?;
+    crate::services::jobs::cancel_job(&state, job_id)
+        .await
+        .map_err(app_error_response)?;
     Ok(StatusCode::NO_CONTENT)
 }
 

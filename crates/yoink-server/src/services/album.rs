@@ -5,7 +5,7 @@ use crate::{
         wanted_status::WantedStatus,
     },
     error::{AppError, AppResult},
-    services::{self, jobs::Job},
+    services,
     state::AppState,
 };
 use sea_orm::{
@@ -165,7 +165,7 @@ pub(crate) async fn toggle_album_monitor(
     info!(%album_id, monitored, "Toggled album monitored status, updated {} tracks", result.rows_affected);
 
     if monitored {
-        services::jobs::enqueue_download_album_job(state, album_id).await?;
+        services::jobs::download::enqueue_download_album_job(state, album_id).await?;
     }
 
     state.notify_sse();

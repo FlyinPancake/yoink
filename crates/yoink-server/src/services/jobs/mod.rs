@@ -1,16 +1,17 @@
 pub mod download;
 pub mod metadata;
+
 use sea_orm::{
     ActiveEnum, ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait,
-    FromJsonQueryResult, QueryFilter,
+    FromJsonQueryResult, IntoActiveModel, QueryFilter,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    db::{job, job_kind::JobKind, job_status::JobStatus, provider::Provider},
-    error::AppResult,
+    db::{job, job_status::JobStatus},
+    error::{AppError, AppResult},
     state::AppState,
 };
 
@@ -68,24 +69,49 @@ pub(crate) async fn list_jobs(db: &DatabaseConnection) -> AppResult<Vec<job::Mod
     Ok(jobs)
 }
 
-pub(crate) async fn list_jobs_for_album(
-    db: &DatabaseConnection,
-    album_id: Uuid,
-) -> AppResult<Vec<job::Model>> {
-    let jobs = job::Entity::find()
-        .filter(job::Column::DeduplicationKey.contains(format!("album:{}", album_id)))
-        .all(db)
-        .await?;
-
-    Ok(jobs)
-}
-
 pub(crate) async fn clear_completed_jobs(db: &DatabaseConnection) -> AppResult<()> {
     job::Entity::delete_many()
         .filter(job::Column::Status.eq(JobStatus::Succeeded))
         .exec(db)
         .await?;
     Ok(())
+}
+
+pub(crate) async fn cancel_job(state: &AppState, job_id: Uuid) -> AppResult<()> {
+    let job = job::Entity::find_by_id(job_id)
+        .one(&state.db)
+        .await?
+        .ok_or(AppError::not_found("job", Some(job_id)))?;
+
+    match job.status {
+        JobStatus::Failed | JobStatus::Queued => {
+            job.into_ex()
+                .into_active_model()
+                .set_status(JobStatus::Cancelled)
+                .update(&state.db)
+                .await?;
+        }
+        _ => {
+            return Err(AppError::validation(
+                Some("job"),
+                format!("cannot cancel a job in this status: {:?}", job.status),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn list_jobs_for_album<C>(db: &C, album_id: Uuid) -> AppResult<Vec<job::Model>>
+where
+    C: sea_orm::ConnectionTrait,
+{
+    let jobs = job::Entity::find()
+        .filter(job::Column::DeduplicationKey.contains(format!("album:{}", album_id)))
+        .all(db)
+        .await?;
+
+    Ok(jobs)
 }
 
 pub(crate) async fn clear_completed_album_jobs(
@@ -100,45 +126,11 @@ pub(crate) async fn clear_completed_album_jobs(
     Ok(())
 }
 
-// TODO implement this function to cancel any pending jobs related to the album and its tracks when the album is unmonitored
-// fail on any job that is currently running and cannot be cancelled
 pub(crate) async fn prepare_album_for_unmonitor(state: &AppState, album_id: Uuid) -> AppResult<()> {
     tracing::warn!("prepare_album_for_unmonitor is not implemented yet");
-    Ok(())
-}
-
-pub(crate) async fn enqueue_download_album_job(
-    state: &AppState,
-    album_id: Uuid,
-) -> AppResult<job::Model> {
-    // FIXME: hardcoded provider, should be fetched from the album record
-    let payload = download::DownloadAlbumJobPayload {
-        album_id,
-        provider: crate::db::provider::Provider::Tidal,
-    };
-    let job = Job::DownloadAlbum { payload };
-    enqueue_job(state, job).await
-}
-
-pub(crate) async fn enqueue_download_track_job(
-    state: &AppState,
-    track_id: Uuid,
-    provider: Provider,
-) -> AppResult<job::Model> {
-    let payload = download::DownloadTrackJobPayload { track_id, provider };
-    let job = Job::DownloadTrack { payload };
-    enqueue_job(state, job).await
-}
-
-pub(crate) async fn retry_album_download(state: &AppState, album_id: Uuid) -> AppResult<()> {
-    // delete DL jobs for the album
-    job::Entity::delete_many()
-        .filter(job::Column::JobKind.eq(JobKind::DownloadAlbum))
-        .filter(job::Column::DeduplicationKey.contains(format!("album:{}", album_id)))
-        .exec(&state.db)
-        .await?;
-
-    // enqueue a new DL job for the album
-    enqueue_download_album_job(state, album_id).await?;
+    let jobs = list_jobs_for_album(&state.db, album_id).await?;
+    for job in jobs {
+        cancel_job(state, job.id).await?;
+    }
     Ok(())
 }

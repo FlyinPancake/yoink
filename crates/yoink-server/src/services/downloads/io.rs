@@ -105,18 +105,6 @@ async fn download_dash_segments_to_file(
     Ok(())
 }
 
-pub(crate) async fn has_flac_stream_marker(path: &Path) -> AppResult<bool> {
-    let mut file = fs::File::open(path)
-        .await
-        .map_err(|err| AppError::filesystem("open file", path.display().to_string(), err))?;
-    let mut header = [0u8; 4];
-    let read = file
-        .read(&mut header)
-        .await
-        .map_err(|err| AppError::filesystem("read header", path.display().to_string(), err))?;
-    Ok(read == 4 && header == *b"fLaC")
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaContainer {
     Flac,
