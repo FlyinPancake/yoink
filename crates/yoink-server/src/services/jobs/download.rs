@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -26,17 +26,21 @@ use crate::{
     state::AppState,
     util::provider_priority,
 };
-use sea_orm::{ColumnTrait, EntityLoaderTrait, EntityTrait, IntoActiveModel, QueryFilter};
+use chrono::Utc;
+use sea_orm::{
+    ColumnTrait, EntityLoaderTrait, EntityTrait, ExprTrait, IntoActiveModel, QueryFilter, sea_query,
+};
 use serde::{Deserialize, Serialize};
-use tokio::task::JoinSet;
+use tokio::{io, task::JoinSet};
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub(crate) struct DownloadAlbumJobPayload {
     pub album_id: uuid::Uuid,
     pub provider: Provider,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub(crate) struct DownloadTrackJobPayload {
     pub track_id: uuid::Uuid,
     pub provider: Provider,
@@ -46,6 +50,11 @@ fn download_jobs() -> [JobKind; 2] {
     [JobKind::DownloadAlbum, JobKind::DownloadTrack]
 }
 
+fn ready_jobs() -> [JobStatus; 2] {
+    [JobStatus::Queued, JobStatus::Failed]
+}
+
+#[derive(Debug, Clone)]
 enum PlannedTrackDownload {
     Id {
         track: track::ModelEx,
@@ -91,6 +100,7 @@ async fn process_album_download_job(state: AppState, job: &mut job::Model) -> Ap
     let job = job
         .set_status(JobStatus::Running)
         .set_attempts(attempt)
+        .set_started_at(Utc::now())
         .update(&state.db)
         .await?;
 
@@ -148,9 +158,19 @@ async fn process_album_download_job(state: AppState, job: &mut job::Model) -> Ap
         album.release_date,
     );
 
+    tokio::fs::create_dir_all(&album_dir).await?;
+
     let cover_art_jpeg = fetch_album_cover_art(&state, &album).await;
 
-    let mut join_set = enqueue_tracks(state.clone(), dl_provider, planned_tracks).await?;
+    let temp_dir = tempfile::tempdir()?;
+
+    let mut join_set = enqueue_tracks(
+        state.clone(),
+        dl_provider,
+        temp_dir.path().to_path_buf(),
+        dbg!(planned_tracks),
+    )
+    .await?;
 
     let total_tracks = album.tracks.len() as f32;
     let mut completed_tracks = 0 as f32;
@@ -284,11 +304,20 @@ async fn process_album_download_job(state: AppState, job: &mut job::Model) -> Ap
         );
     }
 
+    drop(temp_dir);
+
+    album
+        .into_active_model()
+        .set_wanted_status(WantedStatus::Acquired)
+        .update(&state.db)
+        .await?;
+    state.notify_sse();
+
     Ok(())
 }
 
 async fn move_downloaded_track(
-    album_dir: &PathBuf,
+    album_dir: &Path,
     track: &track::ModelEx,
     temp_path: PathBuf,
     quality: Quality,
@@ -325,28 +354,32 @@ async fn move_downloaded_track(
         format!("{prefix}{track_number:02} - {title}.{file_ext}")
     };
     let full_path = album_dir.join(file_name);
-    tokio::fs::rename(&temp_path, &full_path)
-        .await
-        .map_err(|err| {
-            AppError::filesystem(
+    match tokio::fs::rename(&temp_path, &full_path).await {
+        Ok(_) => {}
+        Err(err) if matches!(err.kind(), io::ErrorKind::CrossesDevices) => {
+            tokio::fs::copy(&temp_path, &full_path).await?;
+        }
+        Err(err) => {
+            return Err(AppError::filesystem(
                 "move downloaded track to final location",
                 format!("{} to {}", temp_path.display(), full_path.display()),
                 err,
-            )
-        })?;
+            ));
+        }
+    };
     Ok(full_path)
 }
 
 async fn enqueue_tracks(
     state: AppState,
     dl_provider: Arc<dyn DownloadSource>,
+    temp_dir_path: PathBuf,
     planned_tracks: VecDeque<PlannedTrackDownload>,
 ) -> Result<JoinSet<AppResult<(track::ModelEx, PathBuf, Quality)>>, AppError> {
     let mut join_set = tokio::task::JoinSet::new();
     let semaphore = Arc::new(tokio::sync::Semaphore::new(
         state.download_max_parallel_tracks.max(1),
     ));
-    let temp_dir = tempfile::tempdir()?;
     for track in planned_tracks {
         let permit = semaphore
             .clone()
@@ -354,11 +387,12 @@ async fn enqueue_tracks(
             .await
             .expect("aquire DL permit shouldn't fail");
         let dl_provider = dl_provider.clone();
-        let temp_dir = temp_dir.path().to_path_buf();
+        let temp_dir_path = temp_dir_path.clone();
+
         let state = state.clone();
 
         join_set.spawn(async move {
-            let temp_path = temp_dir.join(format!("{}.part", track.track().title));
+            let temp_path = temp_dir_path.join(format!("{}.part", track.track().title));
             let quality = track.quality();
             let (track_model, pb_info) = match track {
                 PlannedTrackDownload::Id {
@@ -508,6 +542,11 @@ pub(crate) async fn download_worker(state: AppState) -> AppResult<()> {
         // fetch job
         let Some(mut job) = job::Entity::find()
             .filter(job::Column::JobKind.is_in(download_jobs()))
+            .filter(job::Column::Status.is_in(ready_jobs()))
+            .filter(
+                sea_query::Expr::col(job::Column::Attempts)
+                    .lt(sea_query::Expr::col(job::Column::MaxAttempts)),
+            )
             .one(&state.db)
             .await?
         else {
@@ -529,15 +568,23 @@ pub(crate) async fn download_worker(state: AppState) -> AppResult<()> {
             }
         };
 
-        match job_handle.await {
+        let job = match job_handle.await {
             Ok(()) => {
                 tracing::info!("Job {} completed successfully", job.id);
-                // TODO update job status to completed
+                job.into_active_model()
+                    .into_ex()
+                    .set_status(JobStatus::Succeeded)
             }
             Err(err) => {
                 tracing::error!(error = %err, "Job {} failed with error", job.id);
-                // TODO update job status to failed, increment attempts, set error message
+                // TODO increment attempts instead of at the start of the job
+                job.into_active_model()
+                    .into_ex()
+                    .set_status(JobStatus::Failed)
+                    .set_error_message(format!("{err}"))
             }
-        }
+        };
+
+        job.set_finished_at(Utc::now()).update(&state.db).await?;
     }
 }

@@ -1,11 +1,11 @@
 use crate::{
-    api::{Album, DownloadJob, MonitoredArtist, ProviderLink, TrackInfo},
+    api::{Album, JobResponse, MonitoredArtist, ProviderLink, TrackInfo},
     db::{
         self, album, album_artist, provider::Provider, quality::Quality,
         wanted_status::WantedStatus,
     },
     error::{AppError, AppResult},
-    services,
+    services::{self, jobs::Job},
     state::AppState,
 };
 use sea_orm::{
@@ -34,7 +34,7 @@ pub struct AlbumDetailResponse {
     album: Album,
     album_artists: Vec<ArtistWithPriority>,
     tracks: Vec<TrackInfo>,
-    jobs: Vec<DownloadJob>,
+    jobs: Vec<JobResponse>,
     provider_links: Vec<ProviderLink>,
     album_match_suggestions: Vec<AlbumMatchSuggestion>,
     default_quality: Quality,
@@ -72,7 +72,13 @@ pub(crate) async fn get_album_details(
 
     let tracks = get_album_tracks(&state.db, album.id).await?;
 
-    let jobs = services::downloads::list_album_jobs(state, album.id).await?;
+    // let jobs = services::downloads::list_album_jobs(state, album.id).await?;
+
+    let jobs = services::jobs::list_jobs_for_album(&state.db, album.id)
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect();
 
     let provider_links = album
         .find_related(db::album_provider_link::Entity)
@@ -121,7 +127,7 @@ pub(crate) async fn toggle_album_monitor(
     monitored: bool,
 ) -> AppResult<()> {
     if !monitored {
-        services::downloads::prepare_album_for_unmonitor(state, album_id).await?;
+        services::jobs::prepare_album_for_unmonitor(state, album_id).await?;
     }
 
     let existing = album::Entity::find_by_id(album_id)
@@ -159,7 +165,7 @@ pub(crate) async fn toggle_album_monitor(
     info!(%album_id, monitored, "Toggled album monitored status, updated {} tracks", result.rows_affected);
 
     if monitored {
-        services::downloads::enqueue_album_download(state, album_id).await?;
+        services::jobs::enqueue_download_album_job(state, album_id).await?;
     }
 
     state.notify_sse();
@@ -282,12 +288,7 @@ pub(crate) async fn remove_album_files(
             .await?;
     }
 
-    // FIXME: Delete completed download jobs for this album
-    // download_job::Entity::delete_many()
-    //     .filter(download_job::Column::AlbumId.eq(album_id))
-    //     .filter(download_job::Column::Status.eq(DownloadStatus::Completed))
-    //     .exec(&state.db)
-    //     .await?;
+    services::jobs::clear_completed_album_jobs(&state.db, album_id).await?;
 
     info!(%album_id, unmonitor, "Removed downloaded album files");
     state.notify_sse();

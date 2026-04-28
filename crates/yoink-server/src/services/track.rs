@@ -131,7 +131,7 @@ pub(crate) async fn add_track(
         let mut model: track::ActiveModel = found.into();
         model.status = Set(WantedStatus::Wanted);
         model.update(&state.db).await?;
-        services::downloads::enqueue_track_download(state, link.track_id).await?;
+        services::jobs::enqueue_download_track_job(state, link.track_id, provider).await?;
     }
 
     info!(%album_id, %provider, %external_track_id, "Added track from search");
@@ -168,7 +168,8 @@ pub(crate) async fn toggle_track_monitor(
     services::downloads::sync_album_wanted_status_from_tracks(state, album_id).await?;
 
     if should_enqueue {
-        services::downloads::enqueue_track_download(state, track_id).await?;
+        // FIXME: hardcoded provider, should use track provider
+        services::jobs::enqueue_download_track_job(state, track_id, Provider::Tidal).await?;
     }
 
     info!(%track_id, %album_id, monitored, "Toggled track monitored status");
@@ -224,7 +225,8 @@ pub(crate) async fn bulk_toggle_track_monitor(
     services::downloads::sync_album_wanted_status_from_tracks(state, album_id).await?;
 
     if monitored {
-        services::downloads::enqueue_album_download(state, album_id).await?;
+        tracing::warn!("should enqueue jobs here");
+        // services::jobs::enqueue_download_album_job(state, album_id).await?;
     }
 
     info!(%album_id, monitored, "Bulk toggled track monitoring");

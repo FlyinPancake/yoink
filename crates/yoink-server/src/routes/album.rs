@@ -447,7 +447,7 @@ async fn retry_download(
 ) -> ApiStatusResult {
     require_album(&state, album_id).await?;
 
-    crate::services::downloads::retry_album_download(&state, album_id)
+    crate::services::jobs::retry_album_download(&state, album_id)
         .await
         .map_err(app_error_response)?;
 

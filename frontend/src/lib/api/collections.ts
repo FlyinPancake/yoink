@@ -29,7 +29,7 @@ import type { components } from "./types.gen";
 export type MonitoredArtist = components["schemas"]["MonitoredArtist"];
 export type MonitoredAlbum = components["schemas"]["Album"];
 export type LibraryTrack = components["schemas"]["LibraryTrack"];
-export type DownloadJob = components["schemas"]["DownloadJob"];
+export type JobResponse = components["schemas"]["JobResponse"];
 
 /**
  * A lightweight record inserted into the local-only `addedItemsCollection`
@@ -97,7 +97,7 @@ function createCollections(queryClient: QueryClient) {
         const { data } = await fetchClient.GET("/api/job");
         return data ?? [];
       },
-      getKey: (job: DownloadJob) => job.id,
+      getKey: (job: JobResponse) => job.id,
     }),
   );
 

@@ -7,7 +7,7 @@ use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
-use crate::api::{Album, DownloadJob, MonitoredArtist, TrackInfo};
+use crate::api::{Album, JobResponse, MonitoredArtist, TrackInfo};
 
 use crate::{
     db::{self, wanted_status::WantedStatus},
@@ -40,7 +40,7 @@ struct WantedAlbumWithTracks {
 struct WantedData {
     albums: Vec<WantedAlbumWithTracks>,
     artists: Vec<MonitoredArtist>,
-    jobs: Vec<DownloadJob>,
+    jobs: Vec<JobResponse>,
 }
 
 pub(super) fn router() -> OpenApiRouter<AppState> {
@@ -172,9 +172,12 @@ async fn get_wanted(State(state): State<AppState>) -> ApiResult<WantedData> {
             .collect()
     };
 
-    let jobs = services::downloads::list_jobs(&state)
+    let jobs = services::jobs::list_jobs(&state.db)
         .await
-        .map_err(app_error_response)?;
+        .map_err(app_error_response)?
+        .into_iter()
+        .map(Into::into)
+        .collect();
 
     Ok(Json(WantedData {
         albums: wanted_albums,

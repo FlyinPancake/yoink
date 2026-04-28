@@ -1000,7 +1000,7 @@ export interface components {
             album_artists: components["schemas"]["ArtistWithPriority"][];
             album_match_suggestions: components["schemas"]["AlbumMatchSuggestion"][];
             default_quality: components["schemas"]["Quality"];
-            jobs: components["schemas"]["DownloadJob"][];
+            jobs: components["schemas"]["JobResponse"][];
             provider_links: components["schemas"]["ProviderLink"][];
             tracks: components["schemas"]["TrackInfo"][];
         };
@@ -1118,36 +1118,18 @@ export interface components {
         DashboardData: {
             albums: components["schemas"]["DashboardAlbum"][];
             artists: components["schemas"]["MonitoredArtist"][];
-            jobs: components["schemas"]["DownloadJob"][];
+            jobs: components["schemas"]["JobResponse"][];
         };
-        DownloadJob: {
+        DownloadAlbumJobPayload: {
             /** Format: uuid */
             album_id: string;
-            album_title: string;
-            artist_name: string;
-            /** Format: int32 */
-            completed_tracks: number;
-            /** Format: date-time */
-            created_at: string;
-            error?: string | null;
-            /** Format: uuid */
-            id: string;
-            kind: components["schemas"]["DownloadJobKind"];
-            quality: components["schemas"]["Quality"];
-            source: string;
-            status: components["schemas"]["DownloadStatus"];
-            /** Format: int32 */
-            total_tracks: number;
-            /** Format: uuid */
-            track_id?: string | null;
-            track_title?: string | null;
-            /** Format: date-time */
-            updated_at: string;
+            provider: components["schemas"]["Provider"];
         };
-        /** @enum {string} */
-        DownloadJobKind: "album" | "track";
-        /** @enum {string} */
-        DownloadStatus: "queued" | "resolving" | "downloading" | "completed" | "failed";
+        DownloadTrackJobPayload: {
+            provider: components["schemas"]["Provider"];
+            /** Format: uuid */
+            track_id: string;
+        };
         ExternalImportConfirmation: {
             items: components["schemas"]["ImportConfirmation"][];
             mode: components["schemas"]["ManualImportMode"];
@@ -1200,6 +1182,35 @@ export interface components {
             imported: number;
             total_selected: number;
         };
+        Job: (components["schemas"]["DownloadAlbumJobPayload"] & {
+            /** @enum {string} */
+            kind: "download_album";
+        }) | (components["schemas"]["DownloadTrackJobPayload"] & {
+            /** @enum {string} */
+            kind: "download_track";
+        });
+        JobResponse: components["schemas"]["Job"] & {
+            /** Format: int32 */
+            attempts: number;
+            /** Format: date-time */
+            created_at: string;
+            error_message?: string | null;
+            /** Format: date-time */
+            finished_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: int32 */
+            max_attempts: number;
+            /** Format: date-time */
+            modified_at: string;
+            /** Format: float */
+            progress: number;
+            /** Format: date-time */
+            started_at?: string | null;
+            status: components["schemas"]["JobStatus"];
+        };
+        /** @enum {string} */
+        JobStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         LibraryAlbumSummary: components["schemas"]["Album"] & {
             /** Format: uuid */
             artist_id?: string | null;
@@ -1381,7 +1392,7 @@ export interface components {
         WantedData: {
             albums: components["schemas"]["WantedAlbumWithTracks"][];
             artists: components["schemas"]["MonitoredArtist"][];
-            jobs: components["schemas"]["DownloadJob"][];
+            jobs: components["schemas"]["JobResponse"][];
         };
         /** @enum {string} */
         WantedStatus: "unmonitored" | "wanted" | "in_progress" | "acquired";
@@ -2832,7 +2843,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DownloadJob"][];
+                    "application/json": components["schemas"]["JobResponse"][];
                 };
             };
         };

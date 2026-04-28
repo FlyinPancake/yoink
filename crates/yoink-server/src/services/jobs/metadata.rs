@@ -12,6 +12,8 @@ pub async fn fetch_album_cover_art(
     album: &db::album::ModelEx,
 ) -> Option<Vec<u8>> {
     if let Some(ref cover_url) = album.cover_url {
+        // TODO remove hardcoded path + support non-local cover_urls
+        let cover_url = format!("http://localhost:3000{}", cover_url);
         match state
             .http
             .get(cover_url.to_string())

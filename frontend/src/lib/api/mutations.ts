@@ -24,8 +24,8 @@ type ArtistDetailResponse = components["schemas"]["ArtistDetailResponse"];
 type AlbumDetailResponse = components["schemas"]["AlbumDetailResponse"];
 type DashboardData = components["schemas"]["DashboardData"];
 type WantedData = components["schemas"]["WantedData"];
-type DownloadJob = components["schemas"]["DownloadJob"];
-type Quality = components["schemas"]["Quality"];
+type JobResponse = components["schemas"]["JobResponse"];
+type Provider = components["schemas"]["Provider"];
 type WantedStatus = components["schemas"]["WantedStatus"];
 
 function deriveWantedStatus(current: WantedStatus, monitored: boolean): WantedStatus {
@@ -140,13 +140,20 @@ function nextDownloadWantedStatus(current: WantedStatus): WantedStatus {
   return current === "acquired" ? current : "in_progress";
 }
 
-function upsertAlbumJob(jobs: Array<DownloadJob>, job: DownloadJob): Array<DownloadJob> {
+function isAlbumJob(
+  job: JobResponse,
+): job is JobResponse & { kind: "download_album"; album_id: string } {
+  return job.kind === "download_album";
+}
+
+function upsertAlbumJob(jobs: Array<JobResponse>, job: JobResponse): Array<JobResponse> {
   const filtered = jobs.filter(
     (existing) =>
       existing.id !== job.id &&
       !(
+        isAlbumJob(existing) &&
+        isAlbumJob(job) &&
         existing.album_id === job.album_id &&
-        existing.kind === "album" &&
         isDownloadActive(existing.status)
       ),
   );
@@ -154,47 +161,35 @@ function upsertAlbumJob(jobs: Array<DownloadJob>, job: DownloadJob): Array<Downl
   return [job, ...filtered];
 }
 
-function buildOptimisticAlbumJob(
-  albumId: string,
-  albumTitle: string,
-  artistName: string,
-  quality: Quality,
-  source: string,
-): DownloadJob {
+function buildOptimisticAlbumJob(albumId: string, provider: Provider): JobResponse {
   const now = new Date().toISOString();
 
   return {
     id: `optimistic-download-${albumId}`,
-    kind: "album",
+    kind: "download_album",
     album_id: albumId,
-    track_id: null,
-    source,
-    album_title: albumTitle,
-    track_title: null,
-    artist_name: artistName,
     status: "queued",
-    quality,
-    total_tracks: 0,
-    completed_tracks: 0,
-    error: null,
+    progress: 0,
+    attempts: 0,
+    max_attempts: 3,
+    error_message: null,
     created_at: now,
-    updated_at: now,
+    modified_at: now,
+    started_at: null,
+    finished_at: null,
+    provider,
   };
 }
 
 function patchAlbumDownloadCaches(queryClient: ReturnType<typeof useQueryClient>, albumId: string) {
   const detailKey = queryKeys.albums.detail(albumId).queryKey;
   const detail = queryClient.getQueryData<AlbumDetailResponse>(detailKey);
-  const detailArtistName = detail?.album_artists[0]?.name ?? "";
-  const detailJob = detail?.jobs.find((job) => job.album_id === albumId);
+  const detailJob = detail?.jobs.find((job) => isAlbumJob(job) && job.album_id === albumId);
   const optimisticJob =
     detail != null
       ? buildOptimisticAlbumJob(
           albumId,
-          detail.album.title,
-          detailArtistName,
-          detailJob?.quality ?? detail.default_quality,
-          detailJob?.source ?? detail.provider_links[0]?.provider ?? "tidal",
+          detailJob?.provider ?? detail.provider_links[0]?.provider ?? "tidal",
         )
       : null;
 
@@ -250,23 +245,10 @@ function patchAlbumDownloadCaches(queryClient: ReturnType<typeof useQueryClient>
       return current;
     }
 
-    const dashboardAlbum = current.albums.find((album) => album.id === albumId);
-    const artistName =
-      dashboardAlbum?.artist_id != null
-        ? (current.artists.find((artist) => artist.id === dashboardAlbum.artist_id)?.name ?? "")
-        : detailArtistName;
-    const latestAlbumJob = current.jobs.find(
-      (job) => job.album_id === albumId && job.kind === "album",
-    );
+    const latestAlbumJob = current.jobs.find((job) => isAlbumJob(job) && job.album_id === albumId);
     const queuedJob = buildOptimisticAlbumJob(
       albumId,
-      dashboardAlbum?.title ??
-        detail?.album.title ??
-        latestAlbumJob?.album_title ??
-        "Unknown Album",
-      artistName,
-      latestAlbumJob?.quality ?? optimisticJob?.quality ?? "Lossless",
-      latestAlbumJob?.source ?? optimisticJob?.source ?? "tidal",
+      latestAlbumJob?.provider ?? optimisticJob?.provider ?? "tidal",
     );
 
     return {
@@ -289,23 +271,10 @@ function patchAlbumDownloadCaches(queryClient: ReturnType<typeof useQueryClient>
       return current;
     }
 
-    const wantedAlbum = current.albums.find((entry) => entry.album.id === albumId);
-    const artistName =
-      wantedAlbum?.album.artist_id != null
-        ? (current.artists.find((artist) => artist.id === wantedAlbum.album.artist_id)?.name ?? "")
-        : detailArtistName;
-    const latestAlbumJob = current.jobs.find(
-      (job) => job.album_id === albumId && job.kind === "album",
-    );
+    const latestAlbumJob = current.jobs.find((job) => isAlbumJob(job) && job.album_id === albumId);
     const queuedJob = buildOptimisticAlbumJob(
       albumId,
-      wantedAlbum?.album.title ??
-        detail?.album.title ??
-        latestAlbumJob?.album_title ??
-        "Unknown Album",
-      artistName,
-      latestAlbumJob?.quality ?? optimisticJob?.quality ?? "Lossless",
-      latestAlbumJob?.source ?? optimisticJob?.source ?? "tidal",
+      latestAlbumJob?.provider ?? optimisticJob?.provider ?? "tidal",
     );
 
     return {
@@ -327,7 +296,7 @@ function patchAlbumDownloadCaches(queryClient: ReturnType<typeof useQueryClient>
   });
 
   if (optimisticJob != null) {
-    queryClient.setQueryData<Array<DownloadJob> | undefined>(
+    queryClient.setQueryData<Array<JobResponse> | undefined>(
       queryKeys.jobs.list().queryKey,
       (current) => (current == null ? [optimisticJob] : upsertAlbumJob(current, optimisticJob)),
     );
