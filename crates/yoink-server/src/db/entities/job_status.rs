@@ -19,7 +19,7 @@ use utoipa::ToSchema;
     rs_type = "String",
     db_type = "String(StringLen::N(20))",
     rename_all = "snake_case",
-    enum_name = "job_kind"
+    enum_name = "job_status"
 )]
 #[serde(rename_all = "snake_case")]
 pub enum JobStatus {
