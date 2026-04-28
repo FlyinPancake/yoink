@@ -43,7 +43,7 @@ impl MigrationTrait for Migration {
                 Index::create()
                     .name("idx-jobs-job-type")
                     .table("jobs")
-                    .col("job_type")
+                    .col("job_kind")
                     .to_owned(),
             )
             .await?;
