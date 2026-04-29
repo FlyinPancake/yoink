@@ -1,4 +1,6 @@
 pub(crate) mod deezer;
+#[cfg(test)]
+pub mod mock;
 pub(crate) mod musicbrainz;
 pub(crate) mod registry;
 pub(crate) mod soulseek;
@@ -161,6 +163,8 @@ pub(crate) struct ProviderTrack {
     /// Whether the track is marked explicit.
     pub explicit: bool,
     /// Provider-specific extra metadata (for tagging).
+    #[allow(dead_code)]
+    // TODO: remove this
     pub extra: HashMap<String, Value>,
 }
 
@@ -349,6 +353,7 @@ pub(crate) trait MetadataProvider: Send + Sync {
     fn image_url(&self, image_ref: &str, size: u16) -> String;
 
     /// Fetch cover art bytes for an image ref (full resolution).
+    #[expect(dead_code)]
     async fn fetch_cover_art_bytes(&self, image_ref: &str) -> Option<Vec<u8>>;
 
     /// Fetch the image ref for an artist by their external ID.

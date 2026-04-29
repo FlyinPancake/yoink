@@ -382,17 +382,23 @@ pub(crate) async fn add_album(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
 
     use super::{remove_album_files, toggle_album_monitor};
     use crate::{
         db::{self, album, album_type::AlbumType, track, wanted_status::WantedStatus},
+        providers::{mock::MockProvider, registry::ProviderRegistry},
         test_support,
     };
 
     #[tokio::test]
     async fn toggle_album_monitor_updates_album_and_track_statuses() {
-        let state = test_support::test_state().await;
+        let mut registry = ProviderRegistry::new();
+        registry.register_download(Arc::new(MockProvider {}));
+
+        let state = test_support::test_state_with_registry(registry).await;
 
         let album = album::ActiveModel {
             title: sea_orm::ActiveValue::Set("Test Album".to_string()),
