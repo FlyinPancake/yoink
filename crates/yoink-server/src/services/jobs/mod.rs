@@ -127,8 +127,13 @@ pub(crate) async fn clear_completed_album_jobs(
 }
 
 pub(crate) async fn prepare_album_for_unmonitor(state: &AppState, album_id: Uuid) -> AppResult<()> {
-    tracing::warn!("prepare_album_for_unmonitor is not implemented yet");
     let jobs = list_jobs_for_album(&state.db, album_id).await?;
+    if jobs.iter().any(|job| job.status == JobStatus::Running) {
+        return Err(AppError::conflict(
+            "cannot unmonitor album while a download job is running",
+        ));
+    }
+
     for job in jobs {
         cancel_job(state, job.id).await?;
     }

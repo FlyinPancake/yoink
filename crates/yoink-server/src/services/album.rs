@@ -388,8 +388,13 @@ mod tests {
 
     use super::{remove_album_files, toggle_album_monitor};
     use crate::{
-        db::{self, album, album_type::AlbumType, track, wanted_status::WantedStatus},
+        db::{
+            self, album, album_type::AlbumType, job_status::JobStatus, track,
+            wanted_status::WantedStatus,
+        },
+        error::AppError,
         providers::{mock::MockProvider, registry::ProviderRegistry},
+        services::jobs::{self, Job, download::DownloadAlbumJobPayload},
         test_support,
     };
 
@@ -469,248 +474,248 @@ mod tests {
         assert_eq!(track.status, WantedStatus::Unmonitored);
     }
 
-    // FIXME: re-enable once download jobs are migrated
-    // #[tokio::test]
-    // async fn unmonitoring_album_cancels_queued_download_jobs() {
-    //     let state = test_support::test_state().await;
+    #[tokio::test]
+    async fn unmonitoring_album_cancels_queued_download_jobs() {
+        let state = test_support::test_state().await;
 
-    //     let album = album::ActiveModel {
-    //         title: sea_orm::ActiveValue::Set("Queued Album".to_string()),
-    //         album_type: sea_orm::ActiveValue::Set(AlbumType::Album),
-    //         release_date: sea_orm::ActiveValue::Set(None),
-    //         cover_url: sea_orm::ActiveValue::Set(None),
-    //         explicit: sea_orm::ActiveValue::Set(false),
-    //         wanted_status: sea_orm::ActiveValue::Set(WantedStatus::Wanted),
-    //         requested_quality: sea_orm::ActiveValue::Set(None),
-    //         ..album::ActiveModel::new()
-    //     }
-    //     .insert(&state.db)
-    //     .await
-    //     .expect("insert album");
+        let album = album::ActiveModel {
+            title: sea_orm::ActiveValue::Set("Queued Album".to_string()),
+            album_type: sea_orm::ActiveValue::Set(AlbumType::Album),
+            release_date: sea_orm::ActiveValue::Set(None),
+            cover_url: sea_orm::ActiveValue::Set(None),
+            explicit: sea_orm::ActiveValue::Set(false),
+            wanted_status: sea_orm::ActiveValue::Set(WantedStatus::Wanted),
+            requested_quality: sea_orm::ActiveValue::Set(None),
+            ..album::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album");
 
-    //     track::ActiveModel {
-    //         title: sea_orm::ActiveValue::Set("Track 1".to_string()),
-    //         version: sea_orm::ActiveValue::Set(None),
-    //         disc_number: sea_orm::ActiveValue::Set(Some(1)),
-    //         track_number: sea_orm::ActiveValue::Set(Some(1)),
-    //         duration: sea_orm::ActiveValue::Set(Some(180)),
-    //         album_id: sea_orm::ActiveValue::Set(album.id),
-    //         explicit: sea_orm::ActiveValue::Set(false),
-    //         isrc: sea_orm::ActiveValue::Set(None),
-    //         root_folder_id: sea_orm::ActiveValue::Set(None),
-    //         status: sea_orm::ActiveValue::Set(WantedStatus::Wanted),
-    //         file_path: sea_orm::ActiveValue::Set(None),
-    //         ..track::ActiveModel::new()
-    //     }
-    //     .insert(&state.db)
-    //     .await
-    //     .expect("insert track");
+        track::ActiveModel {
+            title: sea_orm::ActiveValue::Set("Track 1".to_string()),
+            version: sea_orm::ActiveValue::Set(None),
+            disc_number: sea_orm::ActiveValue::Set(Some(1)),
+            track_number: sea_orm::ActiveValue::Set(Some(1)),
+            duration: sea_orm::ActiveValue::Set(Some(180)),
+            album_id: sea_orm::ActiveValue::Set(album.id),
+            explicit: sea_orm::ActiveValue::Set(false),
+            isrc: sea_orm::ActiveValue::Set(None),
+            root_folder_id: sea_orm::ActiveValue::Set(None),
+            status: sea_orm::ActiveValue::Set(WantedStatus::Wanted),
+            file_path: sea_orm::ActiveValue::Set(None),
+            ..track::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert track");
 
-    //     download_job::ActiveModel {
-    //         album_id: sea_orm::ActiveValue::Set(album.id),
-    //         track_id: sea_orm::ActiveValue::Set(None),
-    //         source: sea_orm::ActiveValue::Set(Provider::Tidal),
-    //         quality: sea_orm::ActiveValue::Set(Quality::Lossless),
-    //         status: sea_orm::ActiveValue::Set(DownloadStatus::Queued),
-    //         total_tracks: sea_orm::ActiveValue::Set(1),
-    //         completed_tasks: sea_orm::ActiveValue::Set(0),
-    //         error_message: sea_orm::ActiveValue::Set(None),
-    //         ..download_job::ActiveModel::new()
-    //     }
-    //     .insert(&state.db)
-    //     .await
-    //     .expect("insert queued job");
+        let job = jobs::enqueue_job(
+            &state,
+            Job::DownloadAlbum {
+                payload: DownloadAlbumJobPayload {
+                    album_id: album.id,
+                    provider: db::provider::Provider::Tidal,
+                },
+            },
+        )
+        .await
+        .expect("insert queued job");
 
-    //     toggle_album_monitor(&state, album.id, false)
-    //         .await
-    //         .expect("unmonitor album");
+        toggle_album_monitor(&state, album.id, false)
+            .await
+            .expect("unmonitor album");
 
-    //     assert!(
-    //         db::download_job::Entity::find()
-    //             .filter(db::download_job::Column::AlbumId.eq(album.id))
-    //             .all(&state.db)
-    //             .await
-    //             .expect("load jobs")
-    //             .is_empty()
-    //     );
-    // }
+        let job = db::job::Entity::find_by_id(job.id)
+            .one(&state.db)
+            .await
+            .expect("reload job")
+            .expect("job exists");
+        assert_eq!(job.status, JobStatus::Cancelled);
+    }
 
-    // FIXME: re-enable once download jobs are migrated
-    // #[tokio::test]
-    // async fn unmonitoring_album_conflicts_with_active_download_jobs() {
-    //     let state = test_support::test_state().await;
+    #[tokio::test]
+    async fn unmonitoring_album_conflicts_with_active_download_jobs() {
+        let state = test_support::test_state().await;
 
-    //     let album = album::ActiveModel {
-    //         title: sea_orm::ActiveValue::Set("Busy Album".to_string()),
-    //         album_type: sea_orm::ActiveValue::Set(AlbumType::Album),
-    //         release_date: sea_orm::ActiveValue::Set(None),
-    //         cover_url: sea_orm::ActiveValue::Set(None),
-    //         explicit: sea_orm::ActiveValue::Set(false),
-    //         wanted_status: sea_orm::ActiveValue::Set(WantedStatus::InProgress),
-    //         requested_quality: sea_orm::ActiveValue::Set(None),
-    //         ..album::ActiveModel::new()
-    //     }
-    //     .insert(&state.db)
-    //     .await
-    //     .expect("insert album");
+        let album = album::ActiveModel {
+            title: sea_orm::ActiveValue::Set("Busy Album".to_string()),
+            album_type: sea_orm::ActiveValue::Set(AlbumType::Album),
+            release_date: sea_orm::ActiveValue::Set(None),
+            cover_url: sea_orm::ActiveValue::Set(None),
+            explicit: sea_orm::ActiveValue::Set(false),
+            wanted_status: sea_orm::ActiveValue::Set(WantedStatus::InProgress),
+            requested_quality: sea_orm::ActiveValue::Set(None),
+            ..album::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album");
 
-    //     track::ActiveModel {
-    //         title: sea_orm::ActiveValue::Set("Track 1".to_string()),
-    //         version: sea_orm::ActiveValue::Set(None),
-    //         disc_number: sea_orm::ActiveValue::Set(Some(1)),
-    //         track_number: sea_orm::ActiveValue::Set(Some(1)),
-    //         duration: sea_orm::ActiveValue::Set(Some(180)),
-    //         album_id: sea_orm::ActiveValue::Set(album.id),
-    //         explicit: sea_orm::ActiveValue::Set(false),
-    //         isrc: sea_orm::ActiveValue::Set(None),
-    //         root_folder_id: sea_orm::ActiveValue::Set(None),
-    //         status: sea_orm::ActiveValue::Set(WantedStatus::Wanted),
-    //         file_path: sea_orm::ActiveValue::Set(None),
-    //         ..track::ActiveModel::new()
-    //     }
-    //     .insert(&state.db)
-    //     .await
-    //     .expect("insert track");
+        track::ActiveModel {
+            title: sea_orm::ActiveValue::Set("Track 1".to_string()),
+            version: sea_orm::ActiveValue::Set(None),
+            disc_number: sea_orm::ActiveValue::Set(Some(1)),
+            track_number: sea_orm::ActiveValue::Set(Some(1)),
+            duration: sea_orm::ActiveValue::Set(Some(180)),
+            album_id: sea_orm::ActiveValue::Set(album.id),
+            explicit: sea_orm::ActiveValue::Set(false),
+            isrc: sea_orm::ActiveValue::Set(None),
+            root_folder_id: sea_orm::ActiveValue::Set(None),
+            status: sea_orm::ActiveValue::Set(WantedStatus::Wanted),
+            file_path: sea_orm::ActiveValue::Set(None),
+            ..track::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert track");
 
-    //     download_job::ActiveModel {
-    //         album_id: sea_orm::ActiveValue::Set(album.id),
-    //         track_id: sea_orm::ActiveValue::Set(None),
-    //         source: sea_orm::ActiveValue::Set(Provider::Tidal),
-    //         quality: sea_orm::ActiveValue::Set(Quality::Lossless),
-    //         status: sea_orm::ActiveValue::Set(DownloadStatus::Downloading),
-    //         total_tracks: sea_orm::ActiveValue::Set(1),
-    //         completed_tasks: sea_orm::ActiveValue::Set(0),
-    //         error_message: sea_orm::ActiveValue::Set(None),
-    //         ..download_job::ActiveModel::new()
-    //     }
-    //     .insert(&state.db)
-    //     .await
-    //     .expect("insert active job");
+        let job = jobs::enqueue_job(
+            &state,
+            Job::DownloadAlbum {
+                payload: DownloadAlbumJobPayload {
+                    album_id: album.id,
+                    provider: db::provider::Provider::Tidal,
+                },
+            },
+        )
+        .await
+        .expect("insert active job");
+        db::job::ActiveModel {
+            id: sea_orm::ActiveValue::Set(job.id),
+            status: sea_orm::ActiveValue::Set(JobStatus::Running),
+            ..Default::default()
+        }
+        .update(&state.db)
+        .await
+        .expect("mark job running");
 
-    //     let err = toggle_album_monitor(&state, album.id, false)
-    //         .await
-    //         .expect_err("active download should conflict");
+        let err = toggle_album_monitor(&state, album.id, false)
+            .await
+            .expect_err("active download should conflict");
 
-    //     assert!(matches!(err, AppError::Conflict { .. }));
-    // }
+        assert!(matches!(err, AppError::Conflict { .. }));
+    }
 
-    // FIXME: re-enable once download jobs are migrated
-    // #[tokio::test]
-    // async fn remove_album_files_deletes_files_and_clears_track_state() {
-    //     let music_root = tempfile::tempdir().expect("create music root");
-    //     let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
+    #[tokio::test]
+    async fn remove_album_files_deletes_files_and_clears_track_state() {
+        let music_root = tempfile::tempdir().expect("create music root");
+        let state = test_support::test_state_with_music_root(music_root.path().to_path_buf()).await;
 
-    //     let album = album::ActiveModel {
-    //         title: sea_orm::ActiveValue::Set("Downloaded Album".to_string()),
-    //         album_type: sea_orm::ActiveValue::Set(AlbumType::Album),
-    //         release_date: sea_orm::ActiveValue::Set(None),
-    //         cover_url: sea_orm::ActiveValue::Set(None),
-    //         explicit: sea_orm::ActiveValue::Set(false),
-    //         wanted_status: sea_orm::ActiveValue::Set(WantedStatus::Acquired),
-    //         requested_quality: sea_orm::ActiveValue::Set(None),
-    //         ..album::ActiveModel::new()
-    //     }
-    //     .insert(&state.db)
-    //     .await
-    //     .expect("insert album");
+        let album = album::ActiveModel {
+            title: sea_orm::ActiveValue::Set("Downloaded Album".to_string()),
+            album_type: sea_orm::ActiveValue::Set(AlbumType::Album),
+            release_date: sea_orm::ActiveValue::Set(None),
+            cover_url: sea_orm::ActiveValue::Set(None),
+            explicit: sea_orm::ActiveValue::Set(false),
+            wanted_status: sea_orm::ActiveValue::Set(WantedStatus::Acquired),
+            requested_quality: sea_orm::ActiveValue::Set(None),
+            ..album::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album");
 
-    //     let relative_file_path = "Test Artist/Downloaded Album/01 - Track.flac";
-    //     let absolute_file_path = music_root.path().join(relative_file_path);
-    //     tokio::fs::create_dir_all(
-    //         absolute_file_path
-    //             .parent()
-    //             .expect("downloaded track should have parent directory"),
-    //     )
-    //     .await
-    //     .expect("create album directory");
-    //     tokio::fs::write(&absolute_file_path, b"audio")
-    //         .await
-    //         .expect("write downloaded track");
-    //     tokio::fs::write(absolute_file_path.with_extension("lrc"), b"lyrics")
-    //         .await
-    //         .expect("write lyrics sidecar");
+        let relative_file_path = "Test Artist/Downloaded Album/01 - Track.flac";
+        let absolute_file_path = music_root.path().join(relative_file_path);
+        tokio::fs::create_dir_all(
+            absolute_file_path
+                .parent()
+                .expect("downloaded track should have parent directory"),
+        )
+        .await
+        .expect("create album directory");
+        tokio::fs::write(&absolute_file_path, b"audio")
+            .await
+            .expect("write downloaded track");
+        tokio::fs::write(absolute_file_path.with_extension("lrc"), b"lyrics")
+            .await
+            .expect("write lyrics sidecar");
 
-    //     let track = track::ActiveModel {
-    //         title: sea_orm::ActiveValue::Set("Track 1".to_string()),
-    //         version: sea_orm::ActiveValue::Set(None),
-    //         disc_number: sea_orm::ActiveValue::Set(Some(1)),
-    //         track_number: sea_orm::ActiveValue::Set(Some(1)),
-    //         duration: sea_orm::ActiveValue::Set(Some(180)),
-    //         album_id: sea_orm::ActiveValue::Set(album.id),
-    //         explicit: sea_orm::ActiveValue::Set(false),
-    //         isrc: sea_orm::ActiveValue::Set(None),
-    //         root_folder_id: sea_orm::ActiveValue::Set(None),
-    //         status: sea_orm::ActiveValue::Set(WantedStatus::Acquired),
-    //         file_path: sea_orm::ActiveValue::Set(Some(relative_file_path.to_string())),
-    //         ..track::ActiveModel::new()
-    //     }
-    //     .insert(&state.db)
-    //     .await
-    //     .expect("insert downloaded track");
+        let track = track::ActiveModel {
+            title: sea_orm::ActiveValue::Set("Track 1".to_string()),
+            version: sea_orm::ActiveValue::Set(None),
+            disc_number: sea_orm::ActiveValue::Set(Some(1)),
+            track_number: sea_orm::ActiveValue::Set(Some(1)),
+            duration: sea_orm::ActiveValue::Set(Some(180)),
+            album_id: sea_orm::ActiveValue::Set(album.id),
+            explicit: sea_orm::ActiveValue::Set(false),
+            isrc: sea_orm::ActiveValue::Set(None),
+            root_folder_id: sea_orm::ActiveValue::Set(None),
+            status: sea_orm::ActiveValue::Set(WantedStatus::Acquired),
+            file_path: sea_orm::ActiveValue::Set(Some(relative_file_path.to_string())),
+            ..track::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert downloaded track");
 
-    //     download_job::ActiveModel {
-    //         album_id: sea_orm::ActiveValue::Set(album.id),
-    //         track_id: sea_orm::ActiveValue::Set(None),
-    //         source: sea_orm::ActiveValue::Set(Provider::Tidal),
-    //         quality: sea_orm::ActiveValue::Set(Quality::Lossless),
-    //         status: sea_orm::ActiveValue::Set(DownloadStatus::Completed),
-    //         total_tracks: sea_orm::ActiveValue::Set(1),
-    //         completed_tasks: sea_orm::ActiveValue::Set(1),
-    //         error_message: sea_orm::ActiveValue::Set(None),
-    //         ..download_job::ActiveModel::new()
-    //     }
-    //     .insert(&state.db)
-    //     .await
-    //     .expect("insert completed job");
+        let job = jobs::enqueue_job(
+            &state,
+            Job::DownloadAlbum {
+                payload: DownloadAlbumJobPayload {
+                    album_id: album.id,
+                    provider: db::provider::Provider::Tidal,
+                },
+            },
+        )
+        .await
+        .expect("insert completed job");
+        db::job::ActiveModel {
+            id: sea_orm::ActiveValue::Set(job.id),
+            status: sea_orm::ActiveValue::Set(JobStatus::Succeeded),
+            ..Default::default()
+        }
+        .update(&state.db)
+        .await
+        .expect("mark job completed");
 
-    //     remove_album_files(&state, album.id, false)
-    //         .await
-    //         .expect("remove album files");
+        remove_album_files(&state, album.id, false)
+            .await
+            .expect("remove album files");
 
-    //     let reloaded_album = db::album::Entity::find_by_id(album.id)
-    //         .one(&state.db)
-    //         .await
-    //         .expect("reload album")
-    //         .expect("album exists");
-    //     let reloaded_track = db::track::Entity::find_by_id(track.id)
-    //         .one(&state.db)
-    //         .await
-    //         .expect("reload track")
-    //         .expect("track exists");
+        let reloaded_album = db::album::Entity::find_by_id(album.id)
+            .one(&state.db)
+            .await
+            .expect("reload album")
+            .expect("album exists");
+        let reloaded_track = db::track::Entity::find_by_id(track.id)
+            .one(&state.db)
+            .await
+            .expect("reload track")
+            .expect("track exists");
 
-    //     assert_eq!(reloaded_album.wanted_status, WantedStatus::Wanted);
-    //     assert_eq!(reloaded_track.status, WantedStatus::Wanted);
-    //     assert_eq!(reloaded_track.file_path, None);
-    //     assert_eq!(reloaded_track.root_folder_id, None);
-    //     assert!(
-    //         db::download_job::Entity::find()
-    //             .filter(db::download_job::Column::AlbumId.eq(album.id))
-    //             .all(&state.db)
-    //             .await
-    //             .expect("load album jobs")
-    //             .is_empty()
-    //     );
-    //     assert!(
-    //         !tokio::fs::try_exists(&absolute_file_path)
-    //             .await
-    //             .expect("check removed audio file")
-    //     );
-    //     assert!(
-    //         !tokio::fs::try_exists(absolute_file_path.with_extension("lrc"))
-    //             .await
-    //             .expect("check removed lyrics sidecar")
-    //     );
-    //     assert!(
-    //         !tokio::fs::try_exists(music_root.path().join("Test Artist/Downloaded Album"))
-    //             .await
-    //             .expect("check removed album directory")
-    //     );
-    //     assert!(
-    //         !tokio::fs::try_exists(music_root.path().join("Test Artist"))
-    //             .await
-    //             .expect("check removed artist directory")
-    //     );
-    // }
+        assert_eq!(reloaded_album.wanted_status, WantedStatus::Wanted);
+        assert_eq!(reloaded_track.status, WantedStatus::Wanted);
+        assert_eq!(reloaded_track.file_path, None);
+        assert_eq!(reloaded_track.root_folder_id, None);
+        assert!(
+            jobs::list_jobs_for_album(&state.db, album.id)
+                .await
+                .expect("load album jobs")
+                .is_empty()
+        );
+        assert!(
+            !tokio::fs::try_exists(&absolute_file_path)
+                .await
+                .expect("check removed audio file")
+        );
+        assert!(
+            !tokio::fs::try_exists(absolute_file_path.with_extension("lrc"))
+                .await
+                .expect("check removed lyrics sidecar")
+        );
+        assert!(
+            !tokio::fs::try_exists(music_root.path().join("Test Artist/Downloaded Album"))
+                .await
+                .expect("check removed album directory")
+        );
+        assert!(
+            !tokio::fs::try_exists(music_root.path().join("Test Artist"))
+                .await
+                .expect("check removed artist directory")
+        );
+    }
 
     #[tokio::test]
     async fn remove_and_unmonitor_handles_multiple_tracks_in_same_album_directory() {
