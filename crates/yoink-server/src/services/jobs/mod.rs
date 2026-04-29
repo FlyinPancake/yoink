@@ -50,6 +50,33 @@ const MAX_ATTEMPTS: i32 = 3;
 
 pub(crate) async fn enqueue_job(state: &AppState, job: Job) -> AppResult<job::Model> {
     let deduplication_key = job.dedupe_key();
+
+    if let Some(existing) = job::Entity::find()
+        .filter(job::Column::DeduplicationKey.eq(&deduplication_key))
+        .one(&state.db)
+        .await?
+    {
+        let job = match existing.status {
+            JobStatus::Queued | JobStatus::Running => existing,
+            JobStatus::Succeeded | JobStatus::Failed | JobStatus::Cancelled => {
+                let mut active = existing.into_active_model();
+                active.data = Set(job);
+                active.status = Set(JobStatus::Queued);
+                active.attempts = Set(0);
+                active.max_attempts = Set(MAX_ATTEMPTS);
+                active.progress = Set(0.0);
+                active.error_message = Set(None);
+                active.started_at = Set(None);
+                active.finished_at = Set(None);
+                active.update(&state.db).await?
+            }
+        };
+
+        state.download_notify.notify_one();
+
+        return Ok(job);
+    }
+
     let job = job::ActiveModel {
         data: Set(job),
         deduplication_key: Set(deduplication_key),
@@ -114,6 +141,18 @@ where
     Ok(jobs)
 }
 
+pub(crate) async fn list_jobs_for_track<C>(db: &C, track_id: Uuid) -> AppResult<Vec<job::Model>>
+where
+    C: sea_orm::ConnectionTrait,
+{
+    let jobs = job::Entity::find()
+        .filter(job::Column::DeduplicationKey.contains(format!("track:{}", track_id)))
+        .all(db)
+        .await?;
+
+    Ok(jobs)
+}
+
 pub(crate) async fn clear_completed_album_jobs(
     db: &DatabaseConnection,
     album_id: Uuid,
@@ -135,7 +174,25 @@ pub(crate) async fn prepare_album_for_unmonitor(state: &AppState, album_id: Uuid
     }
 
     for job in jobs {
-        cancel_job(state, job.id).await?;
+        if matches!(job.status, JobStatus::Queued | JobStatus::Failed) {
+            cancel_job(state, job.id).await?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) async fn prepare_track_for_unmonitor(state: &AppState, track_id: Uuid) -> AppResult<()> {
+    let jobs = list_jobs_for_track(&state.db, track_id).await?;
+    if jobs.iter().any(|job| job.status == JobStatus::Running) {
+        return Err(AppError::conflict(
+            "cannot unmonitor track while a download job is running",
+        ));
+    }
+
+    for job in jobs {
+        if matches!(job.status, JobStatus::Queued | JobStatus::Failed) {
+            cancel_job(state, job.id).await?;
+        }
     }
     Ok(())
 }

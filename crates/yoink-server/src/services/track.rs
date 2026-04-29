@@ -145,6 +145,10 @@ pub(crate) async fn toggle_track_monitor(
     album_id: Uuid,
     monitored: bool,
 ) -> AppResult<()> {
+    if !monitored {
+        services::jobs::prepare_track_for_unmonitor(state, track_id).await?;
+    }
+
     let track = track::Entity::find_by_id(track_id)
         .one(&state.db)
         .await?
@@ -235,14 +239,19 @@ pub(crate) async fn bulk_toggle_track_monitor(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait};
 
-    use super::{list_library_tracks, set_track_quality};
+    use super::{list_library_tracks, set_track_quality, toggle_track_monitor};
     use crate::{
         db::{
-            album, album_artist, album_type::AlbumType, artist, quality::Quality, track,
-            wanted_status::WantedStatus,
+            album, album_artist, album_type::AlbumType, artist, job_status::JobStatus,
+            provider::Provider, quality::Quality, track, wanted_status::WantedStatus,
         },
+        error::AppError,
+        providers::{mock::MockProvider, registry::ProviderRegistry},
+        services::jobs::{self, Job, download::DownloadTrackJobPayload},
         test_support,
     };
 
@@ -397,5 +406,170 @@ mod tests {
             .expect("reload cleared track")
             .expect("track exists");
         assert_eq!(cleared_track.quality_override, None);
+    }
+
+    #[tokio::test]
+    async fn toggle_track_monitor_unmonitor_cancels_queued_track_jobs_and_remonitor_requeues() {
+        let mut registry = ProviderRegistry::new();
+        registry.register_download(Arc::new(MockProvider {}));
+
+        let state = test_support::test_state_with_registry(registry).await;
+
+        let album = album::ActiveModel {
+            title: Set("Test Album".to_string()),
+            album_type: Set(AlbumType::Album),
+            release_date: Set(None),
+            cover_url: Set(None),
+            explicit: Set(false),
+            wanted_status: Set(WantedStatus::Wanted),
+            requested_quality: Set(None),
+            ..album::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album");
+
+        let track = track::ActiveModel {
+            title: Set("Track 1".to_string()),
+            version: Set(None),
+            disc_number: Set(Some(1)),
+            track_number: Set(Some(1)),
+            duration: Set(Some(215)),
+            album_id: Set(album.id),
+            explicit: Set(false),
+            isrc: Set(None),
+            root_folder_id: Set(None),
+            status: Set(WantedStatus::Wanted),
+            quality_override: Set(None),
+            file_path: Set(None),
+            ..track::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert track");
+
+        let job = jobs::enqueue_job(
+            &state,
+            Job::DownloadTrack {
+                payload: DownloadTrackJobPayload {
+                    track_id: track.id,
+                    provider: Provider::Tidal,
+                },
+            },
+        )
+        .await
+        .expect("insert queued job");
+
+        toggle_track_monitor(&state, track.id, album.id, false)
+            .await
+            .expect("unmonitor track");
+
+        let reloaded_track = track::Entity::find_by_id(track.id)
+            .one(&state.db)
+            .await
+            .expect("reload track")
+            .expect("track exists");
+        let reloaded_job = crate::db::job::Entity::find_by_id(job.id)
+            .one(&state.db)
+            .await
+            .expect("reload job")
+            .expect("job exists");
+
+        assert_eq!(reloaded_track.status, WantedStatus::Unmonitored);
+        assert_eq!(reloaded_job.status, JobStatus::Cancelled);
+
+        toggle_track_monitor(&state, track.id, album.id, false)
+            .await
+            .expect("unmonitor already unmonitored track");
+
+        let reloaded_job = crate::db::job::Entity::find_by_id(job.id)
+            .one(&state.db)
+            .await
+            .expect("reload already cancelled job")
+            .expect("job exists");
+
+        assert_eq!(reloaded_job.status, JobStatus::Cancelled);
+
+        toggle_track_monitor(&state, track.id, album.id, true)
+            .await
+            .expect("remonitor track");
+
+        let reloaded_track = track::Entity::find_by_id(track.id)
+            .one(&state.db)
+            .await
+            .expect("reload remonitored track")
+            .expect("track exists");
+        let reloaded_job = crate::db::job::Entity::find_by_id(job.id)
+            .one(&state.db)
+            .await
+            .expect("reload remonitored job")
+            .expect("job exists");
+
+        assert_eq!(reloaded_track.status, WantedStatus::Wanted);
+        assert_eq!(reloaded_job.status, JobStatus::Queued);
+    }
+
+    #[tokio::test]
+    async fn toggle_track_monitor_unmonitor_conflicts_when_track_job_running() {
+        let state = test_support::test_state().await;
+
+        let album = album::ActiveModel {
+            title: Set("Busy Album".to_string()),
+            album_type: Set(AlbumType::Album),
+            release_date: Set(None),
+            cover_url: Set(None),
+            explicit: Set(false),
+            wanted_status: Set(WantedStatus::InProgress),
+            requested_quality: Set(None),
+            ..album::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert album");
+
+        let track = track::ActiveModel {
+            title: Set("Track 1".to_string()),
+            version: Set(None),
+            disc_number: Set(Some(1)),
+            track_number: Set(Some(1)),
+            duration: Set(Some(215)),
+            album_id: Set(album.id),
+            explicit: Set(false),
+            isrc: Set(None),
+            root_folder_id: Set(None),
+            status: Set(WantedStatus::Wanted),
+            quality_override: Set(None),
+            file_path: Set(None),
+            ..track::ActiveModel::new()
+        }
+        .insert(&state.db)
+        .await
+        .expect("insert track");
+
+        let job = jobs::enqueue_job(
+            &state,
+            Job::DownloadTrack {
+                payload: DownloadTrackJobPayload {
+                    track_id: track.id,
+                    provider: Provider::Tidal,
+                },
+            },
+        )
+        .await
+        .expect("insert queued job");
+        crate::db::job::ActiveModel {
+            id: Set(job.id),
+            status: Set(JobStatus::Running),
+            ..Default::default()
+        }
+        .update(&state.db)
+        .await
+        .expect("mark job running");
+
+        let err = toggle_track_monitor(&state, track.id, album.id, false)
+            .await
+            .expect_err("active download should conflict");
+
+        assert!(matches!(err, AppError::Conflict { .. }));
     }
 }

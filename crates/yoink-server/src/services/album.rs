@@ -532,6 +532,17 @@ mod tests {
             .expect("reload job")
             .expect("job exists");
         assert_eq!(job.status, JobStatus::Cancelled);
+
+        toggle_album_monitor(&state, album.id, false)
+            .await
+            .expect("unmonitor already unmonitored album");
+
+        let job = db::job::Entity::find_by_id(job.id)
+            .one(&state.db)
+            .await
+            .expect("reload already cancelled job")
+            .expect("job exists");
+        assert_eq!(job.status, JobStatus::Cancelled);
     }
 
     #[tokio::test]

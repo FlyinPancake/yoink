@@ -49,7 +49,7 @@ function isTrackJob(
 }
 
 function progressPercent(progress: number): number {
-  return Math.max(0, Math.min(100, Math.round(progress)));
+  return Math.max(0, Math.min(100, Math.round(progress * 100)));
 }
 
 function downloadTitle(
