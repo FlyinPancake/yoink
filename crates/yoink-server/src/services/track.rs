@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::api::LibraryTrack;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
-    QueryOrder,
+    QueryOrder, SelectExt,
 };
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -205,16 +205,30 @@ pub(crate) async fn bulk_toggle_track_monitor(
     album_id: Uuid,
     monitored: bool,
 ) -> AppResult<()> {
-    let _album = album::Entity::find_by_id(album_id)
-        .one(&state.db)
+    if !album::Entity::find_by_id(album_id)
+        .exists(&state.db)
         .await?
-        .ok_or_else(|| AppError::not_found("album", Some(album_id.to_string())))?;
+    {
+        return Err(AppError::not_found("album", Some(album_id.to_string())));
+    }
 
     let next_status = if monitored {
         WantedStatus::Wanted
     } else {
         WantedStatus::Unmonitored
     };
+
+    let tracks = track::Entity::find()
+        .filter(track::Column::AlbumId.eq(album_id))
+        .all(&state.db)
+        .await?;
+
+    // TODO maybe make this better
+    if !monitored {
+        for track in tracks {
+            services::jobs::prepare_track_for_unmonitor(state, track.id).await?;
+        }
+    }
 
     track::Entity::update_many()
         .set(track::ActiveModel {
