@@ -1,4 +1,6 @@
 pub(crate) mod deezer;
+#[cfg(test)]
+pub mod mock;
 pub(crate) mod musicbrainz;
 pub(crate) mod registry;
 pub(crate) mod soulseek;
@@ -161,6 +163,8 @@ pub(crate) struct ProviderTrack {
     /// Whether the track is marked explicit.
     pub explicit: bool,
     /// Provider-specific extra metadata (for tagging).
+    #[allow(dead_code)]
+    // TODO: remove this
     pub extra: HashMap<String, Value>,
 }
 
@@ -349,6 +353,7 @@ pub(crate) trait MetadataProvider: Send + Sync {
     fn image_url(&self, image_ref: &str, size: u16) -> String;
 
     /// Fetch cover art bytes for an image ref (full resolution).
+    #[expect(dead_code)]
     async fn fetch_cover_art_bytes(&self, image_ref: &str) -> Option<Vec<u8>>;
 
     /// Fetch the image ref for an artist by their external ID.
@@ -393,6 +398,7 @@ pub(crate) trait DownloadSource: Send + Sync {
         true
     }
 
+    // TODO: separate resolve from DL
     /// Resolve playback info (download URL / segments) for a track.
     async fn resolve_playback(
         &self,
@@ -400,6 +406,31 @@ pub(crate) trait DownloadSource: Send + Sync {
         quality: &Quality,
         context: Option<&DownloadTrackContext>,
     ) -> Result<PlaybackInfo, ProviderError>;
+
+    // TODO: reimplement for all providers
+    async fn resolve_by_id(
+        &self,
+        external_track_ids: &[String],
+        quality: &Quality,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        // TODO: handle multiple IDs (for providers that have different IDs for different qualities)
+        let Some(external_track_id) = external_track_ids.first() else {
+            return Err(ProviderError::Unavailable {
+                provider: self.id().to_string(),
+                reason: "no external track ID provided".to_string(),
+            });
+        };
+        self.resolve_playback(external_track_id, quality, None)
+            .await
+    }
+
+    async fn resolve_by_metadata(
+        &self,
+        metadata: &DownloadTrackContext,
+        quality: &Quality,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        self.resolve_playback("", quality, Some(metadata)).await
+    }
 }
 
 /// Build an image proxy URL for a given provider and image reference.

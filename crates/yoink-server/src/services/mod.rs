@@ -2,12 +2,12 @@ pub(crate) mod album;
 pub(crate) mod artist;
 pub(crate) mod downloads;
 pub(crate) mod helpers;
+pub(crate) mod jobs;
 pub(crate) mod library;
 pub(crate) mod matching;
 pub(crate) mod search;
 pub(crate) mod track;
 
-pub(crate) use downloads::download_worker_loop;
 pub(crate) use library::{
     browse_path, confirm_external_import, confirm_import_library, merge_albums,
     preview_external_import, preview_import_library, reconcile_library_files,

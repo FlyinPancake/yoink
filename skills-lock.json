@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "sea-orm-2": {
+      "source": "elcoosp/elcoosp-skills",
+      "sourceType": "github",
+      "skillPath": "sea-orm-2/SKILL.md",
+      "computedHash": "b271db0867f4f616c220868014724bb48bdb13f1dec031c55d3d7f1828560b13"
+    }
+  }
+}

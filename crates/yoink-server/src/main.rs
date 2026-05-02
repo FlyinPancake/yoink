@@ -39,7 +39,7 @@ use crate::{
         soulseek::SoulSeekSource, tidal::TidalProvider,
     },
     routes::build_router,
-    services::{download_worker_loop, reconcile_library_files},
+    services::reconcile_library_files,
     state::AppState,
 };
 
@@ -243,7 +243,7 @@ fn spawn_background_tasks(state: &AppState) -> JoinSet<()> {
     join_set.spawn(async move {
         loop {
             let worker_state = worker_state.clone();
-            match download_worker_loop(worker_state).await {
+            match services::jobs::download::download_worker(worker_state).await {
                 Err(err) => {
                     error!(error = %err, "Download worker loop encountered an error, restarting");
                     continue;

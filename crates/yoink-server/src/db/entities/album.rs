@@ -14,8 +14,6 @@ pub struct Model {
     #[sea_orm(has_many)]
     pub tracks: HasMany<super::track::Entity>,
     #[sea_orm(has_many)]
-    pub download_jobs: HasMany<super::download_job::Entity>,
-    #[sea_orm(has_many)]
     pub provider_links: HasMany<super::album_provider_link::Entity>,
     #[sea_orm(index)]
     pub title: String,

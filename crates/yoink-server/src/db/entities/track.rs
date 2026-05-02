@@ -20,9 +20,13 @@ pub struct Model {
     pub album: HasOne<super::album::Entity>,
     #[sea_orm(has_many, via = "track_artist")]
     pub artists: HasMany<super::artist::Entity>,
+    #[sea_orm(has_many)]
+    pub track_artists: HasMany<super::track_artist::Entity>,
     pub explicit: bool,
     /// International Standard Recording Code
     pub isrc: Option<String>,
+    #[sea_orm(has_many)]
+    pub provider_links: HasMany<super::track_provider_link::Entity>,
     pub root_folder_id: Option<Uuid>,
     #[sea_orm(belongs_to, from = "root_folder_id", to = "id", on_delete = "SetNull")]
     pub root_folder: Option<super::root_folder::Entity>,

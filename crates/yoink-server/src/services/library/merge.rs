@@ -3,6 +3,10 @@ use uuid::Uuid;
 use crate::{
     db::{self, album_type::AlbumType, quality::Quality, wanted_status::WantedStatus},
     error::{AppError, AppResult},
+    services::{
+        self,
+        jobs::{Job, download::DownloadAlbumJobPayload},
+    },
     state::AppState,
     util::normalize,
 };
@@ -359,16 +363,26 @@ async fn move_download_jobs<C>(
     source_album_id: Uuid,
 ) -> AppResult<()>
 where
-    C: sea_orm::ConnectionTrait,
+    C: sea_orm::ConnectionTrait + sea_orm::TransactionTrait,
 {
-    let source_jobs = db::download_job::Entity::find()
-        .filter(db::download_job::Column::AlbumId.eq(source_album_id))
-        .all(db)
-        .await?;
+    let source_jobs = services::jobs::list_jobs_for_album(db, source_album_id).await?;
 
     for source_job in source_jobs {
+        let Job::DownloadAlbum { payload } = source_job.data.clone() else {
+            continue;
+        };
+
+        let data = Job::DownloadAlbum {
+            payload: DownloadAlbumJobPayload {
+                album_id: target_album_id,
+                ..payload
+            },
+        };
+        let deduplication_key = data.dedupe_key();
+
         let mut source_job = source_job.into_active_model();
-        source_job.album_id = Set(target_album_id);
+        source_job.data = Set(data);
+        source_job.deduplication_key = Set(deduplication_key);
         source_job.update(db).await?;
     }
 
@@ -498,10 +512,11 @@ mod tests {
     use super::merge_albums;
     use crate::{
         db::{
-            self, album, album_artist, album_provider_link, album_type::AlbumType, download_job,
-            download_status::DownloadStatus, provider::Provider, quality::Quality, track,
-            track_provider_link, wanted_status::WantedStatus,
+            self, album, album_artist, album_provider_link, album_type::AlbumType,
+            provider::Provider, quality::Quality, track, track_provider_link,
+            wanted_status::WantedStatus,
         },
+        services::jobs::{self, Job, download::DownloadAlbumJobPayload},
         test_support,
     };
 
@@ -513,6 +528,7 @@ mod tests {
             name: Set("Artist".to_string()),
             monitored: Set(true),
             image_url: Set(None),
+            bio: Set(None),
             ..db::artist::ActiveModel::new()
         }
         .insert(&state.db)
@@ -523,6 +539,7 @@ mod tests {
             name: Set("Guest".to_string()),
             monitored: Set(false),
             image_url: Set(None),
+            bio: Set(None),
             ..db::artist::ActiveModel::new()
         }
         .insert(&state.db)
@@ -565,6 +582,7 @@ mod tests {
         .insert(&state.db)
         .await
         .expect("link target artist");
+
         album_artist::ActiveModel {
             album_id: Set(source_album.id),
             artist_id: Set(artist.id),
@@ -573,6 +591,7 @@ mod tests {
         .insert(&state.db)
         .await
         .expect("link source artist");
+
         album_artist::ActiveModel {
             album_id: Set(source_album.id),
             artist_id: Set(guest.id),
@@ -593,6 +612,7 @@ mod tests {
         .insert(&state.db)
         .await
         .expect("insert target provider link");
+
         album_provider_link::ActiveModel {
             album_id: Set(source_album.id),
             provider: Set(Provider::Tidal),
@@ -604,6 +624,7 @@ mod tests {
         .insert(&state.db)
         .await
         .expect("insert duplicate source provider link");
+
         album_provider_link::ActiveModel {
             album_id: Set(source_album.id),
             provider: Set(Provider::Deezer),
@@ -627,6 +648,7 @@ mod tests {
             isrc: Set(Some("same-isrc".to_string())),
             root_folder_id: Set(None),
             status: Set(WantedStatus::Wanted),
+            quality_override: Set(None),
             file_path: Set(None),
             ..track::ActiveModel::new()
         }
@@ -655,6 +677,7 @@ mod tests {
             isrc: Set(Some("same-isrc".to_string())),
             root_folder_id: Set(None),
             status: Set(WantedStatus::Acquired),
+            quality_override: Set(None),
             file_path: Set(Some("/music/source-track.flac".to_string())),
             ..track::ActiveModel::new()
         }
@@ -683,6 +706,7 @@ mod tests {
             isrc: Set(Some("unique-isrc".to_string())),
             root_folder_id: Set(None),
             status: Set(WantedStatus::Wanted),
+            quality_override: Set(None),
             file_path: Set(None),
             ..track::ActiveModel::new()
         }
@@ -690,16 +714,15 @@ mod tests {
         .await
         .expect("insert unique source track");
 
-        download_job::ActiveModel {
-            album_id: Set(source_album.id),
-            source: Set(Provider::Tidal),
-            quality: Set(Quality::HiRes),
-            status: Set(DownloadStatus::Queued),
-            total_tracks: Set(2),
-            completed_tasks: Set(0),
-            ..download_job::ActiveModel::new()
-        }
-        .insert(&state.db)
+        jobs::enqueue_job(
+            &state,
+            Job::DownloadAlbum {
+                payload: DownloadAlbumJobPayload {
+                    album_id: source_album.id,
+                    provider: Provider::Tidal,
+                },
+            },
+        )
         .await
         .expect("insert source job");
 
@@ -800,11 +823,21 @@ mod tests {
         assert_eq!(moved_track.id, source_unique_track.id);
         assert_eq!(moved_track.album_id, target_album.id);
 
-        let jobs = db::download_job::Entity::find()
-            .filter(db::download_job::Column::AlbumId.eq(target_album.id))
-            .all(&state.db)
+        let target_jobs = jobs::list_jobs_for_album(&state.db, target_album.id)
             .await
-            .expect("reload jobs");
-        assert_eq!(jobs.len(), 1);
+            .expect("reload target jobs");
+        assert_eq!(target_jobs.len(), 1);
+        match &target_jobs[0].data {
+            Job::DownloadAlbum { payload } => {
+                assert_eq!(payload.album_id, target_album.id);
+                assert_eq!(payload.provider, Provider::Tidal);
+            }
+            other => panic!("unexpected job after merge: {other:?}"),
+        }
+
+        let source_jobs = jobs::list_jobs_for_album(&state.db, source_album.id)
+            .await
+            .expect("reload source jobs");
+        assert!(source_jobs.is_empty());
     }
 }

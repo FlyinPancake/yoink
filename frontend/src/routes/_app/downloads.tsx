@@ -4,19 +4,25 @@ import {
   CheckCircle2Icon,
   Loader2Icon,
   ClockIcon,
-  SearchIcon,
   Trash2Icon,
   XCircleIcon,
 } from "lucide-react";
 import { $api } from "@/lib/api";
 import { useCancelJob, useClearCompletedJobs } from "@/lib/api/mutations";
-import { canCancelDownload, isDownloadActive, isDownloadHistory } from "@/lib/music";
+import {
+  canCancelDownload,
+  isDownloadActive,
+  isDownloadHistory,
+  providerDisplayName,
+} from "@/lib/music";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import type { components } from "@/lib/api/types.gen";
 
-type DownloadJob = components["schemas"]["DownloadJob"];
-type DownloadStatus = components["schemas"]["DownloadStatus"];
+type JobResponse = components["schemas"]["JobResponse"];
+type JobStatus = components["schemas"]["JobStatus"];
+type LibraryAlbumSummary = components["schemas"]["LibraryAlbumSummary"];
+type LibraryTrack = components["schemas"]["LibraryTrack"];
 
 export const Route = createFileRoute("/_app/downloads")({
   component: DownloadsPage,
@@ -26,28 +32,60 @@ export const Route = createFileRoute("/_app/downloads")({
 });
 
 const statusConfig: Record<
-  DownloadStatus,
+  JobStatus,
   { icon: React.ComponentType<{ className?: string }>; color: string }
 > = {
   queued: { icon: ClockIcon, color: "text-amber-500" },
-  resolving: { icon: SearchIcon, color: "text-violet-500" },
-  downloading: { icon: Loader2Icon, color: "text-blue-500" },
-  completed: { icon: CheckCircle2Icon, color: "text-green-500" },
+  running: { icon: Loader2Icon, color: "text-blue-500" },
+  succeeded: { icon: CheckCircle2Icon, color: "text-green-500" },
   failed: { icon: AlertCircleIcon, color: "text-red-500" },
+  cancelled: { icon: XCircleIcon, color: "text-muted-foreground" },
 };
 
-function downloadTitle(job: DownloadJob) {
-  return job.kind === "track" ? (job.track_title ?? job.album_title) : job.album_title;
+function isTrackJob(
+  job: JobResponse,
+): job is JobResponse & { kind: "download_track"; track_id: string } {
+  return job.kind === "download_track";
 }
 
-function downloadSubtitle(job: DownloadJob) {
-  return job.kind === "track"
-    ? `${job.artist_name} · ${job.album_title} · ${job.source}`
-    : `${job.artist_name} · ${job.source}`;
+function progressPercent(progress: number): number {
+  return Math.max(0, Math.min(100, Math.round(progress * 100)));
+}
+
+function downloadTitle(
+  job: JobResponse,
+  albumById: Map<string, LibraryAlbumSummary>,
+  trackById: Map<string, LibraryTrack>,
+) {
+  if (isTrackJob(job)) {
+    return trackById.get(job.track_id)?.track.title ?? "Track download";
+  }
+
+  return albumById.get(job.album_id)?.title ?? "Album download";
+}
+
+function downloadSubtitle(
+  job: JobResponse,
+  albumById: Map<string, LibraryAlbumSummary>,
+  trackById: Map<string, LibraryTrack>,
+) {
+  const provider = providerDisplayName(job.provider);
+
+  if (isTrackJob(job)) {
+    const track = trackById.get(job.track_id);
+    return track != null
+      ? `${track.artist_name} · ${track.album_title} · ${provider}`
+      : `Track download · ${provider}`;
+  }
+
+  const album = albumById.get(job.album_id);
+  return album?.artist_name ? `${album.artist_name} · ${provider}` : `Album download · ${provider}`;
 }
 
 function DownloadsPage() {
   const { data: jobs, isLoading, isError } = $api.useQuery("get", "/api/job");
+  const { data: albums } = $api.useQuery("get", "/api/album");
+  const { data: tracks } = $api.useQuery("get", "/api/track");
   const cancelJob = useCancelJob();
   const clearCompleted = useClearCompletedJobs();
 
@@ -82,6 +120,8 @@ function DownloadsPage() {
 
   const active = jobs.filter((d) => isDownloadActive(d.status));
   const history = jobs.filter((d) => isDownloadHistory(d.status));
+  const albumById = new Map((albums ?? []).map((album) => [album.id, album]));
+  const trackById = new Map((tracks ?? []).map((track) => [track.track.id, track]));
 
   return (
     <div className="space-y-8">
@@ -123,6 +163,8 @@ function DownloadsPage() {
                   <DownloadRow
                     key={dl.id}
                     dl={dl}
+                    albumById={albumById}
+                    trackById={trackById}
                     onCancel={() =>
                       cancelJob.mutate({
                         params: { path: { job_id: dl.id } },
@@ -142,7 +184,7 @@ function DownloadsPage() {
               </h2>
               <div className="space-y-2">
                 {history.map((dl) => (
-                  <DownloadRow key={dl.id} dl={dl} />
+                  <DownloadRow key={dl.id} dl={dl} albumById={albumById} trackById={trackById} />
                 ))}
               </div>
             </section>
@@ -155,43 +197,47 @@ function DownloadsPage() {
 
 function DownloadRow({
   dl,
+  albumById,
+  trackById,
   onCancel,
   cancelling,
 }: {
-  dl: DownloadJob;
+  dl: JobResponse;
+  albumById: Map<string, LibraryAlbumSummary>;
+  trackById: Map<string, LibraryTrack>;
   onCancel?: () => void;
   cancelling?: boolean;
 }) {
   const cfg = statusConfig[dl.status];
   const Icon = cfg.icon;
-  const progress =
-    dl.total_tracks > 0 ? Math.round((dl.completed_tracks / dl.total_tracks) * 100) : 0;
+  const progress = progressPercent(dl.progress);
+  const kindLabel = isTrackJob(dl) ? "track" : "album";
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
       <div className="flex items-center gap-4 p-4">
         <Icon
-          className={`size-5 shrink-0 ${cfg.color} ${dl.status === "downloading" ? "animate-spin" : ""}`}
+          className={`size-5 shrink-0 ${cfg.color} ${dl.status === "running" ? "animate-spin" : ""}`}
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate font-semibold">{downloadTitle(dl)}</p>
+            <p className="truncate font-semibold">{downloadTitle(dl, albumById, trackById)}</p>
             <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
-              {dl.kind}
+              {kindLabel}
             </span>
             <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase">
-              {dl.quality}
+              {providerDisplayName(dl.provider)}
             </span>
           </div>
-          <p className="text-sm text-muted-foreground">{downloadSubtitle(dl)}</p>
-          {dl.error && <p className="mt-1 text-xs text-red-500">{dl.error}</p>}
+          <p className="text-sm text-muted-foreground">
+            {downloadSubtitle(dl, albumById, trackById)}
+          </p>
+          {dl.error_message && <p className="mt-1 text-xs text-red-500">{dl.error_message}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <div className="text-right">
-            <p className="text-sm font-medium tabular-nums">
-              {dl.completed_tracks}/{dl.total_tracks}
-            </p>
-            <p className="text-xs text-muted-foreground">{progress}%</p>
+            <p className="text-sm font-medium capitalize">{dl.status.replaceAll("_", " ")}</p>
+            <p className="text-xs text-muted-foreground tabular-nums">{progress}%</p>
           </div>
           {onCancel && canCancelDownload(dl.status) && (
             <Button
@@ -206,7 +252,7 @@ function DownloadRow({
           )}
         </div>
       </div>
-      {dl.status === "downloading" && (
+      {isDownloadActive(dl.status) && (
         <div className="h-1 bg-muted">
           <div
             className="h-full bg-blue-500 transition-all duration-300"

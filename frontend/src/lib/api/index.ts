@@ -13,7 +13,7 @@ export type {
   MonitoredArtist,
   MonitoredAlbum,
   LibraryTrack,
-  DownloadJob,
+  JobResponse,
   AddedItem,
 } from "./collections";
 export type { components, paths, operations } from "./types.gen";

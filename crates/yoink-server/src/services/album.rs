@@ -1,8 +1,8 @@
 use crate::{
-    api::{Album, DownloadJob, MonitoredArtist, ProviderLink, TrackInfo},
+    api::{Album, JobResponse, MonitoredArtist, ProviderLink, TrackInfo},
     db::{
-        self, album, album_artist, download_job, download_status::DownloadStatus,
-        provider::Provider, quality::Quality, wanted_status::WantedStatus,
+        self, album, album_artist, provider::Provider, quality::Quality,
+        wanted_status::WantedStatus,
     },
     error::{AppError, AppResult},
     services,
@@ -34,7 +34,7 @@ pub struct AlbumDetailResponse {
     album: Album,
     album_artists: Vec<ArtistWithPriority>,
     tracks: Vec<TrackInfo>,
-    jobs: Vec<DownloadJob>,
+    jobs: Vec<JobResponse>,
     provider_links: Vec<ProviderLink>,
     album_match_suggestions: Vec<AlbumMatchSuggestion>,
     default_quality: Quality,
@@ -72,7 +72,11 @@ pub(crate) async fn get_album_details(
 
     let tracks = get_album_tracks(&state.db, album.id).await?;
 
-    let jobs = services::downloads::list_album_jobs(state, album.id).await?;
+    let jobs = services::jobs::list_jobs_for_album(&state.db, album.id)
+        .await?
+        .into_iter()
+        .map(Into::into)
+        .collect();
 
     let provider_links = album
         .find_related(db::album_provider_link::Entity)
@@ -121,7 +125,7 @@ pub(crate) async fn toggle_album_monitor(
     monitored: bool,
 ) -> AppResult<()> {
     if !monitored {
-        services::downloads::prepare_album_for_unmonitor(state, album_id).await?;
+        services::jobs::prepare_album_for_unmonitor(state, album_id).await?;
     }
 
     let existing = album::Entity::find_by_id(album_id)
@@ -159,7 +163,7 @@ pub(crate) async fn toggle_album_monitor(
     info!(%album_id, monitored, "Toggled album monitored status, updated {} tracks", result.rows_affected);
 
     if monitored {
-        services::downloads::enqueue_album_download(state, album_id).await?;
+        services::jobs::download::enqueue_download_album_job(state, album_id).await?;
     }
 
     state.notify_sse();
@@ -206,7 +210,6 @@ pub(crate) async fn set_album_quality(
 ) -> AppResult<()> {
     let album = album::Entity::load()
         .filter_by_id(album_id)
-        .with(download_job::Entity)
         .one(&state.db)
         .await?
         .ok_or_else(|| AppError::not_found("album", Some(album_id.to_string())))?
@@ -216,23 +219,6 @@ pub(crate) async fn set_album_quality(
         .set_requested_quality(quality)
         .update(&state.db)
         .await?;
-
-    // Update quality on queued/failed download jobs for this album
-    if let Some(quality) = quality {
-        download_job::Entity::update_many()
-            .filter(download_job::Column::AlbumId.eq(album_id))
-            .filter(
-                download_job::Column::Status
-                    .is_in([DownloadStatus::Queued, DownloadStatus::Failed]),
-            )
-            .set(download_job::ActiveModel {
-                id: NotSet,
-                quality: Set(quality),
-                ..Default::default()
-            })
-            .exec(&state.db)
-            .await?;
-    }
 
     info!(%album_id, ?quality, "Updated album quality override");
     state.notify_sse();
@@ -300,12 +286,7 @@ pub(crate) async fn remove_album_files(
             .await?;
     }
 
-    // Delete completed download jobs for this album
-    download_job::Entity::delete_many()
-        .filter(download_job::Column::AlbumId.eq(album_id))
-        .filter(download_job::Column::Status.eq(DownloadStatus::Completed))
-        .exec(&state.db)
-        .await?;
+    services::jobs::clear_completed_album_jobs(&state.db, album_id).await?;
 
     info!(%album_id, unmonitor, "Removed downloaded album files");
     state.notify_sse();
@@ -399,21 +380,28 @@ pub(crate) async fn add_album(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
 
     use super::{remove_album_files, toggle_album_monitor};
     use crate::{
         db::{
-            self, album, album_type::AlbumType, download_job, download_status::DownloadStatus,
-            provider::Provider, quality::Quality, track, wanted_status::WantedStatus,
+            self, album, album_type::AlbumType, job_status::JobStatus, track,
+            wanted_status::WantedStatus,
         },
         error::AppError,
+        providers::{mock::MockProvider, registry::ProviderRegistry},
+        services::jobs::{self, Job, download::DownloadAlbumJobPayload},
         test_support,
     };
 
     #[tokio::test]
     async fn toggle_album_monitor_updates_album_and_track_statuses() {
-        let state = test_support::test_state().await;
+        let mut registry = ProviderRegistry::new();
+        registry.register_download(Arc::new(MockProvider {}));
+
+        let state = test_support::test_state_with_registry(registry).await;
 
         let album = album::ActiveModel {
             title: sea_orm::ActiveValue::Set("Test Album".to_string()),
@@ -520,18 +508,15 @@ mod tests {
         .await
         .expect("insert track");
 
-        download_job::ActiveModel {
-            album_id: sea_orm::ActiveValue::Set(album.id),
-            track_id: sea_orm::ActiveValue::Set(None),
-            source: sea_orm::ActiveValue::Set(Provider::Tidal),
-            quality: sea_orm::ActiveValue::Set(Quality::Lossless),
-            status: sea_orm::ActiveValue::Set(DownloadStatus::Queued),
-            total_tracks: sea_orm::ActiveValue::Set(1),
-            completed_tasks: sea_orm::ActiveValue::Set(0),
-            error_message: sea_orm::ActiveValue::Set(None),
-            ..download_job::ActiveModel::new()
-        }
-        .insert(&state.db)
+        let job = jobs::enqueue_job(
+            &state,
+            Job::DownloadAlbum {
+                payload: DownloadAlbumJobPayload {
+                    album_id: album.id,
+                    provider: db::provider::Provider::Tidal,
+                },
+            },
+        )
         .await
         .expect("insert queued job");
 
@@ -539,14 +524,23 @@ mod tests {
             .await
             .expect("unmonitor album");
 
-        assert!(
-            db::download_job::Entity::find()
-                .filter(db::download_job::Column::AlbumId.eq(album.id))
-                .all(&state.db)
-                .await
-                .expect("load jobs")
-                .is_empty()
-        );
+        let job = db::job::Entity::find_by_id(job.id)
+            .one(&state.db)
+            .await
+            .expect("reload job")
+            .expect("job exists");
+        assert_eq!(job.status, JobStatus::Cancelled);
+
+        toggle_album_monitor(&state, album.id, false)
+            .await
+            .expect("unmonitor already unmonitored album");
+
+        let job = db::job::Entity::find_by_id(job.id)
+            .one(&state.db)
+            .await
+            .expect("reload already cancelled job")
+            .expect("job exists");
+        assert_eq!(job.status, JobStatus::Cancelled);
     }
 
     #[tokio::test]
@@ -585,20 +579,25 @@ mod tests {
         .await
         .expect("insert track");
 
-        download_job::ActiveModel {
-            album_id: sea_orm::ActiveValue::Set(album.id),
-            track_id: sea_orm::ActiveValue::Set(None),
-            source: sea_orm::ActiveValue::Set(Provider::Tidal),
-            quality: sea_orm::ActiveValue::Set(Quality::Lossless),
-            status: sea_orm::ActiveValue::Set(DownloadStatus::Downloading),
-            total_tracks: sea_orm::ActiveValue::Set(1),
-            completed_tasks: sea_orm::ActiveValue::Set(0),
-            error_message: sea_orm::ActiveValue::Set(None),
-            ..download_job::ActiveModel::new()
-        }
-        .insert(&state.db)
+        let job = jobs::enqueue_job(
+            &state,
+            Job::DownloadAlbum {
+                payload: DownloadAlbumJobPayload {
+                    album_id: album.id,
+                    provider: db::provider::Provider::Tidal,
+                },
+            },
+        )
         .await
         .expect("insert active job");
+        db::job::ActiveModel {
+            id: sea_orm::ActiveValue::Set(job.id),
+            status: sea_orm::ActiveValue::Set(JobStatus::Running),
+            ..Default::default()
+        }
+        .update(&state.db)
+        .await
+        .expect("mark job running");
 
         let err = toggle_album_monitor(&state, album.id, false)
             .await
@@ -660,20 +659,25 @@ mod tests {
         .await
         .expect("insert downloaded track");
 
-        download_job::ActiveModel {
-            album_id: sea_orm::ActiveValue::Set(album.id),
-            track_id: sea_orm::ActiveValue::Set(None),
-            source: sea_orm::ActiveValue::Set(Provider::Tidal),
-            quality: sea_orm::ActiveValue::Set(Quality::Lossless),
-            status: sea_orm::ActiveValue::Set(DownloadStatus::Completed),
-            total_tracks: sea_orm::ActiveValue::Set(1),
-            completed_tasks: sea_orm::ActiveValue::Set(1),
-            error_message: sea_orm::ActiveValue::Set(None),
-            ..download_job::ActiveModel::new()
-        }
-        .insert(&state.db)
+        let job = jobs::enqueue_job(
+            &state,
+            Job::DownloadAlbum {
+                payload: DownloadAlbumJobPayload {
+                    album_id: album.id,
+                    provider: db::provider::Provider::Tidal,
+                },
+            },
+        )
         .await
         .expect("insert completed job");
+        db::job::ActiveModel {
+            id: sea_orm::ActiveValue::Set(job.id),
+            status: sea_orm::ActiveValue::Set(JobStatus::Succeeded),
+            ..Default::default()
+        }
+        .update(&state.db)
+        .await
+        .expect("mark job completed");
 
         remove_album_files(&state, album.id, false)
             .await
@@ -695,9 +699,7 @@ mod tests {
         assert_eq!(reloaded_track.file_path, None);
         assert_eq!(reloaded_track.root_folder_id, None);
         assert!(
-            db::download_job::Entity::find()
-                .filter(db::download_job::Column::AlbumId.eq(album.id))
-                .all(&state.db)
+            jobs::list_jobs_for_album(&state.db, album.id)
                 .await
                 .expect("load album jobs")
                 .is_empty()

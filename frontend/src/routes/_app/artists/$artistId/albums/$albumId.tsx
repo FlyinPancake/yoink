@@ -49,7 +49,7 @@ type Album = components["schemas"]["Album"];
 type TrackInfo = components["schemas"]["TrackInfo"];
 type ProviderLink = components["schemas"]["ProviderLink"];
 type AlbumMatchSuggestion = components["schemas"]["AlbumMatchSuggestion"];
-type DownloadJob = components["schemas"]["DownloadJob"];
+type JobResponse = components["schemas"]["JobResponse"];
 type Quality = components["schemas"]["Quality"];
 type ArtistWithPriority = components["schemas"]["ArtistWithPriority"];
 type AlbumType = components["schemas"]["AlbumType"];
@@ -94,6 +94,21 @@ function formatDuration(totalSecs: number): string {
     return `${String(hrs)} hr ${String(mins)} min`;
   }
   return `${String(totalMins)} min ${String(secs).padStart(2, "0")} sec`;
+}
+
+function isAlbumJob(
+  job: JobResponse,
+): job is JobResponse & { kind: "download_album"; album_id: string } {
+  return job.kind === "download_album";
+}
+
+/**
+ * @summary Transform 0..1 progress to percentage
+ *
+ * Since progress is 0..1, we need to transform it and clamp it to 0-100.
+ */
+function progressPercent(progress: number): number {
+  return Math.max(0, Math.min(100, Math.round(progress * 100)));
 }
 
 // ── Page component ─────────────────────────────────────────────
@@ -204,7 +219,7 @@ function AlbumDetailContent({
   album: Album;
   albumArtists: Array<ArtistWithPriority>;
   tracks: Array<TrackInfo>;
-  jobs: Array<DownloadJob>;
+  jobs: Array<JobResponse>;
   providerLinks: Array<ProviderLink>;
   matchSuggestions: Array<AlbumMatchSuggestion>;
   defaultQuality: Quality;
@@ -227,8 +242,8 @@ function AlbumDetailContent({
 
   // Find the latest job for this album
   const latestJob = jobs
-    .filter((j) => j.album_id === album.id)
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0] as DownloadJob | undefined;
+    .filter((job) => isAlbumJob(job) && job.album_id === album.id)
+    .sort((a, b) => b.modified_at.localeCompare(a.modified_at))[0] as JobResponse | undefined;
 
   const hasActiveJob = latestJob && isDownloadActive(latestJob.status);
   const canDownload =
@@ -316,9 +331,9 @@ function AlbumDetailContent({
         </div>
 
         {/* Job error banner */}
-        {latestJob?.error && (
+        {latestJob?.error_message && (
           <div className="border-b border-red-500/20 bg-red-500/6 px-5 py-2 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
-            {latestJob.error}
+            {latestJob.error_message}
           </div>
         )}
 
@@ -503,18 +518,18 @@ function AlbumDetailContent({
 
 // ── Job status badge ───────────────────────────────────────────
 
-function JobStatusBadge({ job }: { job: DownloadJob }) {
+function JobStatusBadge({ job }: { job: JobResponse }) {
   const colorMap: Record<string, string> = {
     queued: "bg-amber-500/10 text-amber-500",
-    resolving: "bg-violet-500/10 text-violet-500",
-    downloading: "bg-blue-500/10 text-blue-500",
-    completed: "bg-green-500/10 text-green-500",
+    running: "bg-blue-500/10 text-blue-500",
+    succeeded: "bg-green-500/10 text-green-500",
     failed: "bg-red-500/10 text-red-500",
+    cancelled: "bg-muted text-muted-foreground",
   };
 
   let label = job.status as string;
-  if (job.status === "downloading") {
-    label = `Downloading ${String(job.completed_tracks)}/${String(job.total_tracks)}`;
+  if (job.status === "running") {
+    label = `Running ${String(progressPercent(job.progress))}%`;
   }
 
   return (

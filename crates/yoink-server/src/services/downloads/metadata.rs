@@ -237,33 +237,6 @@ fn parse_featured_artists(title: &str) -> Vec<String> {
     out
 }
 
-pub(crate) fn extract_disc_number(
-    track_extra: &HashMap<String, Value>,
-    track_info_extra: Option<&HashMap<String, Value>>,
-) -> Option<i32> {
-    for key in ["volumeNumber", "discNumber", "volume_number", "disc_number"] {
-        if let Some(val) = track_info_extra
-            .and_then(|m| m.get(key))
-            .or_else(|| track_extra.get(key))
-        {
-            match val {
-                Value::Number(n) => {
-                    if let Some(v) = n.as_i64().and_then(|v| i32::try_from(v).ok()) {
-                        return Some(v);
-                    }
-                }
-                Value::String(s) => {
-                    if let Ok(v) = s.trim().parse::<i32>() {
-                        return Some(v);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -453,52 +426,6 @@ mod tests {
         );
         let result = build_full_artist_string("Song", &track_extra, None, "Fallback");
         assert_eq!(result, "Artist Via Title Key");
-    }
-
-    // ── extract_disc_number ─────────────────────────────────────
-
-    #[test]
-    fn extract_disc_from_info_extra_number() {
-        let track_extra = HashMap::new();
-        let mut info_extra = HashMap::new();
-        info_extra.insert("volumeNumber".to_string(), json!(2));
-        assert_eq!(
-            extract_disc_number(&track_extra, Some(&info_extra)),
-            Some(2)
-        );
-    }
-
-    #[test]
-    fn extract_disc_from_track_extra_string() {
-        let mut track_extra = HashMap::new();
-        track_extra.insert("discNumber".to_string(), json!("3"));
-        assert_eq!(extract_disc_number(&track_extra, None), Some(3));
-    }
-
-    #[test]
-    fn extract_disc_from_info_extra_takes_precedence() {
-        let mut track_extra = HashMap::new();
-        track_extra.insert("volumeNumber".to_string(), json!(5));
-        let mut info_extra = HashMap::new();
-        info_extra.insert("volumeNumber".to_string(), json!(1));
-        // info_extra is checked first for each key
-        assert_eq!(
-            extract_disc_number(&track_extra, Some(&info_extra)),
-            Some(1)
-        );
-    }
-
-    #[test]
-    fn extract_disc_none_when_missing() {
-        let track_extra = HashMap::new();
-        assert_eq!(extract_disc_number(&track_extra, None), None);
-    }
-
-    #[test]
-    fn extract_disc_snake_case_key() {
-        let mut track_extra = HashMap::new();
-        track_extra.insert("disc_number".to_string(), json!(4));
-        assert_eq!(extract_disc_number(&track_extra, None), Some(4));
     }
 
     // ── value_as_string ─────────────────────────────────────────

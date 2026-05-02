@@ -1,6 +1,7 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use chrono::{Datelike, NaiveDate};
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt},
@@ -104,18 +105,6 @@ async fn download_dash_segments_to_file(
     Ok(())
 }
 
-pub(crate) async fn has_flac_stream_marker(path: &Path) -> AppResult<bool> {
-    let mut file = fs::File::open(path)
-        .await
-        .map_err(|err| AppError::filesystem("open file", path.display().to_string(), err))?;
-    let mut header = [0u8; 4];
-    let read = file
-        .read(&mut header)
-        .await
-        .map_err(|err| AppError::filesystem("read header", path.display().to_string(), err))?;
-    Ok(read == 4 && header == *b"fLaC")
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaContainer {
     Flac,
@@ -200,6 +189,25 @@ pub(crate) fn extract_year(release_date: &str) -> String {
     } else {
         String::new()
     }
+}
+
+pub fn get_artist_dir(root_dir: &Path, artist_name: &str) -> PathBuf {
+    root_dir.join(sanitize_path_component(artist_name))
+}
+
+pub fn get_album_dir(
+    root_dir: &Path,
+    artist_name: &str,
+    album_title: &str,
+    album_date: Option<NaiveDate>,
+) -> PathBuf {
+    let artist_dir = get_artist_dir(root_dir, artist_name);
+    let release_year = album_date
+        .map(|d| d.year().to_string())
+        .unwrap_or("Unknown".to_string());
+    artist_dir.join(sanitize_path_component(&format!(
+        "{album_title} ({release_year})"
+    )))
 }
 
 #[cfg(test)]

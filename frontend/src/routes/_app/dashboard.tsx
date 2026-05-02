@@ -2,10 +2,18 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { DiscAlbumIcon, DownloadIcon, HeartIcon, LibraryIcon, MicIcon } from "lucide-react";
 import { $api } from "@/lib/api";
 import type { components } from "@/lib/api/types.gen";
-import { isAlbumAcquired, isAlbumWantedLike, isDownloadActive } from "@/lib/music";
+import {
+  isAlbumAcquired,
+  isAlbumWantedLike,
+  isDownloadActive,
+  providerDisplayName,
+} from "@/lib/music";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type DownloadJob = components["schemas"]["DownloadJob"];
+type JobResponse = components["schemas"]["JobResponse"];
+type DashboardAlbum = components["schemas"]["DashboardAlbum"];
+type LibraryTrack = components["schemas"]["LibraryTrack"];
+type MonitoredArtist = components["schemas"]["MonitoredArtist"];
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -14,14 +22,42 @@ export const Route = createFileRoute("/_app/dashboard")({
   },
 });
 
-function downloadTitle(job: DownloadJob) {
-  return job.kind === "track" ? (job.track_title ?? job.album_title) : job.album_title;
+function isTrackJob(
+  job: JobResponse,
+): job is JobResponse & { kind: "download_track"; track_id: string } {
+  return job.kind === "download_track";
 }
 
-function downloadSubtitle(job: DownloadJob) {
-  return job.kind === "track"
-    ? `${job.artist_name} · ${job.album_title} · ${job.source}`
-    : `${job.artist_name} · ${job.source}`;
+function downloadTitle(
+  job: JobResponse,
+  albumById: Map<string, DashboardAlbum>,
+  trackById: Map<string, LibraryTrack>,
+) {
+  if (isTrackJob(job)) {
+    return trackById.get(job.track_id)?.track.title ?? "Track download";
+  }
+
+  return albumById.get(job.album_id)?.title ?? "Album download";
+}
+
+function downloadSubtitle(
+  job: JobResponse,
+  albumById: Map<string, DashboardAlbum>,
+  artistById: Map<string, MonitoredArtist>,
+  trackById: Map<string, LibraryTrack>,
+) {
+  const provider = providerDisplayName(job.provider);
+
+  if (isTrackJob(job)) {
+    const track = trackById.get(job.track_id);
+    return track != null
+      ? `${track.artist_name} · ${track.album_title} · ${provider}`
+      : `Track download · ${provider}`;
+  }
+
+  const album = albumById.get(job.album_id);
+  const artistName = album?.artist_id != null ? artistById.get(album.artist_id)?.name : null;
+  return artistName ? `${artistName} · ${provider}` : `Album download · ${provider}`;
 }
 
 function StatCard({
@@ -58,6 +94,7 @@ function StatCardSkeleton() {
 
 function DashboardPage() {
   const { data, isLoading, isError } = $api.useQuery("get", "/api/dashboard");
+  const { data: tracks } = $api.useQuery("get", "/api/track");
 
   if (isLoading) {
     return (
@@ -94,13 +131,18 @@ function DashboardPage() {
   }
 
   const { artists, albums, jobs } = data;
+  const albumById = new Map(albums.map((album) => [album.id, album]));
+  const artistById = new Map(artists.map((artist) => [artist.id, artist]));
+  const trackById = new Map((tracks ?? []).map((track) => [track.track.id, track]));
 
   const totalArtists = artists.length;
   const totalAlbums = albums.length;
   const wantedAlbums = albums.filter((a) => isAlbumWantedLike(a.wanted_status)).length;
   const acquiredAlbums = albums.filter((a) => isAlbumAcquired(a.wanted_status)).length;
   const activeDownloads = jobs.filter((j) => isDownloadActive(j.status)).length;
-  const recentDownloads = jobs.slice(0, 3);
+  const recentDownloads = [...jobs]
+    .sort((a, b) => b.modified_at.localeCompare(a.modified_at))
+    .slice(0, 3);
   const wantedAlbumsList = albums.filter((a) => isAlbumWantedLike(a.wanted_status)).slice(0, 5);
 
   return (
@@ -133,8 +175,12 @@ function DashboardPage() {
               {recentDownloads.map((dl) => (
                 <div key={dl.id} className="flex items-center justify-between px-5 py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{downloadTitle(dl)}</p>
-                    <p className="truncate text-xs text-muted-foreground">{downloadSubtitle(dl)}</p>
+                    <p className="truncate text-sm font-medium">
+                      {downloadTitle(dl, albumById, trackById)}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {downloadSubtitle(dl, albumById, artistById, trackById)}
+                    </p>
                   </div>
                   <StatusBadge status={dl.status} />
                 </div>
@@ -206,10 +252,10 @@ function DashboardPage() {
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     queued: "bg-amber-500/10 text-amber-500",
-    resolving: "bg-violet-500/10 text-violet-500",
-    downloading: "bg-blue-500/10 text-blue-500",
-    completed: "bg-green-500/10 text-green-500",
+    running: "bg-blue-500/10 text-blue-500",
+    succeeded: "bg-green-500/10 text-green-500",
     failed: "bg-red-500/10 text-red-500",
+    cancelled: "bg-muted text-muted-foreground",
   };
 
   return (

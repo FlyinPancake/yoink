@@ -76,7 +76,7 @@ pub(crate) async fn candidate_base_urls(
 
     let mut candidates = Vec::new();
     if let Some(manual) = manual_base_url {
-        candidates.push(manual.to_string());
+        candidates.push(manual.to_string().trim_end_matches("/").to_string());
     }
 
     {
