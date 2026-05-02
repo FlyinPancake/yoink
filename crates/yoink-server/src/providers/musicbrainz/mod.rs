@@ -29,11 +29,8 @@ pub(crate) struct MusicBrainzProvider {
 
 impl MusicBrainzProvider {
     pub fn new() -> Self {
-        let mut client = MusicBrainzClient::default();
         let user_agent = format!("Yoink/{} (flyinpancake@pm.me)", env!("CARGO_PKG_VERSION"));
-        client
-            .set_user_agent(&user_agent)
-            .expect("invalid MusicBrainz user-agent");
+        let client = MusicBrainzClient::new(&user_agent);
         let http = reqwest::Client::builder()
             .user_agent(&user_agent)
             .build()
@@ -55,7 +52,7 @@ impl MusicBrainzProvider {
                 .by_artist(artist_mbid)
                 .offset(offset)
                 .limit(LIMIT)
-                .execute_with_client(&self.client)
+                .execute_with_client_async(&self.client)
                 .await
                 .map_err(|e| {
                     ProviderError::http("musicbrainz", "browse release groups", e.to_string())
@@ -82,7 +79,7 @@ impl MusicBrainzProvider {
         let rg = ReleaseGroup::fetch()
             .id(release_group_id)
             .with_releases()
-            .execute_with_client(&self.client)
+            .execute_with_client_async(&self.client)
             .await
             .map_err(|e| {
                 ProviderError::http("musicbrainz", "fetch release group", e.to_string())
@@ -129,7 +126,7 @@ impl MusicBrainzProvider {
         let artist = match MbArtist::fetch()
             .id(mbid)
             .with_url_relations()
-            .execute_with_client(&self.client)
+            .execute_with_client_async(&self.client)
             .await
         {
             Ok(a) => a,
@@ -375,7 +372,7 @@ impl MetadataProvider for MusicBrainzProvider {
         let lucene_query = ArtistSearchQuery::query_builder().artist(query).build();
 
         let result = MbArtist::search(lucene_query)
-            .execute_with_client(&self.client)
+            .execute_with_client_async(&self.client)
             .await
             .map_err(|e| ProviderError::http("musicbrainz", "artist search", e.to_string()))?;
 
@@ -467,7 +464,7 @@ impl MetadataProvider for MusicBrainzProvider {
             .id(&release.id)
             .with_recordings()
             .with_artist_credits()
-            .execute_with_client(&self.client)
+            .execute_with_client_async(&self.client)
             .await
             .map_err(|e| ProviderError::http("musicbrainz", "fetch release", e.to_string()))?;
 
@@ -578,7 +575,7 @@ impl MetadataProvider for MusicBrainzProvider {
             .build();
 
         let result = ReleaseGroup::search(lucene_query)
-            .execute_with_client(&self.client)
+            .execute_with_client_async(&self.client)
             .await
             .map_err(|e| {
                 ProviderError::http("musicbrainz", "release group search", e.to_string())
