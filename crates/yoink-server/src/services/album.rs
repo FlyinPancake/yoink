@@ -72,8 +72,6 @@ pub(crate) async fn get_album_details(
 
     let tracks = get_album_tracks(&state.db, album.id).await?;
 
-    // let jobs = services::downloads::list_album_jobs(state, album.id).await?;
-
     let jobs = services::jobs::list_jobs_for_album(&state.db, album.id)
         .await?
         .into_iter()

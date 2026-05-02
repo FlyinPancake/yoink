@@ -191,8 +191,8 @@ pub(crate) fn extract_year(release_date: &str) -> String {
     }
 }
 
-pub fn get_artist_dir(root_dir: &Path, aritst_name: &str) -> PathBuf {
-    root_dir.join(sanitize_path_component(aritst_name))
+pub fn get_artist_dir(root_dir: &Path, artist_name: &str) -> PathBuf {
+    root_dir.join(sanitize_path_component(artist_name))
 }
 
 pub fn get_album_dir(

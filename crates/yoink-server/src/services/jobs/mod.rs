@@ -57,8 +57,11 @@ pub(crate) async fn enqueue_job(state: &AppState, job: Job) -> AppResult<job::Mo
         .await?
     {
         let job = match existing.status {
-            JobStatus::Queued | JobStatus::Running => existing,
-            JobStatus::Succeeded | JobStatus::Failed | JobStatus::Cancelled => {
+            JobStatus::Running => {
+                tracing::warn!("job already running, not touching it");
+                existing
+            }
+            JobStatus::Queued | JobStatus::Succeeded | JobStatus::Failed | JobStatus::Cancelled => {
                 let mut active = existing.into_active_model();
                 active.data = Set(job);
                 active.status = Set(JobStatus::Queued);
@@ -111,7 +114,7 @@ pub(crate) async fn cancel_job(state: &AppState, job_id: Uuid) -> AppResult<()> 
         .ok_or(AppError::not_found("job", Some(job_id)))?;
 
     match job.status {
-        JobStatus::Failed | JobStatus::Queued => {
+        JobStatus::Queued => {
             job.into_ex()
                 .into_active_model()
                 .set_status(JobStatus::Cancelled)
@@ -174,7 +177,7 @@ pub(crate) async fn prepare_album_for_unmonitor(state: &AppState, album_id: Uuid
     }
 
     for job in jobs {
-        if matches!(job.status, JobStatus::Queued | JobStatus::Failed) {
+        if matches!(job.status, JobStatus::Queued) {
             cancel_job(state, job.id).await?;
         }
     }

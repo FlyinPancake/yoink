@@ -8,8 +8,6 @@ pub(crate) mod artist_match_suggestion;
 pub(crate) mod artist_provider_link;
 pub(crate) mod auth_session;
 pub(crate) mod auth_settings;
-// pub(crate) mod download_job;
-pub(crate) mod download_status;
 pub(crate) mod job;
 pub(crate) mod job_kind;
 pub(crate) mod job_status;

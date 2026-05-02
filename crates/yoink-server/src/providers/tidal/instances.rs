@@ -79,16 +79,16 @@ pub(crate) async fn candidate_base_urls(
         candidates.push(manual.to_string().trim_end_matches("/").to_string());
     }
 
-    // {
-    //     let c = cache.read().await;
-    //     if let Some(active) = &c.active_base_url {
-    //         candidates.push(active.clone());
-    //     }
-    //     candidates.extend(c.ranked.iter().map(|instance| instance.url.clone()));
-    // }
+    {
+        let c = cache.read().await;
+        if let Some(active) = &c.active_base_url {
+            candidates.push(active.clone());
+        }
+        candidates.extend(c.ranked.iter().map(|instance| instance.url.clone()));
+    }
 
-    // let mut seen = HashSet::new();
-    // candidates.retain(|url| seen.insert(url.clone()));
+    let mut seen = HashSet::new();
+    candidates.retain(|url| seen.insert(url.clone()));
     candidates
 }
 

@@ -170,12 +170,23 @@ pub(crate) async fn enqueue_download_track_job(
 }
 
 pub(crate) async fn retry_album_download(state: &AppState, album_id: Uuid) -> AppResult<()> {
-    // delete DL jobs for the album
-    job::Entity::delete_many()
-        .filter(job::Column::JobKind.eq(JobKind::DownloadAlbum))
-        .filter(job::Column::DeduplicationKey.contains(format!("album:{}", album_id)))
-        .exec(&state.db)
+    let album_dl_job = job::Entity::load()
+        .filter(
+            job::COLUMN
+                .deduplication_key
+                .contains(format!("album:{}", album_id)),
+        )
+        .filter(job::COLUMN.job_kind.eq(JobKind::DownloadAlbum))
+        .one(&state.db)
         .await?;
+
+    if let Some(album_dl_job) = album_dl_job {
+        if album_dl_job.status == JobStatus::Running {
+            return Err(AppError::download("album", "download already in progress"));
+        } else {
+            album_dl_job.delete(&state.db).await?;
+        }
+    }
 
     // enqueue a new DL job for the album
     enqueue_download_album_job(state, album_id).await?;
@@ -272,7 +283,7 @@ async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppRe
     .await?;
 
     let total_tracks = album.tracks.len() as f32;
-    let mut completed_tracks = 0 as f32;
+    let mut completed_tracks = 0.0_f32;
 
     // let job = job.into_active_model();
     let mut job = job;
@@ -286,15 +297,22 @@ async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppRe
             .await?;
         state.notify_sse();
 
-        let (track, temp_path, quality) = match result {
-            Ok(Ok(pair)) => pair,
+        let dl_result = match result {
+            Ok(Ok(plan)) => Ok(plan),
             Ok(Err(err)) => {
                 tracing::error!(job_id = %job.id, error = %err, "Error downloading track in album download job");
-                continue;
+                Err(err)
             }
             Err(err) => {
                 tracing::error!(job_id = %job.id, error = %err, "Join error in album download job");
-                continue;
+                Err(AppError::download("download", err.to_string()))
+            }
+        };
+
+        let (track, temp_path, quality) = match dl_result {
+            Ok(plan) => plan,
+            Err(err) => {
+                return Err(err);
             }
         };
 
@@ -308,7 +326,7 @@ async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppRe
             &track,
             &path,
         )
-        .await;
+        .await?;
 
         let relative_path = path
             .strip_prefix(&state.music_root)
@@ -481,7 +499,7 @@ async fn process_track_download_job(state: AppState, job: job::ModelEx) -> AppRe
             &track,
             &path,
         )
-        .await;
+        .await?;
 
         let relative_path = path
             .strip_prefix(&state.music_root)
@@ -519,14 +537,22 @@ async fn enrich_track_metadata(
     cover_art_jpeg: &Option<Vec<u8>>,
     track: &track::ModelEx,
     path: &PathBuf,
-) {
+) -> AppResult<()> {
     // TODO: having to refetch provider metadata here is not ideal
     // we should cache it during sync and only fill metadata from local db during download
     // it has worked like this so far, but it feels off
     let mut track_providers: Vec<_> = track.provider_links.iter().collect();
     track_providers.sort_by_key(|tp| Reverse(provider_priority(tp.provider)));
-    let primary_provider = track_providers[0].provider;
-    let primary_provider_id = &track_providers[0].provider_track_id;
+
+    let Some(first_provider) = track_providers.first() else {
+        return Err(AppError::metadata(
+            "enrich metadata",
+            "no provider links found",
+        ));
+    };
+
+    let primary_provider = first_provider.provider;
+    let primary_provider_id = first_provider.provider_track_id.as_ref();
 
     let md_provider = state
         .registry
@@ -600,8 +626,11 @@ async fn enrich_track_metadata(
             track = %track.id,
             error = %err,
             "Failed to write LRC sidecar"
-        )
+        );
+        return Err(AppError::metadata("write LRC sidecar", err.to_string()));
     }
+
+    Ok(())
 }
 
 async fn move_downloaded_track(
@@ -860,6 +889,7 @@ pub(crate) async fn download_worker(state: AppState) -> AppResult<()> {
             return Ok(());
         }
         // fetch job
+        // TODO implement back-off for jobs
         let Some(job) = job::Entity::find()
             .filter(job::Column::JobKind.is_in(download_jobs()))
             .filter(job::Column::Status.is_in(ready_jobs()))

@@ -414,7 +414,13 @@ pub(crate) trait DownloadSource: Send + Sync {
         quality: &Quality,
     ) -> Result<PlaybackInfo, ProviderError> {
         // TODO: handle multiple IDs (for providers that have different IDs for different qualities)
-        self.resolve_playback(&external_track_ids[0], quality, None)
+        let Some(external_track_id) = external_track_ids.first() else {
+            return Err(ProviderError::Unavailable {
+                provider: self.id().to_string(),
+                reason: "no external track ID provided".to_string(),
+            });
+        };
+        self.resolve_playback(external_track_id, quality, None)
             .await
     }
 

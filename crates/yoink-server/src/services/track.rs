@@ -227,11 +227,6 @@ pub(crate) async fn bulk_toggle_track_monitor(
 
     services::downloads::sync_album_wanted_status_from_tracks(state, album_id).await?;
 
-    if monitored {
-        tracing::warn!("should enqueue jobs here");
-        // services::jobs::enqueue_download_album_job(state, album_id).await?;
-    }
-
     info!(%album_id, monitored, "Bulk toggled track monitoring");
     state.notify_sse();
     Ok(())

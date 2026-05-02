@@ -1,7 +1,6 @@
 pub(crate) mod io;
 pub(crate) mod lyrics;
 pub(crate) mod metadata;
-// mod worker;
 
 pub(crate) use io::sanitize_path_component;
 pub(crate) use metadata::{TrackMetadata, write_audio_metadata};
@@ -19,7 +18,6 @@ use uuid::Uuid;
 use crate::{
     db::{self, wanted_status::WantedStatus},
     error::{AppError, AppResult},
-    // services::downloads::worker::{download_album_job, download_track_job},
     state::AppState,
 };
 
