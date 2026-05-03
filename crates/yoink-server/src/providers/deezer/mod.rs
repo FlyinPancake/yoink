@@ -5,9 +5,13 @@ use chrono::NaiveDate;
 use governor::{Quota, RateLimiter, clock::DefaultClock, state::InMemoryState, state::NotKeyed};
 use serde::Deserialize;
 use serde_json::Value;
+use snafu::{ResultExt, ensure};
 use tracing::warn;
 
-use crate::db::provider::Provider;
+use crate::{
+    db::provider::Provider,
+    providers::{HttpSnafu, InvalidResponseSnafu, JsonParseSnafu, RateLimitedSnafu, ReqwestSnafu},
+};
 
 use super::{
     MetadataProvider, ProviderAlbum, ProviderArtist, ProviderError, ProviderSearchAlbum,
@@ -196,49 +200,53 @@ impl DeezerProvider {
     ) -> Result<T, ProviderError> {
         self.rate_limiter.until_ready().await;
 
-        let resp = self
-            .http
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| ProviderError::http("deezer", "request", e.to_string()))?;
+        let resp = self.http.get(url).send().await.context(ReqwestSnafu {
+            provider: self.id(),
+            operation: "request".to_string(),
+        })?;
 
         let status = resp.status();
-        let body = resp
-            .text()
-            .await
-            .map_err(|e| ProviderError::parse("deezer", "response body", e.to_string()))?;
+        let body = resp.text().await.context(ReqwestSnafu {
+            provider: Provider::Deezer,
+            operation: "response body",
+        })?;
 
         // Deezer returns HTTP 200 even for errors — check the JSON body.
         if let Ok(err) = serde_json::from_str::<DeezerErrorBody>(&body) {
             if err.error.code == 4 || err.error.error_type.eq_ignore_ascii_case("QuotaException") {
-                return Err(ProviderError::rate_limited(
-                    "deezer",
-                    format!(
+                RateLimitedSnafu {
+                    provider: Provider::Deezer,
+                    reason: format!(
                         "API error ({}): {} [code {}]",
                         err.error.error_type, err.error.message, err.error.code
                     ),
-                ));
+                }
+                .fail()?;
             }
-            return Err(ProviderError::invalid_response(
-                "deezer",
-                format!(
+
+            InvalidResponseSnafu {
+                provider: Provider::Deezer,
+                reason: format!(
                     "API error ({}): {} [code {}]",
                     err.error.error_type, err.error.message, err.error.code
                 ),
-            ));
+            }
+            .fail()?;
         }
 
-        if !status.is_success() {
-            return Err(ProviderError::http(
-                "deezer",
-                "non-success status",
-                format!("{status}: {body}"),
-            ));
-        }
+        ensure!(
+            status.is_success(),
+            HttpSnafu {
+                provider: Provider::Deezer,
+                operation: "non-success status",
+                error: format!("{status}: {body}"),
+            }
+        );
 
-        serde_json::from_str::<T>(&body)
-            .map_err(|e| ProviderError::parse("deezer", "json decode", e.to_string()))
+        serde_json::from_str::<T>(&body).context(JsonParseSnafu {
+            provider: Provider::Deezer,
+            operation: "json decode".to_string(),
+        })
     }
 
     /// Build a Deezer API URL with query parameters (handles encoding).

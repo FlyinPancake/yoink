@@ -12,101 +12,57 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use serde_json::Value;
-use thiserror::Error;
+use snafu::prelude::*;
 
 use crate::db::{provider::Provider, quality::Quality};
 
 // ── Provider error ──────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Snafu)]
 pub(crate) enum ProviderError {
-    #[error("{provider} HTTP error during {operation}: {reason}")]
+    #[snafu(display("{provider} HTTP error during {operation}: {error}"))]
     Http {
-        provider: String,
+        provider: Provider,
         operation: String,
-        reason: String,
+        error: String,
     },
-    #[error("{provider} authentication error: {reason}")]
-    Auth { provider: String, reason: String },
-    #[error("{provider} rate limited: {reason}")]
-    RateLimited { provider: String, reason: String },
-    #[error("{provider} parse error during {operation}: {reason}")]
+    #[snafu(display("{provider} Reqwest error during {operation}: {source}"))]
+    Reqwest {
+        provider: Provider,
+        operation: String,
+        source: reqwest::Error,
+    },
+    #[snafu(display("{provider} authentication error: {reason}"))]
+    Auth { provider: Provider, reason: String },
+    #[snafu(display("{provider} rate limited: {reason}"))]
+    RateLimited { provider: Provider, reason: String },
+    #[snafu(display("{provider} parse error during {operation}: {reason}"))]
     Parse {
-        provider: String,
+        provider: Provider,
         operation: String,
         reason: String,
     },
-    #[error("{provider} not found: {resource}")]
-    NotFound { provider: String, resource: String },
-    #[error("{provider} unavailable: {reason}")]
-    Unavailable { provider: String, reason: String },
-    #[error("{provider} invalid response: {reason}")]
-    InvalidResponse { provider: String, reason: String },
-}
+    #[snafu(display("{provider} JSON parse error during {operation}: {source}"))]
+    JsonParse {
+        provider: Provider,
+        operation: String,
+        source: serde_json::Error,
+    },
+    #[snafu(display("{provider} not found: {resource}"))]
+    NotFound {
+        provider: Provider,
+        resource: String,
+    },
+    #[snafu(display("{provider} unavailable: {reason}"))]
+    Unavailable { provider: Provider, reason: String },
+    #[snafu(display("{provider} invalid response: {reason}"))]
+    InvalidResponse { provider: Provider, reason: String },
 
-impl ProviderError {
-    pub(crate) fn http(
-        provider: impl Into<String>,
-        operation: impl Into<String>,
-        reason: impl Into<String>,
-    ) -> Self {
-        Self::Http {
-            provider: provider.into(),
-            operation: operation.into(),
-            reason: reason.into(),
-        }
-    }
-
-    pub(crate) fn auth(provider: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self::Auth {
-            provider: provider.into(),
-            reason: reason.into(),
-        }
-    }
-
-    pub(crate) fn rate_limited(provider: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self::RateLimited {
-            provider: provider.into(),
-            reason: reason.into(),
-        }
-    }
-
-    pub(crate) fn parse(
-        provider: impl Into<String>,
-        operation: impl Into<String>,
-        reason: impl Into<String>,
-    ) -> Self {
-        Self::Parse {
-            provider: provider.into(),
-            operation: operation.into(),
-            reason: reason.into(),
-        }
-    }
-
-    pub(crate) fn not_found(provider: impl Into<String>, resource: impl Into<String>) -> Self {
-        Self::NotFound {
-            provider: provider.into(),
-            resource: resource.into(),
-        }
-    }
-
-    pub(crate) fn unavailable(provider: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self::Unavailable {
-            provider: provider.into(),
-            reason: reason.into(),
-        }
-    }
-
-    pub(crate) fn invalid_response(provider: impl Into<String>, reason: impl Into<String>) -> Self {
-        Self::InvalidResponse {
-            provider: provider.into(),
-            reason: reason.into(),
-        }
-    }
-
-    pub(crate) fn is_rate_limited(&self) -> bool {
-        matches!(self, Self::RateLimited { .. })
-    }
+    #[snafu(display("{provider} operation not supported: {operation}"))]
+    NotSupported {
+        provider: Provider,
+        operation: String,
+    },
 }
 
 // ── Shared provider types ───────────────────────────────────────────
@@ -394,43 +350,19 @@ pub(crate) trait DownloadSource: Send + Sync {
     fn id(&self) -> Provider;
 
     /// Whether this source requires provider-linked external IDs.
-    fn requires_linked_provider(&self) -> bool {
-        true
-    }
+    fn requires_linked_provider(&self) -> bool;
 
-    // TODO: separate resolve from DL
-    /// Resolve playback info (download URL / segments) for a track.
-    async fn resolve_playback(
-        &self,
-        external_track_id: &str,
-        quality: &Quality,
-        context: Option<&DownloadTrackContext>,
-    ) -> Result<PlaybackInfo, ProviderError>;
-
-    // TODO: reimplement for all providers
     async fn resolve_by_id(
         &self,
         external_track_ids: &[String],
         quality: &Quality,
-    ) -> Result<PlaybackInfo, ProviderError> {
-        // TODO: handle multiple IDs (for providers that have different IDs for different qualities)
-        let Some(external_track_id) = external_track_ids.first() else {
-            return Err(ProviderError::Unavailable {
-                provider: self.id().to_string(),
-                reason: "no external track ID provided".to_string(),
-            });
-        };
-        self.resolve_playback(external_track_id, quality, None)
-            .await
-    }
+    ) -> Result<PlaybackInfo, ProviderError>;
 
     async fn resolve_by_metadata(
         &self,
         metadata: &DownloadTrackContext,
         quality: &Quality,
-    ) -> Result<PlaybackInfo, ProviderError> {
-        self.resolve_playback("", quality, Some(metadata)).await
-    }
+    ) -> Result<PlaybackInfo, ProviderError>;
 }
 
 /// Build an image proxy URL for a given provider and image reference.
@@ -443,29 +375,6 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-
-    // ── ProviderError ───────────────────────────────────────────
-
-    #[test]
-    fn provider_error_display() {
-        let err = ProviderError::invalid_response("test", "something went wrong");
-        assert_eq!(
-            format!("{err}"),
-            "test invalid response: something went wrong"
-        );
-    }
-
-    #[test]
-    fn provider_error_from_string() {
-        let err = ProviderError::parse("x", "json", "bad payload");
-        assert_eq!(format!("{err}"), "x parse error during json: bad payload");
-    }
-
-    #[test]
-    fn provider_error_from_owned_string() {
-        let err = ProviderError::rate_limited("x", "429");
-        assert!(err.is_rate_limited());
-    }
 
     // ── ProviderTrack conversion ────────────────────────────────
 

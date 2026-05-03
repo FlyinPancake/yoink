@@ -16,11 +16,15 @@ use std::{
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use snafu::prelude::*;
 use tokio::sync::{RwLock, Semaphore};
 use tracing::{debug, warn};
 use url::Url;
 
-use crate::db::{provider::Provider, quality::Quality};
+use crate::{
+    db::{provider::Provider, quality::Quality},
+    providers::*,
+};
 
 use self::{
     matching::{pick_best_candidate, pick_from_album_bundle},
@@ -75,19 +79,23 @@ impl DownloadSource for SoulSeekSource {
         false
     }
 
-    async fn resolve_playback(
+    async fn resolve_by_id(
         &self,
-        external_track_id: &str,
-        quality: &Quality,
-        context: Option<&DownloadTrackContext>,
+        _external_track_ids: &[String],
+        _quality: &Quality,
     ) -> Result<PlaybackInfo, ProviderError> {
-        let ctx = context.ok_or_else(|| {
-            ProviderError::invalid_response(
-                "soulseek",
-                "requires track context for search/matching",
-            )
-        })?;
+        NotSupportedSnafu {
+            provider: Provider::Soulseek,
+            operation: "resolve_by_id".to_string(),
+        }
+        .fail()
+    }
 
+    async fn resolve_by_metadata(
+        &self,
+        ctx: &DownloadTrackContext,
+        quality: &Quality,
+    ) -> Result<PlaybackInfo, ProviderError> {
         // Try album-bundle search first, then fall back to per-track search.
         let candidate = match self.find_album_bundle_candidate(ctx, quality).await? {
             Some(c) => c,
@@ -97,19 +105,21 @@ impl DownloadSource for SoulSeekSource {
         self.enqueue_download(&candidate.username, &candidate.filename, candidate.size)
             .await?;
 
-        let local_path = self
+        let local_path = match self
             .wait_for_download(&candidate.username, &candidate.filename, 180)
             .await
-            .map_err(|e| {
+        {
+            Ok(path) => path,
+            Err(e) => {
                 warn!(
-                    track_id = external_track_id,
                     username = candidate.username,
                     filename = candidate.filename,
                     error = %e,
                     "SoulSeek transfer did not complete in time"
                 );
-                e
-            })?;
+                return Err(e);
+            }
+        };
 
         Ok(PlaybackInfo::LocalFile(local_path))
     }
@@ -136,17 +146,18 @@ impl SoulSeekSource {
         quality: &Quality,
     ) -> Result<matching::Candidate, ProviderError> {
         let responses = self.search_track_queries(ctx).await?;
-        if responses.is_empty() {
-            return Err(ProviderError::not_found(
-                "soulseek",
-                format!("search responses for track '{}'", ctx.track_title),
-            ));
-        }
-        pick_best_candidate(&responses, ctx, quality).ok_or_else(|| {
-            ProviderError::not_found(
-                "soulseek",
-                format!("suitable candidate for '{}'", ctx.track_title),
-            )
+
+        ensure!(
+            !responses.is_empty(),
+            NotFoundSnafu {
+                provider: Provider::Soulseek,
+                resource: format!("search responses for track '{}'", ctx.track_title),
+            }
+        );
+
+        pick_best_candidate(&responses, ctx, quality).context(NotFoundSnafu {
+            provider: Provider::Soulseek,
+            resource: format!("suitable candidate for '{}'", ctx.track_title),
         })
     }
 
@@ -256,19 +267,23 @@ impl SoulSeekSource {
             .json(&payload)
             .send()
             .await
-            .map_err(|e| ProviderError::http("soulseek", "slskd login request", e.to_string()))?;
+            .context(ReqwestSnafu {
+                provider: Provider::Soulseek,
+                operation: "slskd login request",
+            })?;
 
-        if !resp.status().is_success() {
-            return Err(ProviderError::auth(
-                "soulseek",
-                format!("slskd login failed with status {}", resp.status()),
-            ));
-        }
+        ensure!(
+            resp.status().is_success(),
+            AuthSnafu {
+                provider: Provider::Soulseek,
+                reason: format!("slskd login failed with status {}", resp.status()),
+            }
+        );
 
-        let token_resp: TokenResponse = resp
-            .json()
-            .await
-            .map_err(|e| ProviderError::parse("soulseek", "slskd login response", e.to_string()))?;
+        let token_resp: TokenResponse = resp.json().await.context(ReqwestSnafu {
+            provider: Provider::Soulseek,
+            operation: "slskd login response".to_string(),
+        })?;
 
         let token = token_resp.token;
         *self.token.write().await = Some(token.clone());
@@ -292,31 +307,30 @@ impl SoulSeekSource {
             req = req.bearer_auth(t);
         }
 
-        let resp = req.send().await.map_err(|e| {
-            ProviderError::http("soulseek", format!("slskd POST {path}"), e.to_string())
+        let resp = req.send().await.context(ReqwestSnafu {
+            provider: Provider::Soulseek,
+            operation: format!("slskd POST {path}"),
         })?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             if status.as_u16() == 429 {
-                return Err(ProviderError::rate_limited(
-                    "soulseek",
-                    format!("slskd POST {path} returned {status}"),
-                ));
+                return RateLimitedSnafu {
+                    provider: Provider::Soulseek,
+                    reason: format!("slskd POST {path} returned {status}"),
+                }
+                .fail();
             }
-            return Err(ProviderError::http(
-                "soulseek",
-                format!("slskd POST {path}"),
-                format!("returned {status}"),
-            ));
+            return InvalidResponseSnafu {
+                provider: Provider::Soulseek,
+                reason: format!("slskd POST {path} returned {status}"),
+            }
+            .fail();
         }
 
-        resp.json().await.map_err(|e| {
-            ProviderError::parse(
-                "soulseek",
-                format!("slskd POST {path} decode"),
-                e.to_string(),
-            )
+        resp.json().await.context(ReqwestSnafu {
+            provider: Provider::Soulseek,
+            operation: format!("slskd POST {path} decode"),
         })
     }
 
@@ -329,41 +343,42 @@ impl SoulSeekSource {
             req = req.bearer_auth(t);
         }
 
-        let resp = req.send().await.map_err(|e| {
-            ProviderError::http("soulseek", format!("slskd GET {path}"), e.to_string())
+        let resp = req.send().await.context(ReqwestSnafu {
+            provider: Provider::Soulseek,
+            operation: format!("slskd GET {path}"),
         })?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             if status.as_u16() == 429 {
-                return Err(ProviderError::rate_limited(
-                    "soulseek",
-                    format!("slskd GET {path} returned {status}"),
-                ));
+                return RateLimitedSnafu {
+                    provider: Provider::Soulseek,
+                    reason: format!("slskd GET {path} returned {status}"),
+                }
+                .fail();
             }
-            return Err(ProviderError::http(
-                "soulseek",
-                format!("slskd GET {path}"),
-                format!("returned {status}"),
-            ));
+            return InvalidResponseSnafu {
+                provider: Provider::Soulseek,
+                reason: format!("slskd GET {path} returned {status}"),
+            }
+            .fail();
         }
 
-        resp.json().await.map_err(|e| {
-            ProviderError::parse(
-                "soulseek",
-                format!("slskd GET {path} decode"),
-                e.to_string(),
-            )
+        resp.json().await.context(ReqwestSnafu {
+            provider: Provider::Soulseek,
+            operation: format!("slskd GET {path} decode"),
         })
     }
 
     /// Kick off a search, retrying on 429 rate-limit responses.
     async fn start_search(&self, query: &str) -> Result<Search, ProviderError> {
-        let _permit = self
-            .search_request_gate
-            .acquire()
-            .await
-            .map_err(|_| ProviderError::unavailable("soulseek", "search gate closed"))?;
+        let Ok(_permit) = self.search_request_gate.acquire().await else {
+            return UnavailableSnafu {
+                provider: Provider::Soulseek,
+                reason: "search gate closed",
+            }
+            .fail();
+        };
 
         let req = SearchRequest {
             id: None,
@@ -389,10 +404,11 @@ impl SoulSeekSource {
             }
         }
 
-        Err(ProviderError::rate_limited(
-            "soulseek",
-            "search creation failed after retries",
-        ))
+        RateLimitedSnafu {
+            provider: Provider::Soulseek,
+            reason: "search creation failed after retries",
+        }
+        .fail()
     }
 
     /// Poll until search completes or `timeout_secs` elapses.
@@ -466,17 +482,17 @@ impl SoulSeekSource {
             req = req.bearer_auth(t);
         }
 
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| ProviderError::http("soulseek", "enqueue download", e.to_string()))?;
+        let resp = req.send().await.context(ReqwestSnafu {
+            provider: Provider::Soulseek,
+            operation: "enqueue download",
+        })?;
 
         if !resp.status().is_success() {
-            return Err(ProviderError::http(
-                "soulseek",
-                "enqueue download",
-                format!("returned {}", resp.status()),
-            ));
+            return InvalidResponseSnafu {
+                provider: Provider::Soulseek,
+                reason: format!("enqueue download returned {}", resp.status()),
+            }
+            .fail();
         }
 
         Ok(())
@@ -511,10 +527,11 @@ impl SoulSeekSource {
                             .clone()
                             .or_else(|| file.state_description.clone())
                             .unwrap_or_else(|| "unknown transfer failure".to_string());
-                        return Err(ProviderError::unavailable(
-                            "soulseek",
-                            format!("transfer failed for {filename}: {detail}"),
-                        ));
+                        return UnavailableSnafu {
+                            provider: Provider::Soulseek,
+                            reason: format!("transfer failed for {filename}: {detail}"),
+                        }
+                        .fail();
                     }
 
                     if is_complete_success(file)
@@ -535,10 +552,11 @@ impl SoulSeekSource {
             elapsed += 2;
         }
 
-        Err(ProviderError::unavailable(
-            "soulseek",
-            format!("timed out waiting for download: {filename}"),
-        ))
+        UnavailableSnafu {
+            provider: Provider::Soulseek,
+            reason: format!("timed out waiting for download: {filename}"),
+        }
+        .fail()
     }
 
     /// Check candidate local paths for a completed download.
@@ -587,7 +605,7 @@ impl SoulSeekSource {
 // ── Helpers ─────────────────────────────────────────────────────────
 
 fn is_rate_limited(err: &ProviderError) -> bool {
-    if err.is_rate_limited() {
+    if matches!(err, ProviderError::RateLimited { .. }) {
         return true;
     }
     let msg = err.to_string().to_ascii_lowercase();
