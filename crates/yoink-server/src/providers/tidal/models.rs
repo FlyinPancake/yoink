@@ -156,7 +156,7 @@ pub(crate) struct HifiSearchTrack {
     pub artists: Vec<HifiAlbumArtist>,
     /// Album this track belongs to.
     pub album: Option<HifiSearchTrackAlbum>,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     #[serde(flatten)]
     pub extra: std::collections::HashMap<String, serde_json::Value>,
 }
@@ -177,17 +177,62 @@ pub(crate) struct HifiPlaybackResponse {
     pub data: HifiPlaybackData,
 }
 
+/// Response from the newer `/trackManifests/` endpoint.
+#[derive(Debug, Deserialize)]
+pub(crate) struct HifiTrackManifestsResponse {
+    pub data: HifiTrackManifestsData,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct HifiTrackManifestsData {
+    pub data: HifiTrackManifestResource,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct HifiTrackManifestResource {
+    pub attributes: HifiTrackManifestAttributes,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct HifiTrackManifestAttributes {
+    pub uri: String,
+    #[serde(default)]
+    pub formats: Vec<String>,
+    #[expect(dead_code)]
+    pub hash: Option<String>,
+}
+
 /// Playback data containing a base64-encoded manifest and its MIME type.
 #[derive(Debug, Deserialize)]
 pub(crate) struct HifiPlaybackData {
+    #[expect(dead_code)]
+    #[serde(rename = "trackId")]
+    pub track_id: Option<i64>,
+    #[expect(dead_code)]
+    #[serde(rename = "audioQuality")]
+    pub audio_quality: Option<String>,
     #[serde(rename = "manifestMimeType")]
     pub manifest_mime_type: String,
     pub manifest: String,
+    #[expect(dead_code)]
+    #[serde(rename = "bitDepth")]
+    pub bit_depth: Option<u32>,
+    #[expect(dead_code)]
+    #[serde(rename = "sampleRate")]
+    pub sample_rate: Option<u32>,
 }
 
 /// Decoded BTS manifest (`application/vnd.tidal.bts`) containing direct URLs.
 #[derive(Debug, Deserialize)]
 pub(crate) struct BtsManifest {
+    #[expect(dead_code)]
+    #[serde(rename = "mimeType")]
+    pub mime_type: Option<String>,
+    #[expect(dead_code)]
+    pub codecs: Option<String>,
+    #[expect(dead_code)]
+    #[serde(rename = "encryptionType")]
+    pub encryption_type: Option<String>,
     pub urls: Vec<String>,
 }
 

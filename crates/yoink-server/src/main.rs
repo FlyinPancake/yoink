@@ -67,10 +67,6 @@ async fn main() -> color_eyre::Result<()> {
     dotenvy::dotenv().ok();
     let app_config = AppConfig::from_env()?;
 
-    //     .unwrap_or_else(|err| {
-    //     panic!("Failed to parse configuration from environment: {err}");
-    // });
-
     init_logging(&app_config.log_format);
 
     let music_root = app_config.music_root_path();

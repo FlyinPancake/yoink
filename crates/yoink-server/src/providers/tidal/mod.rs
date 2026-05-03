@@ -14,7 +14,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
-use tracing::warn;
+use tracing::debug;
 
 use crate::{
     db::{provider::Provider, quality::Quality},
@@ -24,7 +24,7 @@ use crate::{
 use self::{
     api::hifi_get_json,
     instances::InstanceCache,
-    manifest::{extract_download_payload, summarize_manifest_for_logs},
+    manifest::{extract_dash_download_payload, extract_download_payload},
     models::*,
 };
 use super::{
@@ -358,7 +358,7 @@ impl DownloadSource for TidalProvider {
     }
 
     fn requires_linked_provider(&self) -> bool {
-        false
+        true
     }
 
     async fn resolve_by_id(
@@ -376,6 +376,12 @@ impl DownloadSource for TidalProvider {
         // FIXME this will only resolve the first track ID
         let external_track_id = &external_track_ids[0];
 
+        if matches!(quality, Quality::Lossless | Quality::HiRes) {
+            return self
+                .resolve_lossless_by_track_manifest(external_track_id, quality)
+                .await;
+        }
+
         let quality_str = quality.as_str().to_string();
         let playback = self
             .hifi_get::<HifiPlaybackResponse>(
@@ -387,35 +393,7 @@ impl DownloadSource for TidalProvider {
             )
             .await?;
 
-        match extract_download_payload(&playback.data) {
-            Ok(payload) => Ok(payload),
-            Err(err)
-                if playback.data.manifest_mime_type == "application/dash+xml"
-                    && *quality == Quality::HiRes =>
-            {
-                let dash_summary = summarize_manifest_for_logs(&playback.data);
-                warn!(
-                    track_id = external_track_id,
-                    error = %err,
-                    manifest_summary = %dash_summary,
-                    "HI_RES DASH manifest unsupported, falling back to LOSSLESS"
-                );
-
-                // Retry with lossless
-                let fallback_playback = self
-                    .hifi_get::<HifiPlaybackResponse>(
-                        "/track/",
-                        vec![
-                            ("id".to_string(), external_track_id.to_string()),
-                            ("quality".to_string(), "LOSSLESS".to_string()),
-                        ],
-                    )
-                    .await?;
-
-                extract_download_payload(&fallback_playback.data)
-            }
-            Err(err) => Err(err),
-        }
+        extract_download_payload(&playback.data)
     }
 
     async fn resolve_by_metadata(
@@ -428,5 +406,83 @@ impl DownloadSource for TidalProvider {
             operation: "resolve_by_metadata".to_string(),
         }
         .fail()
+    }
+}
+
+impl TidalProvider {
+    async fn resolve_lossless_by_track_manifest(
+        &self,
+        external_track_id: &str,
+        quality: &Quality,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        let formats = match quality {
+            Quality::HiRes => ["FLAC_HIRES", "FLAC"].as_slice(),
+            Quality::Lossless => ["FLAC"].as_slice(),
+            Quality::High | Quality::Low => unreachable!("only lossless qualities use manifests"),
+        };
+        let mut query = vec![
+            ("id".to_string(), external_track_id.to_string()),
+            ("adaptive".to_string(), "true".to_string()),
+            ("manifestType".to_string(), "MPEG_DASH".to_string()),
+            ("uriScheme".to_string(), "HTTPS".to_string()),
+            ("usage".to_string(), "PLAYBACK".to_string()),
+        ];
+        query.extend(
+            formats
+                .iter()
+                .map(|format| ("formats".to_string(), (*format).to_string())),
+        );
+
+        let response = self
+            .hifi_get::<HifiTrackManifestsResponse>("/trackManifests/", query)
+            .await?;
+        let attributes = response.data.data.attributes;
+        debug!(
+            track_id = external_track_id,
+            requested_quality = %quality,
+            formats = ?attributes.formats,
+            "Resolved Tidal track manifest"
+        );
+
+        if attributes
+            .formats
+            .iter()
+            .all(|format| !format.starts_with("FLAC"))
+        {
+            return Err(ProviderError::InvalidResponse {
+                provider: Provider::Tidal,
+                reason: format!(
+                    "track {external_track_id} requested {quality}, but trackManifests returned formats {:?}",
+                    attributes.formats,
+                ),
+            });
+        }
+
+        let manifest_xml = self
+            .http
+            .get(&attributes.uri)
+            .timeout(Duration::from_secs(20))
+            .send()
+            .await
+            .map_err(|source| ProviderError::Reqwest {
+                provider: Provider::Tidal,
+                operation: "track manifest request".to_string(),
+                source,
+            })?
+            .error_for_status()
+            .map_err(|err| ProviderError::Http {
+                provider: Provider::Tidal,
+                operation: "track manifest status".to_string(),
+                error: err.to_string(),
+            })?
+            .text()
+            .await
+            .map_err(|source| ProviderError::Reqwest {
+                provider: Provider::Tidal,
+                operation: "track manifest body".to_string(),
+                source,
+            })?;
+
+        extract_dash_download_payload(&manifest_xml)
     }
 }

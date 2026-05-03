@@ -99,6 +99,18 @@ pub(crate) fn extract_download_payload(
     }
 }
 
+/// Parse a raw DASH MPD document into downloadable segment URLs.
+pub(crate) fn extract_dash_download_payload(xml: &str) -> Result<PlaybackInfo, ProviderError> {
+    if let Ok(urls) = extract_dash_segment_urls(xml)
+        && !urls.is_empty()
+    {
+        return Ok(PlaybackInfo::SegmentUrls(urls));
+    }
+    extract_dash_base_url(xml)
+        .map(PlaybackInfo::DirectUrl)
+        .map_err(ProviderError::from)
+}
+
 /// Parse a DASH MPD document and resolve all segment URLs from the
 /// highest-bandwidth audio `Representation`.
 ///
@@ -387,47 +399,4 @@ fn extract_dash_base_url(xml: &str) -> Result<String, ManifestError> {
         error: "no absolute URL found in DASH manifest",
     }
     .fail()
-}
-
-/// Produce a compact, single-line summary of a playback manifest for
-/// structured log output (element counts, byte size, MIME type).
-pub(crate) fn summarize_manifest_for_logs(playback: &HifiPlaybackData) -> String {
-    let decoded =
-        match base64::engine::general_purpose::STANDARD.decode(playback.manifest.as_bytes()) {
-            Ok(bytes) => bytes,
-            Err(err) => return format!("decode_error={err}"),
-        };
-
-    if playback.manifest_mime_type != "application/dash+xml" {
-        return format!(
-            "mime_type={}, decoded_bytes={}",
-            playback.manifest_mime_type,
-            decoded.len()
-        );
-    }
-
-    let xml = match String::from_utf8(decoded) {
-        Ok(xml) => xml,
-        Err(err) => return format!("dash_utf8_error={err}"),
-    };
-
-    let base_url_count = xml.matches("<BaseURL").count();
-    let representation_count = xml.matches("<Representation").count();
-    let adaptation_set_count = xml.matches("<AdaptationSet").count();
-    let segment_template_count = xml.matches("<SegmentTemplate").count();
-    let segment_base_count = xml.matches("<SegmentBase").count();
-    let segment_list_count = xml.matches("<SegmentList").count();
-    let content_protection_count = xml.matches("<ContentProtection").count();
-
-    format!(
-        "mime_type=application/dash+xml, xml_bytes={}, base_url={}, representation={}, adaptation_set={}, segment_template={}, segment_base={}, segment_list={}, content_protection={}",
-        xml.len(),
-        base_url_count,
-        representation_count,
-        adaptation_set_count,
-        segment_template_count,
-        segment_base_count,
-        segment_list_count,
-        content_protection_count
-    )
 }
