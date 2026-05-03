@@ -16,7 +16,10 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 use tracing::warn;
 
-use crate::db::{provider::Provider, quality::Quality};
+use crate::{
+    db::{provider::Provider, quality::Quality},
+    providers::NotSupportedSnafu,
+};
 
 use self::{
     api::hifi_get_json,
@@ -354,12 +357,25 @@ impl DownloadSource for TidalProvider {
         Provider::Tidal
     }
 
-    async fn resolve_playback(
+    fn requires_linked_provider(&self) -> bool {
+        false
+    }
+
+    async fn resolve_by_id(
         &self,
-        external_track_id: &str,
+        external_track_ids: &[String],
         quality: &Quality,
-        _context: Option<&DownloadTrackContext>,
     ) -> Result<PlaybackInfo, ProviderError> {
+        if external_track_ids.is_empty() {
+            return Err(ProviderError::NotFound {
+                provider: Provider::Tidal,
+                resource: "track".to_string(),
+            });
+        }
+
+        // FIXME this will only resolve the first track ID
+        let external_track_id = &external_track_ids[0];
+
         let quality_str = quality.as_str().to_string();
         let playback = self
             .hifi_get::<HifiPlaybackResponse>(
@@ -400,5 +416,17 @@ impl DownloadSource for TidalProvider {
             }
             Err(err) => Err(err),
         }
+    }
+
+    async fn resolve_by_metadata(
+        &self,
+        _metadata: &DownloadTrackContext,
+        _quality: &Quality,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        NotSupportedSnafu {
+            provider: Provider::Tidal,
+            operation: "resolve_by_metadata".to_string(),
+        }
+        .fail()
     }
 }

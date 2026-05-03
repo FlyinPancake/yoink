@@ -64,5 +64,8 @@ pub(crate) async fn hifi_get_json<T: DeserializeOwned>(
     let error_msg =
         last_error.unwrap_or_else(|| "No healthy hifi-api instances available".to_string());
     warn!(error = %error_msg, "All hifi-api candidates failed");
-    Err(ProviderError::unavailable("tidal", error_msg))
+    Err(ProviderError::Unavailable {
+        provider: crate::db::provider::Provider::Tidal,
+        reason: error_msg,
+    })
 }

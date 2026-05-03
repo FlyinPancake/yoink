@@ -90,7 +90,7 @@ impl From<AppError> for ApiError {
 mod tests {
     use std::io;
 
-    use crate::{error::AppError, providers::ProviderError};
+    use crate::{db::provider::Provider, error::AppError, providers::ProviderError};
 
     use super::ApiError;
 
@@ -142,7 +142,10 @@ mod tests {
 
     #[test]
     fn maps_provider_errors_to_unavailable() {
-        let err = ApiError::from(AppError::from(ProviderError::unavailable("tidal", "down")));
+        let err = ApiError::from(AppError::from(ProviderError::Unavailable {
+            provider: Provider::Tidal,
+            reason: "down".to_string(),
+        }));
 
         assert!(matches!(
             err,

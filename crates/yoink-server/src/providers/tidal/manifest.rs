@@ -10,31 +10,35 @@
 
 use base64::Engine;
 use roxmltree::{Document, Node};
-use thiserror::Error;
+use snafu::prelude::*;
 use tracing::warn;
 
 use super::models::{BtsManifest, HifiPlaybackData};
 use crate::providers::{PlaybackInfo, ProviderError};
 
-#[derive(Debug, Error)]
+#[derive(Debug, Snafu)]
 enum ManifestError {
-    #[error("failed to decode manifest: {0}")]
-    Decode(#[from] base64::DecodeError),
-    #[error("failed to parse BTS manifest: {0}")]
-    ParseBts(#[from] serde_json::Error),
-    #[error("DASH manifest is not valid UTF-8: {0}")]
-    Utf8(#[from] std::string::FromUtf8Error),
-    #[error("unsupported manifest type '{mime_type}'")]
+    #[snafu(display("failed to decode manifest: {source}"))]
+    Decode { source: base64::DecodeError },
+    #[snafu(display("failed to parse BTS manifest: {source}"))]
+    ParseBts { source: serde_json::Error },
+    #[snafu(display("DASH manifest is not valid UTF-8: {source}"))]
+    Utf8 { source: std::string::FromUtf8Error },
+    #[snafu(display("unsupported manifest type '{mime_type}'"))]
     UnsupportedType { mime_type: String },
-    #[error("{0}")]
-    DashStructure(&'static str),
-    #[error("failed to parse DASH XML: {0}")]
-    DashXml(#[from] roxmltree::Error),
+    #[snafu(display("{error}"))]
+    DashStructure { error: &'static str },
+    #[snafu(display("failed to parse DASH XML: {source}"))]
+    DashXml { source: roxmltree::Error },
 }
 
 impl From<ManifestError> for ProviderError {
     fn from(value: ManifestError) -> Self {
-        ProviderError::parse("tidal", "manifest", value.to_string())
+        ProviderError::Parse {
+            provider: crate::db::provider::Provider::Tidal,
+            operation: "manifest".to_string(),
+            reason: value.to_string(),
+        }
     }
 }
 
@@ -48,22 +52,24 @@ pub(crate) fn extract_download_payload(
 ) -> Result<PlaybackInfo, ProviderError> {
     let decoded = base64::engine::general_purpose::STANDARD
         .decode(playback.manifest.as_bytes())
-        .map_err(ManifestError::from)?;
+        .context(DecodeSnafu)?;
 
     match playback.manifest_mime_type.as_str() {
         "application/vnd.tidal.bts" => {
             let manifest =
-                serde_json::from_slice::<BtsManifest>(&decoded).map_err(ManifestError::ParseBts)?;
+                serde_json::from_slice::<BtsManifest>(&decoded).context(ParseBtsSnafu)?;
             manifest
                 .urls
                 .first()
                 .cloned()
                 .map(PlaybackInfo::DirectUrl)
-                .ok_or(ManifestError::DashStructure("no track URL in BTS manifest"))
-                .map_err(ProviderError::from)
+                .context(DashStructureSnafu {
+                    error: "no track URL in BTS manifest",
+                })
+                .map_err(Into::into)
         }
         "application/dash+xml" => {
-            let xml = String::from_utf8(decoded).map_err(ManifestError::Utf8)?;
+            let xml = String::from_utf8(decoded).context(Utf8Snafu)?;
             if let Ok(urls) = extract_dash_segment_urls(&xml)
                 && !urls.is_empty()
             {
@@ -85,10 +91,10 @@ pub(crate) fn extract_download_payload(
                 .first()
                 .cloned()
                 .map(PlaybackInfo::DirectUrl)
-                .ok_or(ManifestError::DashStructure(
-                    "no track URL in fallback BTS manifest",
-                ))
-                .map_err(ProviderError::from)
+                .context(DashStructureSnafu {
+                    error: "no track URL in fallback BTS manifest",
+                })
+                .map_err(Into::into)
         }
     }
 }
@@ -99,30 +105,32 @@ pub(crate) fn extract_download_payload(
 /// Returns the initialization URL (if present) followed by all media
 /// segment URLs derived from the `SegmentTimeline`.
 fn extract_dash_segment_urls(xml: &str) -> Result<Vec<String>, ManifestError> {
-    let doc = Document::parse(xml).map_err(ManifestError::DashXml)?;
+    let doc = Document::parse(xml).context(DashXmlSnafu)?;
 
-    let mpd =
-        doc.descendants()
-            .find(|n| n.has_tag_name("MPD"))
-            .ok_or(ManifestError::DashStructure(
-                "DASH manifest has no MPD element",
-            ))?;
-    let period =
-        mpd.children()
-            .find(|n| n.has_tag_name("Period"))
-            .ok_or(ManifestError::DashStructure(
-                "DASH manifest has no Period element",
-            ))?;
+    let mpd = doc
+        .descendants()
+        .find(|n| n.has_tag_name("MPD"))
+        .context(DashStructureSnafu {
+            error: "DASH manifest has no MPD element",
+        })?;
+    let period = mpd
+        .children()
+        .find(|n| n.has_tag_name("Period"))
+        .context(DashStructureSnafu {
+            error: "DASH manifest has no Period element",
+        })?;
 
     let adaptation_sets: Vec<Node<'_, '_>> = period
         .children()
         .filter(|n| n.has_tag_name("AdaptationSet"))
         .collect();
-    if adaptation_sets.is_empty() {
-        return Err(ManifestError::DashStructure(
-            "DASH manifest has no AdaptationSet",
-        ));
-    }
+
+    ensure!(
+        !adaptation_sets.is_empty(),
+        DashStructureSnafu {
+            error: "DASH manifest has no AdaptationSet"
+        }
+    );
 
     let audio_set = adaptation_sets
         .iter()
@@ -142,11 +150,14 @@ fn extract_dash_segment_urls(xml: &str) -> Result<Vec<String>, ManifestError> {
         .children()
         .filter(|n| n.has_tag_name("Representation"))
         .collect();
-    if reps.is_empty() {
-        return Err(ManifestError::DashStructure(
-            "DASH manifest has no Representation",
-        ));
-    }
+
+    ensure!(
+        !reps.is_empty(),
+        DashStructureSnafu {
+            error: "DASH manifest has no Representation",
+        }
+    );
+
     reps.sort_by_key(|rep| {
         rep.attribute("bandwidth")
             .and_then(|v| v.parse::<u64>().ok())
@@ -164,16 +175,16 @@ fn extract_dash_segment_urls(xml: &str) -> Result<Vec<String>, ManifestError> {
                 .children()
                 .find(|n| n.has_tag_name("SegmentTemplate"))
         })
-        .ok_or(ManifestError::DashStructure(
-            "DASH manifest has no SegmentTemplate",
-        ))?;
+        .context(DashStructureSnafu {
+            error: "DASH manifest has no SegmentTemplate",
+        })?;
 
     let initialization = segment_template.attribute("initialization");
     let media = segment_template
         .attribute("media")
-        .ok_or(ManifestError::DashStructure(
-            "DASH SegmentTemplate has no media template",
-        ))?;
+        .context(DashStructureSnafu {
+            error: "DASH SegmentTemplate has no media template",
+        })?;
     let start_number = segment_template
         .attribute("startNumber")
         .and_then(|v| v.parse::<u64>().ok())
@@ -207,9 +218,9 @@ fn extract_dash_segment_urls(xml: &str) -> Result<Vec<String>, ManifestError> {
     let timeline = segment_template
         .children()
         .find(|n| n.has_tag_name("SegmentTimeline"))
-        .ok_or(ManifestError::DashStructure(
-            "DASH SegmentTemplate has no SegmentTimeline",
-        ))?;
+        .context(DashStructureSnafu {
+            error: "DASH SegmentTemplate has no SegmentTimeline",
+        })?;
 
     let mut entries = Vec::new();
     let mut current_time = 0u64;
@@ -218,9 +229,12 @@ fn extract_dash_segment_urls(xml: &str) -> Result<Vec<String>, ManifestError> {
         if let Some(t) = s.attribute("t").and_then(|v| v.parse::<u64>().ok()) {
             current_time = t;
         }
-        let duration = s.attribute("d").and_then(|v| v.parse::<u64>().ok()).ok_or(
-            ManifestError::DashStructure("DASH timeline entry missing duration"),
-        )?;
+        let duration = s
+            .attribute("d")
+            .and_then(|v| v.parse::<u64>().ok())
+            .context(DashStructureSnafu {
+                error: "DASH timeline entry missing duration",
+            })?;
         let repeats = s
             .attribute("r")
             .and_then(|v| v.parse::<i64>().ok())
@@ -247,11 +261,12 @@ fn extract_dash_segment_urls(xml: &str) -> Result<Vec<String>, ManifestError> {
         urls.push(join_dash_url(&base_url, &path));
     }
 
-    if urls.is_empty() {
-        return Err(ManifestError::DashStructure(
-            "DASH generated no segment URLs",
-        ));
-    }
+    ensure!(
+        !urls.is_empty(),
+        DashStructureSnafu {
+            error: "DASH generated no segment URLs",
+        }
+    );
 
     Ok(urls)
 }
@@ -368,9 +383,10 @@ fn extract_dash_base_url(xml: &str) -> Result<String, ManifestError> {
         }
     }
 
-    Err(ManifestError::DashStructure(
-        "no absolute URL found in DASH manifest",
-    ))
+    DashStructureSnafu {
+        error: "no absolute URL found in DASH manifest",
+    }
+    .fail()
 }
 
 /// Produce a compact, single-line summary of a playback manifest for

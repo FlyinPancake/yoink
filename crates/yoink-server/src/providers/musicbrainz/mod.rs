@@ -11,9 +11,13 @@ use musicbrainz_rs::{
     prelude::*,
 };
 use serde_json::Value;
+use snafu::OptionExt;
 use tracing::{debug, warn};
 
-use crate::db::provider::Provider;
+use crate::{
+    db::provider::Provider,
+    providers::{HttpSnafu, NotFoundSnafu},
+};
 
 use super::{
     MetadataProvider, ProviderAlbum, ProviderArtist, ProviderError, ProviderSearchAlbum,
@@ -54,8 +58,10 @@ impl MusicBrainzProvider {
                 .limit(LIMIT)
                 .execute_with_client_async(&self.client)
                 .await
-                .map_err(|e| {
-                    ProviderError::http("musicbrainz", "browse release groups", e.to_string())
+                .map_err(|e| ProviderError::Http {
+                    provider: Provider::MusicBrainz,
+                    operation: "browse release groups".to_string(),
+                    error: e.to_string(),
                 })?;
 
             let count = page.entities.len();
@@ -81,8 +87,10 @@ impl MusicBrainzProvider {
             .with_releases()
             .execute_with_client_async(&self.client)
             .await
-            .map_err(|e| {
-                ProviderError::http("musicbrainz", "fetch release group", e.to_string())
+            .map_err(|e| ProviderError::Http {
+                provider: Provider::MusicBrainz,
+                operation: "fetch release group".to_string(),
+                error: e.to_string(),
             })?;
 
         let Some(releases) = rg.releases else {
@@ -374,7 +382,11 @@ impl MetadataProvider for MusicBrainzProvider {
         let result = MbArtist::search(lucene_query)
             .execute_with_client_async(&self.client)
             .await
-            .map_err(|e| ProviderError::http("musicbrainz", "artist search", e.to_string()))?;
+            .map_err(|e| ProviderError::Http {
+                provider: Provider::MusicBrainz,
+                operation: "artist search".to_string(),
+                error: e.to_string(),
+            })?;
 
         Ok(result
             .entities
@@ -457,7 +469,10 @@ impl MetadataProvider for MusicBrainzProvider {
         let release = self
             .best_release_for_group(external_album_id)
             .await?
-            .ok_or_else(|| ProviderError::not_found("musicbrainz", "release in release group"))?;
+            .context(NotFoundSnafu {
+                provider: self.id(),
+                resource: "release in release group".to_string(),
+            })?;
 
         // Now fetch the full release with recordings (which contain ISRCs)
         let full_release = MbRelease::fetch()
@@ -466,7 +481,11 @@ impl MetadataProvider for MusicBrainzProvider {
             .with_artist_credits()
             .execute_with_client_async(&self.client)
             .await
-            .map_err(|e| ProviderError::http("musicbrainz", "fetch release", e.to_string()))?;
+            .map_err(|e| ProviderError::Http {
+                provider: self.id(),
+                operation: "fetch release".to_string(),
+                error: e.to_string(),
+            })?;
 
         let mut tracks = Vec::new();
         let album_extra = HashMap::new();
@@ -578,7 +597,12 @@ impl MetadataProvider for MusicBrainzProvider {
             .execute_with_client_async(&self.client)
             .await
             .map_err(|e| {
-                ProviderError::http("musicbrainz", "release group search", e.to_string())
+                HttpSnafu {
+                    provider: self.id(),
+                    operation: "release group search".to_string(),
+                    error: e.to_string(),
+                }
+                .build()
             })?;
 
         Ok(result

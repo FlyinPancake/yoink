@@ -940,55 +940,20 @@ pub(crate) async fn download_worker(state: AppState) -> AppResult<()> {
 mod tests {
     use std::sync::Arc;
 
-    use async_trait::async_trait;
     use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set};
 
     use super::{enqueue_download_album_job, enqueue_download_track_job};
     use crate::{
-        api::Quality,
         db::{self, provider::Provider, wanted_status::WantedStatus},
-        providers::{DownloadSource, DownloadTrackContext, PlaybackInfo, ProviderError},
+        providers::mock::TestDownloadSource,
         services::jobs::Job,
         test_support,
     };
 
-    struct TestDownloadSource {
-        provider: Provider,
-        requires_linked_provider: bool,
-    }
-
-    #[async_trait]
-    impl DownloadSource for TestDownloadSource {
-        fn id(&self) -> Provider {
-            self.provider
-        }
-
-        fn requires_linked_provider(&self) -> bool {
-            self.requires_linked_provider
-        }
-
-        async fn resolve_playback(
-            &self,
-            _external_track_id: &str,
-            _quality: &Quality,
-            _context: Option<&DownloadTrackContext>,
-        ) -> Result<PlaybackInfo, ProviderError> {
-            Ok(PlaybackInfo::DirectUrl(
-                "https://example.test/track.flac".to_string(),
-            ))
-        }
-    }
-
     fn registry_with_tidal_and_soulseek() -> crate::providers::registry::ProviderRegistry {
         let mut registry = crate::providers::registry::ProviderRegistry::new();
-        registry.register_download(Arc::new(TestDownloadSource {
-            provider: Provider::Soulseek,
-            requires_linked_provider: false,
-        }));
-        registry.register_download(Arc::new(TestDownloadSource {
-            provider: Provider::Tidal,
-            requires_linked_provider: true,
-        }));
+        registry.register_download(Arc::new(TestDownloadSource::new(Provider::Soulseek, false)));
+        registry.register_download(Arc::new(TestDownloadSource::new(Provider::Tidal, true)));
         registry
     }
 
