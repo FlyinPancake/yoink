@@ -43,6 +43,18 @@ services:
       - .env.docker
     restart: always
 
+  hifi-api:
+    image: ghcr.io/binimum/hifi-api:main
+    container_name: hifi-api
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+    env_file:
+      - .env.hifi
+    ports:
+      - 3005:8000
+
 volumes:
   yoink-data:
   postgres-data:
