@@ -10,6 +10,7 @@ name = "yoink-server"
 migration.workspace = true
 
 argon2.workspace             = true
+anyhow.workspace             = true
 async-trait.workspace        = true
 axum.workspace               = true
 base64.workspace             = true
@@ -20,10 +21,12 @@ cookie.workspace             = true
 dotenvy.workspace            = true
 envious.workspace            = true
 governor.workspace           = true
+http.workspace               = true
 lofty.workspace              = true
 lrclib-api-rs.workspace      = true
 mime_guess.workspace         = true
 musicbrainz_rs.workspace     = true
+oas3-gen-support.workspace   = true
 rand.workspace               = true
 reqwest.workspace            = true
 roxmltree.workspace          = true
@@ -32,6 +35,7 @@ sea-orm.workspace            = true
 serde.workspace              = true
 serde_json.workspace         = true
 serde_trim.workspace         = true
+serde_with.workspace         = true
 snafu.workspace              = true
 sha2.workspace               = true
 strsim.workspace             = true
@@ -49,6 +53,7 @@ utoipa.workspace             = true
 utoipa-axum.workspace        = true
 utoipa-scalar.workspace      = true
 uuid.workspace               = true
+validator.workspace          = true
 veil.workspace               = true
 
 [dev-dependencies]

@@ -292,7 +292,6 @@ async fn recompute_album_match_suggestions(
         let target_tracks = provider
             .fetch_tracks(&candidate_album.external_id)
             .await
-            .map(|(tracks, _)| tracks)
             .unwrap_or_default();
 
         let isrc_overlap = count_isrc_overlap(&reference_tracks, &target_tracks);
@@ -357,7 +356,7 @@ async fn pick_reference_tracks(
 
     for link in sorted {
         let provider = state.registry.metadata_provider(link.provider)?;
-        if let Ok((tracks, _)) = provider.fetch_tracks(&link.provider_album_id).await
+        if let Ok(tracks) = provider.fetch_tracks(&link.provider_album_id).await
             && !tracks.is_empty()
         {
             return Some((link.provider, tracks));
@@ -482,10 +481,6 @@ pub(crate) async fn primary_artist_id_for_album(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use serde_json::Value;
-
     use super::*;
 
     fn track(title: &str, isrc: Option<&str>) -> ProviderTrack {
@@ -498,7 +493,6 @@ mod tests {
             duration_secs: 180,
             isrc: isrc.map(str::to_string),
             explicit: false,
-            extra: HashMap::<String, Value>::new(),
         }
     }
 

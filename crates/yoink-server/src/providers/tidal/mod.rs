@@ -6,30 +6,29 @@
 //! upstream hifi-api hosts.
 
 pub(crate) mod api;
+#[allow(clippy::needless_return)]
+mod hifi_types;
 pub(crate) mod instances;
 pub(crate) mod manifest;
 pub(crate) mod models;
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
-use tracing::debug;
+use tracing::{debug, warn};
 
-use crate::{
-    db::{provider::Provider, quality::Quality},
-    providers::NotSupportedSnafu,
-};
+use crate::db::{provider::Provider, quality::Quality};
 
 use self::{
-    api::hifi_get_json,
+    api::{HifiApi, HifiAudioFormat},
     instances::InstanceCache,
     manifest::{extract_dash_download_payload, extract_download_payload},
     models::*,
 };
 use super::{
-    DownloadSource, DownloadTrackContext, MetadataProvider, PlaybackInfo, ProviderAlbum,
-    ProviderArtist, ProviderError, ProviderSearchAlbum, ProviderSearchTrack, ProviderTrack,
+    LinkedTrackResolver, MetadataProvider, PlaybackInfo, ProviderAlbum, ProviderArtist,
+    ProviderError, ProviderSearchAlbum, ProviderSearchTrack, ProviderTrack, ProviderTrackMetadata,
 };
 
 // ── TidalProvider ───────────────────────────────────────────────────
@@ -59,20 +58,12 @@ impl TidalProvider {
         }
     }
 
-    /// Low-level hifi API call with instance failover (exposed for internal use).
-    pub async fn hifi_get<T: serde::de::DeserializeOwned>(
-        &self,
-        path: &str,
-        query: Vec<(String, String)>,
-    ) -> Result<T, ProviderError> {
-        hifi_get_json(
+    fn hifi(&self) -> HifiApi<'_> {
+        HifiApi::new(
             &self.http,
             self.manual_base_url.as_deref(),
             &self.instance_cache,
-            path,
-            query,
         )
-        .await
     }
 }
 
@@ -82,14 +73,8 @@ impl MetadataProvider for TidalProvider {
         Provider::Tidal
     }
 
-    fn display_name(&self) -> &str {
-        "Tidal"
-    }
-
     async fn search_artists(&self, query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
-        let parsed = self
-            .hifi_get::<HifiResponse>("/search/", vec![("a".to_string(), query.to_string())])
-            .await?;
+        let parsed = self.hifi().search_artists(query).await?;
 
         let artists = parsed
             .data
@@ -132,15 +117,7 @@ impl MetadataProvider for TidalProvider {
         &self,
         external_artist_id: &str,
     ) -> Result<Vec<ProviderAlbum>, ProviderError> {
-        let response = self
-            .hifi_get::<HifiArtistAlbumsResponse>(
-                "/artist/",
-                vec![
-                    ("f".to_string(), external_artist_id.to_string()),
-                    ("skip_tracks".to_string(), "true".to_string()),
-                ],
-            )
-            .await?;
+        let response = self.hifi().artist_albums(external_artist_id).await?;
 
         Ok(response
             .albums
@@ -165,15 +142,9 @@ impl MetadataProvider for TidalProvider {
     async fn fetch_tracks(
         &self,
         external_album_id: &str,
-    ) -> Result<(Vec<ProviderTrack>, HashMap<String, serde_json::Value>), ProviderError> {
-        let response = self
-            .hifi_get::<HifiAlbumResponse>(
-                "/album/",
-                vec![("id".to_string(), external_album_id.to_string())],
-            )
-            .await?;
+    ) -> Result<Vec<ProviderTrack>, ProviderError> {
+        let response = self.hifi().album(external_album_id).await?;
 
-        let album_extra = response.data.extra;
         let tracks = response
             .data
             .items
@@ -184,42 +155,38 @@ impl MetadataProvider for TidalProvider {
                     HifiAlbumItem::Item { item } => item,
                     HifiAlbumItem::Track(t) => t,
                 };
-                let explicit = track
-                    .extra
-                    .get("explicit")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
                 ProviderTrack {
                     external_id: track.id.to_string(),
                     title: track.title,
                     version: track.version,
                     track_number: track.track_number.unwrap_or((idx + 1) as i32),
-                    disc_number: None, // extracted later from extra
+                    disc_number: track.volume_number,
                     duration_secs: track.duration.unwrap_or(0),
-                    isrc: None,
-                    explicit,
-                    extra: track.extra,
+                    isrc: track.isrc.filter(|isrc| !isrc.is_empty()),
+                    explicit: track.explicit.unwrap_or(false),
                 }
             })
             .collect();
 
-        Ok((tracks, album_extra))
+        Ok(tracks)
     }
 
-    async fn fetch_track_info_extra(
+    async fn fetch_track_metadata(
         &self,
         external_track_id: &str,
-    ) -> Option<HashMap<String, serde_json::Value>> {
-        let response = self
-            .hifi_get::<serde_json::Value>(
-                "/info/",
-                vec![("id".to_string(), external_track_id.to_string())],
-            )
-            .await
-            .ok()?;
-
-        let data = response.get("data")?.as_object()?;
-        Some(data.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+    ) -> Result<Option<ProviderTrackMetadata>, ProviderError> {
+        let response = self.hifi().track_info(external_track_id).await?;
+        let data = response.data;
+        Ok(Some(ProviderTrackMetadata {
+            artists: data.artists.into_iter().map(|artist| artist.name).collect(),
+            isrc: data.isrc.filter(|isrc| !isrc.is_empty()),
+            copyright: data.copyright,
+            version: data.version.filter(|version| !version.is_empty()),
+            initial_key: data.key,
+            bpm: data.bpm,
+            track_replay_gain: data.replay_gain,
+            track_peak_amplitude: data.peak,
+        }))
     }
 
     fn validate_image_id(&self, image_id: &str) -> bool {
@@ -234,55 +201,22 @@ impl MetadataProvider for TidalProvider {
         )
     }
 
-    async fn fetch_cover_art_bytes(&self, image_ref: &str) -> Option<Vec<u8>> {
-        let url = format!(
-            "https://resources.tidal.com/images/{}/1080x1080.jpg",
-            image_ref.replace('-', "/")
-        );
-        let resp = self
-            .http
-            .get(url)
-            .timeout(Duration::from_secs(20))
-            .send()
-            .await
-            .ok()?
-            .error_for_status()
-            .ok()?;
-        resp.bytes().await.ok().map(|b| b.to_vec())
-    }
-
     async fn fetch_artist_image_ref(
         &self,
         external_artist_id: &str,
-        name_hint: Option<&str>,
+        _name_hint: Option<&str>,
     ) -> Option<String> {
-        // Tidal has no "get artist by ID" endpoint that returns the picture,
-        // so we search by name and match on the numeric ID.
-        let query = name_hint?;
-        let parsed = self
-            .hifi_get::<HifiResponse>("/search/", vec![("a".to_string(), query.to_string())])
-            .await
-            .ok()?;
-
-        let artists = parsed
-            .data
-            .artists
-            .map(|paged| paged.items)
-            .or(parsed.data.items)
-            .unwrap_or_default();
-
-        artists
-            .into_iter()
-            .find(|a| a.id.to_string() == external_artist_id)
-            .and_then(|a| a.picture.or(a.selected_album_cover_fallback))
+        let response = self.hifi().artist(external_artist_id).await.ok()?;
+        response
+            .artist
+            .picture
+            .or(response.artist.selected_album_cover_fallback)
     }
 
     async fn search_albums(&self, query: &str) -> Result<Vec<ProviderSearchAlbum>, ProviderError> {
         // The hifi API /search/ endpoint returns albums when queried.
         // We use the same endpoint but extract the albums section.
-        let parsed = self
-            .hifi_get::<HifiResponse>("/search/", vec![("a".to_string(), query.to_string())])
-            .await?;
+        let parsed = self.hifi().search_albums(query).await?;
 
         let albums = parsed.data.albums.map(|p| p.items).unwrap_or_default();
 
@@ -311,11 +245,9 @@ impl MetadataProvider for TidalProvider {
     }
 
     async fn search_tracks(&self, query: &str) -> Result<Vec<ProviderSearchTrack>, ProviderError> {
-        let parsed = self
-            .hifi_get::<HifiResponse>("/search/", vec![("a".to_string(), query.to_string())])
-            .await?;
+        let parsed = self.hifi().search_tracks(query).await?;
 
-        let tracks = parsed.data.tracks.map(|p| p.items).unwrap_or_default();
+        let tracks = parsed.data.items;
 
         Ok(tracks
             .into_iter()
@@ -338,7 +270,7 @@ impl MetadataProvider for TidalProvider {
                     title: t.title,
                     version: t.version,
                     duration_secs: t.duration.unwrap_or(0),
-                    isrc: None,
+                    isrc: t.isrc.filter(|isrc| !isrc.is_empty()),
                     explicit: t.explicit.unwrap_or(false),
                     artist_name,
                     artist_external_id,
@@ -352,16 +284,12 @@ impl MetadataProvider for TidalProvider {
 }
 
 #[async_trait]
-impl DownloadSource for TidalProvider {
+impl LinkedTrackResolver for TidalProvider {
     fn id(&self) -> Provider {
         Provider::Tidal
     }
 
-    fn requires_linked_provider(&self) -> bool {
-        true
-    }
-
-    async fn resolve_by_id(
+    async fn resolve(
         &self,
         external_track_ids: &[String],
         quality: &Quality,
@@ -373,68 +301,68 @@ impl DownloadSource for TidalProvider {
             });
         }
 
-        // FIXME this will only resolve the first track ID
-        let external_track_id = &external_track_ids[0];
+        let mut failures = Vec::new();
+        for external_track_id in external_track_ids {
+            let result = if matches!(quality, Quality::Lossless | Quality::HiRes) {
+                self.resolve_lossless_by_track_manifest(external_track_id, quality)
+                    .await
+            } else {
+                self.resolve_track_playback(external_track_id, quality)
+                    .await
+            };
 
-        if matches!(quality, Quality::Lossless | Quality::HiRes) {
-            return self
-                .resolve_lossless_by_track_manifest(external_track_id, quality)
-                .await;
+            match result {
+                Ok(playback) => return Ok(playback),
+                Err(err) => {
+                    warn!(
+                        track_id = external_track_id,
+                        requested_quality = %quality,
+                        error = %err,
+                        "Tidal track candidate could not be resolved"
+                    );
+                    failures.push(format!("{external_track_id}: {err}"));
+                }
+            }
         }
 
-        let quality_str = quality.as_str().to_string();
+        Err(ProviderError::InvalidResponse {
+            provider: Provider::Tidal,
+            reason: format!(
+                "none of {} Tidal track candidates could be resolved at {quality}: {}",
+                external_track_ids.len(),
+                failures.join("; "),
+            ),
+        })
+    }
+}
+
+impl TidalProvider {
+    async fn resolve_track_playback(
+        &self,
+        external_track_id: &str,
+        quality: &Quality,
+    ) -> Result<PlaybackInfo, ProviderError> {
         let playback = self
-            .hifi_get::<HifiPlaybackResponse>(
-                "/track/",
-                vec![
-                    ("id".to_string(), external_track_id.to_string()),
-                    ("quality".to_string(), quality_str),
-                ],
-            )
+            .hifi()
+            .track_playback(external_track_id, quality)
             .await?;
 
         extract_download_payload(&playback.data)
     }
 
-    async fn resolve_by_metadata(
-        &self,
-        _metadata: &DownloadTrackContext,
-        _quality: &Quality,
-    ) -> Result<PlaybackInfo, ProviderError> {
-        NotSupportedSnafu {
-            provider: Provider::Tidal,
-            operation: "resolve_by_metadata".to_string(),
-        }
-        .fail()
-    }
-}
-
-impl TidalProvider {
     async fn resolve_lossless_by_track_manifest(
         &self,
         external_track_id: &str,
         quality: &Quality,
     ) -> Result<PlaybackInfo, ProviderError> {
         let formats = match quality {
-            Quality::HiRes => ["FLAC_HIRES", "FLAC"].as_slice(),
-            Quality::Lossless => ["FLAC"].as_slice(),
+            Quality::HiRes => [HifiAudioFormat::FlacHires, HifiAudioFormat::Flac].as_slice(),
+            Quality::Lossless => [HifiAudioFormat::Flac].as_slice(),
             Quality::High | Quality::Low => unreachable!("only lossless qualities use manifests"),
         };
-        let mut query = vec![
-            ("id".to_string(), external_track_id.to_string()),
-            ("adaptive".to_string(), "true".to_string()),
-            ("manifestType".to_string(), "MPEG_DASH".to_string()),
-            ("uriScheme".to_string(), "HTTPS".to_string()),
-            ("usage".to_string(), "PLAYBACK".to_string()),
-        ];
-        query.extend(
-            formats
-                .iter()
-                .map(|format| ("formats".to_string(), (*format).to_string())),
-        );
-
         let response = self
-            .hifi_get::<HifiTrackManifestsResponse>("/trackManifests/", query)
+            .hifi()
+            .track_manifests(external_track_id, formats)
             .await?;
         let attributes = response.data.data.attributes;
         debug!(

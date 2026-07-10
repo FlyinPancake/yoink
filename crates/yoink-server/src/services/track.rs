@@ -420,7 +420,9 @@ mod tests {
     #[tokio::test]
     async fn toggle_track_monitor_unmonitor_cancels_queued_track_jobs_and_remonitor_requeues() {
         let mut registry = ProviderRegistry::new();
-        registry.register_download(Arc::new(MockProvider {}));
+        registry.register_download(crate::providers::DownloadSource::Search(Arc::new(
+            MockProvider {},
+        )));
 
         let state = test_support::test_state_with_registry(registry).await;
 

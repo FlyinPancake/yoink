@@ -10,6 +10,7 @@ edition = "2024"
 migration = { path = "crates/yoink-migration" }
 
 argon2 = "0.5"
+anyhow = "1"
 async-trait = "0.1"
 axum = { version = "0.8", features = ["form", "json", "macros"] }
 base64 = "0.22"
@@ -20,6 +21,7 @@ cookie = "0.18"
 dotenvy = "0.15.7"
 envious = "0.2.2"
 governor = "0.10"
+http = "1"
 lofty = "0.24"
 lrclib-api-rs = "0.3"
 mime_guess = "2"
@@ -28,6 +30,7 @@ musicbrainz_rs = { version = "0.13", features = [
   "async",
   "rustls",
 ], default-features = false }
+oas3-gen-support = "0.26.2"
 rand = "0.10"
 reqwest = { version = "0.13", default-features = false, features = [
   "json",
@@ -49,6 +52,7 @@ sea-orm = { version = "2.0.0-rc.37", features = [
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_trim = "1.1.0"
+serde_with = "3.20"
 sha2 = "0.11"
 strsim = "0.11"
 snafu = { version = "0.9", features = ["futures"] }
@@ -82,4 +86,5 @@ utoipa = { version = "5.4.0", features = [
 utoipa-axum = "0.2.0"
 utoipa-scalar = { version = "0.3.0", features = ["axum"] }
 uuid = { version = "1", features = ["v7", "serde"] }
+validator = { version = "0.20", features = ["derive"] }
 veil = "0.3"

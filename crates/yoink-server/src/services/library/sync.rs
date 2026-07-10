@@ -278,7 +278,7 @@ pub(crate) async fn sync_album_tracks(
         )
     })?;
 
-    let (provider_tracks, _album_extra) = metadata.fetch_tracks(external_album_id).await?;
+    let provider_tracks = metadata.fetch_tracks(external_album_id).await?;
 
     if provider_tracks.is_empty() {
         tracing::debug!(%album_id, %provider, "no tracks returned from provider");
@@ -483,7 +483,6 @@ mod tests {
         ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, ColumnTrait, EntityTrait,
         QueryFilter,
     };
-    use serde_json::Value;
 
     use crate::{
         db::{self, provider::Provider, wanted_status::WantedStatus},
@@ -509,10 +508,6 @@ mod tests {
             Provider::Tidal
         }
 
-        fn display_name(&self) -> &str {
-            "Test Sync Provider"
-        }
-
         async fn search_artists(&self, _query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
             Ok(Vec::new())
         }
@@ -531,29 +526,16 @@ mod tests {
         async fn fetch_tracks(
             &self,
             external_album_id: &str,
-        ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError> {
-            Ok((
-                self.tracks_by_album
-                    .get(external_album_id)
-                    .cloned()
-                    .unwrap_or_default(),
-                HashMap::new(),
-            ))
-        }
-
-        async fn fetch_track_info_extra(
-            &self,
-            _external_track_id: &str,
-        ) -> Option<HashMap<String, Value>> {
-            None
+        ) -> Result<Vec<ProviderTrack>, ProviderError> {
+            Ok(self
+                .tracks_by_album
+                .get(external_album_id)
+                .cloned()
+                .unwrap_or_default())
         }
 
         fn image_url(&self, image_ref: &str, size: u16) -> String {
             format!("https://example.test/{image_ref}/{size}")
-        }
-
-        async fn fetch_cover_art_bytes(&self, _image_ref: &str) -> Option<Vec<u8>> {
-            None
         }
     }
 
@@ -689,7 +671,6 @@ mod tests {
                     duration_secs: 210,
                     isrc: Some("ISRC123".to_string()),
                     explicit: true,
-                    extra: HashMap::new(),
                 }],
             )]),
         }));
@@ -767,7 +748,6 @@ mod tests {
                     duration_secs: 222,
                     isrc: Some("NEWISRC".to_string()),
                     explicit: true,
-                    extra: HashMap::new(),
                 }],
             )]),
         }));

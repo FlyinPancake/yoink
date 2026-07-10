@@ -4,8 +4,6 @@
 //! and the uptime discovery feeds. They are intentionally kept close to
 //! the wire format; higher-level mapping lives in [`super`].
 
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 
 // ── Tidal API response types ────────────────────────────────────────
@@ -14,6 +12,41 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize)]
 pub(crate) struct HifiResponse {
     pub data: SearchData,
+}
+
+/// Response from a track-specific `/search/?s=...` request.
+///
+/// Unlike artist and album searches, hifi-api returns the track page directly
+/// under `data` instead of wrapping it in a categorized `tracks` field.
+#[derive(Debug, Deserialize)]
+pub(crate) struct HifiTrackSearchResponse {
+    pub data: PagedTracks,
+}
+
+/// Response from `/artist/?id=...` containing artist metadata and cover URLs.
+#[derive(Debug, Deserialize)]
+pub(crate) struct HifiArtistResponse {
+    pub artist: HifiArtist,
+}
+
+/// Response from `/info/` with the fields used for local audio tags.
+#[derive(Debug, Deserialize)]
+pub(crate) struct HifiTrackInfoResponse {
+    pub data: HifiTrackInfo,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct HifiTrackInfo {
+    pub isrc: Option<String>,
+    pub copyright: Option<String>,
+    pub version: Option<String>,
+    pub key: Option<String>,
+    pub bpm: Option<u32>,
+    #[serde(rename = "replayGain")]
+    pub replay_gain: Option<f64>,
+    pub peak: Option<f64>,
+    #[serde(default)]
+    pub artists: Vec<HifiAlbumArtist>,
 }
 
 /// Response from the `/artist/` endpoint when fetching an artist's discography.
@@ -32,8 +65,6 @@ pub(crate) struct HifiAlbumResponse {
 #[derive(Debug, Deserialize)]
 pub(crate) struct HifiAlbumData {
     pub items: Vec<HifiAlbumItem>,
-    #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
 }
 
 /// A track entry inside an album response.
@@ -87,9 +118,11 @@ pub(crate) struct HifiTrack {
     pub version: Option<String>,
     #[serde(rename = "trackNumber")]
     pub track_number: Option<i32>,
+    #[serde(rename = "volumeNumber")]
+    pub volume_number: Option<i32>,
     pub duration: Option<i32>,
-    #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
+    pub isrc: Option<String>,
+    pub explicit: Option<bool>,
 }
 
 /// Full artist object as returned by the search endpoint.
@@ -121,7 +154,6 @@ pub(crate) struct HifiArtistRole {
 pub(crate) struct SearchData {
     pub artists: Option<PagedArtists>,
     pub albums: Option<PagedAlbums>,
-    pub tracks: Option<PagedTracks>,
     pub items: Option<Vec<HifiArtist>>,
 }
 
@@ -150,15 +182,13 @@ pub(crate) struct HifiSearchTrack {
     pub title: String,
     pub version: Option<String>,
     pub duration: Option<u32>,
+    pub isrc: Option<String>,
     pub explicit: Option<bool>,
     /// Track-level artists.
     #[serde(default)]
     pub artists: Vec<HifiAlbumArtist>,
     /// Album this track belongs to.
     pub album: Option<HifiSearchTrackAlbum>,
-    #[expect(dead_code)]
-    #[serde(flatten)]
-    pub extra: std::collections::HashMap<String, serde_json::Value>,
 }
 
 /// Minimal album info embedded in track search results.

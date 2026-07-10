@@ -6,12 +6,10 @@ pub(crate) mod registry;
 pub(crate) mod soulseek;
 pub(crate) mod tidal;
 
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 use chrono::NaiveDate;
-use serde_json::Value;
 use snafu::prelude::*;
 
 use crate::db::{provider::Provider, quality::Quality};
@@ -86,14 +84,6 @@ pub(crate) struct ProviderArtist {
     pub popularity: Option<u8>,
 }
 
-/// A minimal artist reference attached to a provider album.
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub(crate) struct ProviderAlbumArtist {
-    pub external_id: String,
-    pub name: String,
-}
-
 /// An album returned by a metadata provider.
 #[derive(Debug, Clone)]
 pub(crate) struct ProviderAlbum {
@@ -118,95 +108,35 @@ pub(crate) struct ProviderTrack {
     pub isrc: Option<String>,
     /// Whether the track is marked explicit.
     pub explicit: bool,
-    /// Provider-specific extra metadata (for tagging).
-    #[allow(dead_code)]
-    // TODO: remove this
-    pub extra: HashMap<String, Value>,
 }
 
-// TODO: remove impl, and convert the tests
-
-#[cfg(test)]
-/// Local-state overrides applied when converting a [`ProviderTrack`] into
-/// a [`crate::api::TrackInfo`].  Fields default to sensible "fresh track"
-/// values so callers only need to set what differs.
-pub(crate) struct LocalTrackOverrides {
-    pub id: uuid::Uuid,
-    pub quality_override: Option<crate::api::Quality>,
-    pub file_path: Option<String>,
-    pub monitored: bool,
-    pub acquired: bool,
-    /// Override disc number (e.g. from file metadata). `None` uses the
-    /// provider value.
-    pub disc_number: Option<i32>,
-    /// Override track number. `None` uses the provider value.
-    pub track_number: Option<i32>,
-    /// Override explicit flag. `None` uses the provider value.
-    pub explicit: Option<bool>,
+/// Supplemental track metadata used when writing audio tags.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ProviderTrackMetadata {
+    pub artists: Vec<String>,
+    pub isrc: Option<String>,
+    pub copyright: Option<String>,
+    pub version: Option<String>,
+    pub initial_key: Option<String>,
+    pub bpm: Option<u32>,
+    pub track_replay_gain: Option<f64>,
+    pub track_peak_amplitude: Option<f64>,
 }
 
-// TODO: remove impl, and convert the tests
-
-#[cfg(test)]
-impl Default for LocalTrackOverrides {
-    fn default() -> Self {
-        Self {
-            id: uuid::Uuid::now_v7(),
-            quality_override: None,
-            file_path: None,
-            monitored: false,
-            acquired: false,
-            disc_number: None,
-            track_number: None,
-            explicit: None,
+impl ProviderTrackMetadata {
+    /// Fill missing fields from a lower-priority metadata source.
+    pub(crate) fn with_fallback(mut self, fallback: Self) -> Self {
+        if self.artists.is_empty() {
+            self.artists = fallback.artists;
         }
-    }
-}
-
-// TODO: remove impl, and convert the tests
-
-#[cfg(test)]
-impl ProviderTrack {
-    /// Convert this provider track into a [`TrackInfo`], applying
-    /// local-state overrides for fields that differ by call site.
-    pub(crate) fn into_track_info(self, overrides: LocalTrackOverrides) -> crate::api::TrackInfo {
-        let secs = self.duration_secs;
-        crate::api::TrackInfo {
-            id: overrides.id,
-            title: self.title,
-            version: self.version,
-            disc_number: overrides.disc_number.or(self.disc_number).unwrap_or(1),
-            track_number: overrides.track_number.unwrap_or(self.track_number),
-            duration_secs: secs,
-            isrc: self.isrc,
-            explicit: overrides.explicit.unwrap_or(self.explicit),
-            quality_override: overrides.quality_override,
-            track_artist: None,
-            file_path: overrides.file_path,
-            monitored: overrides.monitored,
-            acquired: overrides.acquired,
-        }
-    }
-
-    /// Borrowing variant of [`into_track_info`](Self::into_track_info)
-    /// for call sites that continue using the `ProviderTrack` afterward.
-    pub(crate) fn to_track_info(&self, overrides: LocalTrackOverrides) -> crate::api::TrackInfo {
-        let secs = self.duration_secs;
-        crate::api::TrackInfo {
-            id: overrides.id,
-            title: self.title.clone(),
-            version: self.version.clone(),
-            disc_number: overrides.disc_number.or(self.disc_number).unwrap_or(1),
-            track_number: overrides.track_number.unwrap_or(self.track_number),
-            duration_secs: secs,
-            isrc: self.isrc.clone(),
-            explicit: overrides.explicit.unwrap_or(self.explicit),
-            quality_override: overrides.quality_override,
-            track_artist: None,
-            file_path: overrides.file_path,
-            monitored: overrides.monitored,
-            acquired: overrides.acquired,
-        }
+        self.isrc = self.isrc.or(fallback.isrc);
+        self.copyright = self.copyright.or(fallback.copyright);
+        self.version = self.version.or(fallback.version);
+        self.initial_key = self.initial_key.or(fallback.initial_key);
+        self.bpm = self.bpm.or(fallback.bpm);
+        self.track_replay_gain = self.track_replay_gain.or(fallback.track_replay_gain);
+        self.track_peak_amplitude = self.track_peak_amplitude.or(fallback.track_peak_amplitude);
+        self
     }
 }
 
@@ -273,10 +203,6 @@ pub(crate) trait MetadataProvider: Send + Sync {
     /// Unique provider identifier (e.g. "tidal", "musicbrainz", "deezer").
     fn id(&self) -> Provider;
 
-    /// Human-readable display name.
-    #[allow(dead_code)]
-    fn display_name(&self) -> &str;
-
     /// Search for artists by name.
     async fn search_artists(&self, query: &str) -> Result<Vec<ProviderArtist>, ProviderError>;
 
@@ -286,31 +212,29 @@ pub(crate) trait MetadataProvider: Send + Sync {
         external_artist_id: &str,
     ) -> Result<Vec<ProviderAlbum>, ProviderError>;
 
-    /// Fetch tracks for an album (with extra metadata for tagging).
+    /// Fetch tracks for an album.
     async fn fetch_tracks(
         &self,
         external_album_id: &str,
-    ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError>;
+    ) -> Result<Vec<ProviderTrack>, ProviderError>;
 
-    /// Fetch extra metadata for a single track (ISRC, BPM, key, etc.).
-    async fn fetch_track_info_extra(
+    /// Fetch supplemental metadata for tagging a single track.
+    async fn fetch_track_metadata(
         &self,
-        external_track_id: &str,
-    ) -> Option<HashMap<String, Value>>;
+        _external_track_id: &str,
+    ) -> Result<Option<ProviderTrackMetadata>, ProviderError> {
+        Ok(None)
+    }
 
     /// Validate an image ID before proxying. Returns `true` if safe.
     /// Override in provider implementations for provider-specific validation.
     fn validate_image_id(&self, image_id: &str) -> bool {
         let _ = image_id;
-        true
+        false
     }
 
     /// Build the upstream image URL for a given image ref and size.
     fn image_url(&self, image_ref: &str, size: u16) -> String;
-
-    /// Fetch cover art bytes for an image ref (full resolution).
-    #[expect(dead_code)]
-    async fn fetch_cover_art_bytes(&self, image_ref: &str) -> Option<Vec<u8>>;
 
     /// Fetch the image ref for an artist by their external ID.
     /// `name_hint` can be used by providers that need to search by name to find the artist.
@@ -331,38 +255,72 @@ pub(crate) trait MetadataProvider: Send + Sync {
     }
 
     /// Search for albums by query string.
-    /// Default returns empty; providers can override.
+    /// Providers without this capability return [`ProviderError::NotSupported`].
     async fn search_albums(&self, _query: &str) -> Result<Vec<ProviderSearchAlbum>, ProviderError> {
-        Ok(vec![])
+        Err(ProviderError::NotSupported {
+            provider: self.id(),
+            operation: "search_albums".to_string(),
+        })
     }
 
     /// Search for tracks by query string.
-    /// Default returns empty; providers can override.
+    /// Providers without this capability return [`ProviderError::NotSupported`].
     async fn search_tracks(&self, _query: &str) -> Result<Vec<ProviderSearchTrack>, ProviderError> {
-        Ok(vec![])
+        Err(ProviderError::NotSupported {
+            provider: self.id(),
+            operation: "search_tracks".to_string(),
+        })
     }
 }
 
-/// Provides track download (playback resolution).
+/// Resolves playback using provider-linked external track IDs.
 #[async_trait]
-pub(crate) trait DownloadSource: Send + Sync {
+pub(crate) trait LinkedTrackResolver: Send + Sync {
     /// Source identifier.
     fn id(&self) -> Provider;
 
-    /// Whether this source requires provider-linked external IDs.
-    fn requires_linked_provider(&self) -> bool;
-
-    async fn resolve_by_id(
+    async fn resolve(
         &self,
         external_track_ids: &[String],
         quality: &Quality,
     ) -> Result<PlaybackInfo, ProviderError>;
+}
 
-    async fn resolve_by_metadata(
+/// Resolves playback by searching with locally stored track metadata.
+#[async_trait]
+pub(crate) trait SearchTrackResolver: Send + Sync {
+    /// Source identifier.
+    fn id(&self) -> Provider;
+
+    async fn resolve(
         &self,
         metadata: &DownloadTrackContext,
         quality: &Quality,
     ) -> Result<PlaybackInfo, ProviderError>;
+}
+
+/// An enabled download source and the lookup strategy it supports.
+#[derive(Clone)]
+pub(crate) enum DownloadSource {
+    Linked(Arc<dyn LinkedTrackResolver>),
+    Search(Arc<dyn SearchTrackResolver>),
+}
+
+impl DownloadSource {
+    pub fn id(&self) -> Provider {
+        match self {
+            Self::Linked(source) => source.id(),
+            Self::Search(source) => source.id(),
+        }
+    }
+
+    /// Whether this source can resolve a track with the available provider links.
+    pub fn is_available_for(&self, linked_providers: &HashSet<Provider>) -> bool {
+        match self {
+            Self::Linked(source) => linked_providers.contains(&source.id()),
+            Self::Search(_) => true,
+        }
+    }
 }
 
 /// Build an image proxy URL for a given provider and image reference.
@@ -372,112 +330,28 @@ pub fn provider_image_url(provider: Provider, image_ref: &str, size: u16) -> Str
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use super::*;
-
-    // ── ProviderTrack conversion ────────────────────────────────
-
-    fn base_provider_track() -> ProviderTrack {
-        ProviderTrack {
-            external_id: "ext-1".to_string(),
-            title: "Song Title".to_string(),
-            version: Some("Remastered".to_string()),
-            track_number: 3,
-            disc_number: Some(2),
-            duration_secs: 210,
-            isrc: Some("USRC12345678".to_string()),
-            explicit: true,
-            extra: HashMap::new(),
-        }
-    }
+    use super::ProviderTrackMetadata;
 
     #[test]
-    fn into_track_info_defaults_use_provider_values() {
-        let pt = base_provider_track();
-        let id = uuid::Uuid::now_v7();
-        let info = pt.into_track_info(LocalTrackOverrides {
-            id,
-            ..Default::default()
-        });
-
-        assert_eq!(info.id, id);
-        assert_eq!(info.title, "Song Title");
-        assert_eq!(info.version.as_deref(), Some("Remastered"));
-        assert_eq!(info.disc_number, 2);
-        assert_eq!(info.track_number, 3);
-        assert_eq!(info.duration_secs, 210);
-        assert_eq!(info.isrc.as_deref(), Some("USRC12345678"));
-        assert!(info.explicit);
-        assert!(info.file_path.is_none());
-        assert!(!info.monitored);
-        assert!(!info.acquired);
-    }
-
-    #[test]
-    fn into_track_info_overrides_take_precedence() {
-        let pt = base_provider_track();
-        let id = uuid::Uuid::now_v7();
-        let info = pt.into_track_info(LocalTrackOverrides {
-            id,
-            disc_number: Some(5),
-            track_number: Some(99),
-            explicit: Some(false),
-            file_path: Some("/music/file.flac".to_string()),
-            monitored: true,
-            acquired: true,
-            quality_override: Some(crate::api::Quality::Lossless),
-        });
-
-        assert_eq!(info.disc_number, 5);
-        assert_eq!(info.track_number, 99);
-        assert!(!info.explicit);
-        assert_eq!(info.file_path.as_deref(), Some("/music/file.flac"));
-        assert!(info.monitored);
-        assert!(info.acquired);
-        assert_eq!(info.quality_override, Some(crate::api::Quality::Lossless));
-    }
-
-    #[test]
-    fn into_track_info_disc_number_falls_back_to_one() {
-        let mut pt = base_provider_track();
-        pt.disc_number = None;
-        let info = pt.into_track_info(LocalTrackOverrides {
-            disc_number: None,
-            ..Default::default()
-        });
-        assert_eq!(info.disc_number, 1);
-    }
-
-    #[test]
-    fn to_track_info_matches_into_semantics() {
-        let pt = base_provider_track();
-        let id = uuid::Uuid::now_v7();
-
-        let overrides_a = LocalTrackOverrides {
-            id,
-            disc_number: Some(7),
-            explicit: Some(false),
+    fn provider_track_metadata_fills_only_missing_fields() {
+        let preferred = ProviderTrackMetadata {
+            artists: vec!["Provider Artist".to_string()],
+            copyright: Some("Provider Copyright".to_string()),
             ..Default::default()
         };
-        let overrides_b = LocalTrackOverrides {
-            id,
-            disc_number: Some(7),
-            explicit: Some(false),
+        let fallback = ProviderTrackMetadata {
+            artists: vec!["Local Artist".to_string()],
+            isrc: Some("LOCALISRC".to_string()),
+            copyright: Some("Local Copyright".to_string()),
+            version: Some("Local Version".to_string()),
             ..Default::default()
         };
 
-        let via_borrow = pt.to_track_info(overrides_a);
-        // Confirm the original is still usable after to_track_info.
-        assert_eq!(pt.title, "Song Title");
-        let via_move = pt.into_track_info(overrides_b);
+        let merged = preferred.with_fallback(fallback);
 
-        assert_eq!(via_borrow.title, via_move.title);
-        assert_eq!(via_borrow.version, via_move.version);
-        assert_eq!(via_borrow.disc_number, via_move.disc_number);
-        assert_eq!(via_borrow.track_number, via_move.track_number);
-        assert_eq!(via_borrow.isrc, via_move.isrc);
-        assert_eq!(via_borrow.explicit, via_move.explicit);
-        assert_eq!(via_borrow.track_artist, via_move.track_artist);
+        assert_eq!(merged.artists, ["Provider Artist"]);
+        assert_eq!(merged.isrc.as_deref(), Some("LOCALISRC"));
+        assert_eq!(merged.copyright.as_deref(), Some("Provider Copyright"));
+        assert_eq!(merged.version.as_deref(), Some("Local Version"));
     }
 }

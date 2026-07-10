@@ -9,7 +9,7 @@ use super::{
 /// Central registry that holds all enabled providers and dispatches operations.
 pub(crate) struct ProviderRegistry {
     metadata: Vec<Arc<dyn MetadataProvider>>,
-    download: Vec<Arc<dyn DownloadSource>>,
+    download: Vec<DownloadSource>,
 }
 
 impl ProviderRegistry {
@@ -22,12 +22,28 @@ impl ProviderRegistry {
 
     /// Register a provider that implements MetadataProvider.
     pub fn register_metadata(&mut self, provider: Arc<dyn MetadataProvider>) {
-        self.metadata.push(provider);
+        if let Some(existing) = self
+            .metadata
+            .iter_mut()
+            .find(|existing| existing.id() == provider.id())
+        {
+            *existing = provider;
+        } else {
+            self.metadata.push(provider);
+        }
     }
 
     /// Register a provider that implements DownloadSource.
-    pub fn register_download(&mut self, source: Arc<dyn DownloadSource>) {
-        self.download.push(source);
+    pub fn register_download(&mut self, source: DownloadSource) {
+        if let Some(existing) = self
+            .download
+            .iter_mut()
+            .find(|existing| existing.id() == source.id())
+        {
+            *existing = source;
+        } else {
+            self.download.push(source);
+        }
     }
 
     /// Fan-out search to all metadata providers concurrently.
@@ -42,7 +58,10 @@ impl ProviderRegistry {
                 let id = p.id();
                 match p.search_artists(&q).await {
                     Ok(artists) => (id, artists),
-                    Err(_) => (id, Vec::new()),
+                    Err(error) => {
+                        log_search_error(id, "artist", &error);
+                        (id, Vec::new())
+                    }
                 }
             }));
         }
@@ -71,7 +90,10 @@ impl ProviderRegistry {
                 let id = p.id();
                 match p.search_albums(&q).await {
                     Ok(albums) => (id, albums),
-                    Err(_) => (id, Vec::new()),
+                    Err(error) => {
+                        log_search_error(id, "album", &error);
+                        (id, Vec::new())
+                    }
                 }
             }));
         }
@@ -100,7 +122,10 @@ impl ProviderRegistry {
                 let id = p.id();
                 match p.search_tracks(&q).await {
                     Ok(tracks) => (id, tracks),
-                    Err(_) => (id, Vec::new()),
+                    Err(error) => {
+                        log_search_error(id, "track", &error);
+                        (id, Vec::new())
+                    }
                 }
             }));
         }
@@ -120,18 +145,54 @@ impl ProviderRegistry {
     }
 
     /// Get a specific download source by ID.
-    pub fn download_source(&self, id: Provider) -> Option<Arc<dyn DownloadSource>> {
+    pub fn download_source(&self, id: Provider) -> Option<DownloadSource> {
         self.download.iter().find(|s| s.id() == id).cloned()
     }
 
     /// List all enabled metadata provider IDs.
-    #[allow(dead_code)]
     pub fn metadata_provider_ids(&self) -> Vec<String> {
         self.metadata.iter().map(|p| p.id().to_string()).collect()
     }
 
     /// List all enabled download sources.
-    pub fn download_sources(&self) -> Vec<Arc<dyn DownloadSource>> {
-        self.download.clone()
+    pub fn download_sources(&self) -> &[DownloadSource] {
+        &self.download
+    }
+}
+
+fn log_search_error(provider: Provider, resource: &str, error: &super::ProviderError) {
+    if matches!(error, super::ProviderError::NotSupported { .. }) {
+        tracing::debug!(%provider, resource, "Provider does not support this search");
+    } else {
+        tracing::warn!(%provider, resource, %error, "Provider search failed");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ProviderRegistry;
+    use crate::{
+        db::provider::Provider,
+        providers::{
+            DownloadSource,
+            mock::{TestLinkedTrackResolver, TestSearchTrackResolver},
+        },
+    };
+
+    #[test]
+    fn registering_same_download_provider_replaces_existing_entry() {
+        let mut registry = ProviderRegistry::new();
+        registry.register_download(DownloadSource::Linked(std::sync::Arc::new(
+            TestLinkedTrackResolver::new(Provider::Tidal),
+        )));
+        registry.register_download(DownloadSource::Search(std::sync::Arc::new(
+            TestSearchTrackResolver::new(Provider::Tidal),
+        )));
+
+        assert_eq!(registry.download_sources().len(), 1);
+        assert!(matches!(
+            registry.download_source(Provider::Tidal),
+            Some(DownloadSource::Search(_))
+        ));
     }
 }

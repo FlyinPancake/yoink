@@ -32,7 +32,7 @@ use self::{
     transfer::{is_complete_success, is_failure},
     util::{dedup_queries, normalize, percent_encode_path, sanitize_relative_path},
 };
-use super::{DownloadSource, DownloadTrackContext, PlaybackInfo, ProviderError};
+use super::{DownloadTrackContext, PlaybackInfo, ProviderError, SearchTrackResolver};
 
 // ── Source ───────────────────────────────────────────────────────────
 
@@ -67,31 +67,15 @@ impl SoulSeekSource {
     }
 }
 
-// ── DownloadSource trait ────────────────────────────────────────────
+// ── SearchTrackResolver trait ──────────────────────────────────────
 
 #[async_trait]
-impl DownloadSource for SoulSeekSource {
+impl SearchTrackResolver for SoulSeekSource {
     fn id(&self) -> Provider {
         Provider::Soulseek
     }
 
-    fn requires_linked_provider(&self) -> bool {
-        false
-    }
-
-    async fn resolve_by_id(
-        &self,
-        _external_track_ids: &[String],
-        _quality: &Quality,
-    ) -> Result<PlaybackInfo, ProviderError> {
-        NotSupportedSnafu {
-            provider: Provider::Soulseek,
-            operation: "resolve_by_id".to_string(),
-        }
-        .fail()
-    }
-
-    async fn resolve_by_metadata(
+    async fn resolve(
         &self,
         ctx: &DownloadTrackContext,
         quality: &Quality,

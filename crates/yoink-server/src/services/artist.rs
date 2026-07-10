@@ -330,11 +330,10 @@ pub(crate) async fn unlink_artist_provider(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+    use std::{path::PathBuf, sync::Arc, time::Duration};
 
     use async_trait::async_trait;
     use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set, EntityTrait};
-    use serde_json::Value;
     use tokio::time::sleep;
 
     use super::*;
@@ -366,10 +365,6 @@ mod tests {
             Provider::Deezer
         }
 
-        fn display_name(&self) -> &str {
-            "Test Provider"
-        }
-
         async fn search_artists(&self, _query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
             Ok(Vec::new())
         }
@@ -384,23 +379,12 @@ mod tests {
         async fn fetch_tracks(
             &self,
             _external_album_id: &str,
-        ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError> {
-            Ok((Vec::new(), HashMap::new()))
-        }
-
-        async fn fetch_track_info_extra(
-            &self,
-            _external_track_id: &str,
-        ) -> Option<HashMap<String, Value>> {
-            None
+        ) -> Result<Vec<ProviderTrack>, ProviderError> {
+            Ok(Vec::new())
         }
 
         fn image_url(&self, image_ref: &str, size: u16) -> String {
             format!("https://example.test/{image_ref}/{size}")
-        }
-
-        async fn fetch_cover_art_bytes(&self, _image_ref: &str) -> Option<Vec<u8>> {
-            None
         }
 
         async fn fetch_artist_image_ref(
@@ -434,10 +418,6 @@ mod tests {
             self.provider
         }
 
-        fn display_name(&self) -> &str {
-            "Bio Fallback Provider"
-        }
-
         async fn search_artists(&self, _query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
             Ok(Vec::new())
         }
@@ -452,23 +432,12 @@ mod tests {
         async fn fetch_tracks(
             &self,
             _external_album_id: &str,
-        ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError> {
-            Ok((Vec::new(), HashMap::new()))
-        }
-
-        async fn fetch_track_info_extra(
-            &self,
-            _external_track_id: &str,
-        ) -> Option<HashMap<String, Value>> {
-            None
+        ) -> Result<Vec<ProviderTrack>, ProviderError> {
+            Ok(Vec::new())
         }
 
         fn image_url(&self, image_ref: &str, size: u16) -> String {
             format!("https://example.test/{image_ref}/{size}")
-        }
-
-        async fn fetch_cover_art_bytes(&self, _image_ref: &str) -> Option<Vec<u8>> {
-            None
         }
 
         async fn fetch_artist_bio(&self, _external_artist_id: &str) -> Option<String> {
