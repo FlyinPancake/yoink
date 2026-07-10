@@ -36,6 +36,9 @@ run   = "bun x openapi-typescript http://localhost:3000/docs/openapi.json --outp
 [tasks.gen-hifi-types]
 run = "oas3-gen generate types --input hifi-oapi.json --output crates/yoink-server/src/providers/tidal/hifi_types.rs --visibility crate && cargo fmt"
 
+[tasks.gen-slskd-types]
+run = "oas3-gen generate types --input slskd-oapi.json --output crates/yoink-server/src/providers/soulseek/slskd_types.rs --visibility crate --all-schemas --no-ordered-collections && cargo fmt"
+
 [tasks.lint]
 depends = ["lint-server", "lint-frontend"]
 

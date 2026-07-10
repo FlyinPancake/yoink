@@ -36,6 +36,7 @@ services:
       - "50300:50300"
     environment:
       - SLSKD_REMOTE_CONFIGURATION=true
+      - SLSKD_SWAGGER=true
     volumes:
       - ./development/slskd-data:/app
       - ./music:/music

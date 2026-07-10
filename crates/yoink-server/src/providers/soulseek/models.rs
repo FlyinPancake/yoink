@@ -3,32 +3,13 @@
 //! These structs mirror the JSON shapes used by the slskd REST API.
 //! Higher-level logic lives in [`super`].
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-// ── Authentication ──────────────────────────────────────────────────
-
-#[derive(Debug, Serialize)]
-pub(crate) struct LoginRequest {
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct TokenResponse {
-    pub token: String,
-}
+pub(crate) use super::slskd_types::{
+    LoginRequest, QueueDownloadRequest, SearchRequest, TokenResponse,
+};
 
 // ── Search ──────────────────────────────────────────────────────────
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct SearchRequest {
-    pub id: Option<String>,
-    pub search_text: String,
-    pub search_timeout: Option<u32>,
-    pub response_limit: Option<u32>,
-    pub file_limit: Option<u32>,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,12 +47,6 @@ pub(crate) struct SearchFile {
 }
 
 // ── Downloads / Transfers ───────────────────────────────────────────
-
-#[derive(Debug, Serialize)]
-pub(crate) struct QueueDownloadRequest {
-    pub filename: String,
-    pub size: i64,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

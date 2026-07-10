@@ -270,7 +270,7 @@ async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppRe
             .await?
         }
         DownloadSource::Search(source) => {
-            let planned_tracks = plan_tracks_by_metadata(&album, quality);
+            let planned_tracks = plan_tracks_by_metadata(&album, quality, &album_artist);
             enqueue_search_tracks(
                 state.clone(),
                 source,
@@ -462,8 +462,12 @@ async fn process_track_download_job(state: AppState, job: job::ModelEx) -> AppRe
             .await?
         }
         DownloadSource::Search(source) => {
-            let planned_tracks =
-                VecDeque::from([plan_track_by_metadata(&album, &target_track, quality)]);
+            let planned_tracks = VecDeque::from([plan_track_by_metadata(
+                &album,
+                &target_track,
+                quality,
+                &album_artist,
+            )]);
             enqueue_search_tracks(
                 state.clone(),
                 source,
@@ -891,11 +895,15 @@ fn plan_track_by_id(
     })
 }
 
-fn plan_tracks_by_metadata(album: &album::ModelEx, quality: Quality) -> VecDeque<SearchTrackPlan> {
+fn plan_tracks_by_metadata(
+    album: &album::ModelEx,
+    quality: Quality,
+    album_artist: &str,
+) -> VecDeque<SearchTrackPlan> {
     album
         .tracks
         .iter()
-        .map(|track| plan_track_by_metadata(album, track, quality))
+        .map(|track| plan_track_by_metadata(album, track, quality, album_artist))
         .collect()
 }
 
@@ -903,22 +911,23 @@ fn plan_track_by_metadata(
     album: &album::ModelEx,
     track: &track::ModelEx,
     quality: Quality,
+    album_artist: &str,
 ) -> SearchTrackPlan {
     let primary_artist_id = track
         .track_artists
         .iter()
         .min_by_key(|ta| ta.priority)
         .map(|ta| ta.artist_id);
-    let artist_name = if let Some(primary_artist_id) = primary_artist_id {
+    let track_artist = if let Some(primary_artist_id) = primary_artist_id {
         track
             .artists
             .iter()
             .find(|artist| artist.id == primary_artist_id)
-            .map(|artist| artist.name.clone())
-            .unwrap_or_else(|| "Unknown Artist".to_string())
+            .map(|artist| artist.name.as_str())
     } else {
-        "Unknown Artist".to_string()
+        None
     };
+    let artist_name = search_artist_name(track_artist, album_artist);
 
     let metadata = DownloadTrackContext {
         artist_name,
@@ -934,6 +943,13 @@ fn plan_track_by_metadata(
         metadata,
         quality,
     }
+}
+
+fn search_artist_name(track_artist: Option<&str>, album_artist: &str) -> String {
+    track_artist
+        .filter(|artist| !artist.trim().is_empty())
+        .unwrap_or(album_artist)
+        .to_string()
 }
 
 pub(crate) async fn download_worker(state: AppState) -> AppResult<()> {
@@ -997,7 +1013,7 @@ mod tests {
 
     use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set};
 
-    use super::{enqueue_download_album_job, enqueue_download_track_job};
+    use super::{enqueue_download_album_job, enqueue_download_track_job, search_artist_name};
     use crate::{
         db::{self, provider::Provider, wanted_status::WantedStatus},
         providers::{
@@ -1017,6 +1033,16 @@ mod tests {
             TestLinkedTrackResolver::new(Provider::Tidal),
         )));
         registry
+    }
+
+    #[test]
+    fn search_artist_falls_back_to_album_artist() {
+        assert_eq!(search_artist_name(None, "Noisia"), "Noisia");
+        assert_eq!(search_artist_name(Some(""), "Noisia"), "Noisia");
+        assert_eq!(
+            search_artist_name(Some("Foreign Beggars"), "Noisia"),
+            "Foreign Beggars"
+        );
     }
 
     #[tokio::test]
