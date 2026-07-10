@@ -186,7 +186,7 @@ async fn recompute_artist_level_suggestions(
         .max_by_key(|link| provider_priority(link.provider))
         .unwrap_or(&artist_links[0]);
 
-    for (provider_id, results) in state.registry.search_artists_all(artist_name).await {
+    for (provider_id, results) in state.registry.search_artists_all(artist_name, None).await {
         let Some((candidate, score)) = best_artist_candidate(artist_name, results, |candidate| {
             !existing_pairs.contains(&(provider_id, candidate.external_id.clone()))
         }) else {
@@ -274,7 +274,7 @@ async fn recompute_album_match_suggestions(
             )
         });
 
-    for (provider_id, artists) in state.registry.search_artists_all(artist_name).await {
+    for (provider_id, artists) in state.registry.search_artists_all(artist_name, None).await {
         let Some(provider) = state.registry.metadata_provider(provider_id) else {
             continue;
         };

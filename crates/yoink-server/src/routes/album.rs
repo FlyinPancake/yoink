@@ -152,9 +152,7 @@ async fn require_track(state: &AppState, track_id: Uuid) -> Result<(), ApiErrorR
     get,
     path = "/search",
     tag = TAG,
-    params(
-        ("query" = String, Query, description = "Album search query")
-    ),
+    params(SearchQuery),
     responses(
         (status = 200, description = "Search results across all providers", body = Vec<SearchAlbumResult>),
         (status = 503, description = "Provider search unavailable"),

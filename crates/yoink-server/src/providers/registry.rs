@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::db::provider::Provider;
@@ -48,10 +49,15 @@ impl ProviderRegistry {
 
     /// Fan-out search to all metadata providers concurrently.
     /// Returns a list of (provider_id, results).
-    pub async fn search_artists_all(&self, query: &str) -> Vec<(Provider, Vec<ProviderArtist>)> {
+    /// `providers` restricts the fan-out to the given set; `None` searches all.
+    pub async fn search_artists_all(
+        &self,
+        query: &str,
+        providers: Option<&HashSet<Provider>>,
+    ) -> Vec<(Provider, Vec<ProviderArtist>)> {
         let mut handles = Vec::new();
 
-        for provider in &self.metadata {
+        for provider in self.filtered_metadata(providers) {
             let p = Arc::clone(provider);
             let q = query.to_string();
             handles.push(tokio::spawn(async move {
@@ -80,10 +86,11 @@ impl ProviderRegistry {
     pub async fn search_albums_all(
         &self,
         query: &str,
+        providers: Option<&HashSet<Provider>>,
     ) -> Vec<(Provider, Vec<ProviderSearchAlbum>)> {
         let mut handles = Vec::new();
 
-        for provider in &self.metadata {
+        for provider in self.filtered_metadata(providers) {
             let p = Arc::clone(provider);
             let q = query.to_string();
             handles.push(tokio::spawn(async move {
@@ -112,10 +119,11 @@ impl ProviderRegistry {
     pub async fn search_tracks_all(
         &self,
         query: &str,
+        providers: Option<&HashSet<Provider>>,
     ) -> Vec<(Provider, Vec<ProviderSearchTrack>)> {
         let mut handles = Vec::new();
 
-        for provider in &self.metadata {
+        for provider in self.filtered_metadata(providers) {
             let p = Arc::clone(provider);
             let q = query.to_string();
             handles.push(tokio::spawn(async move {
@@ -137,6 +145,16 @@ impl ProviderRegistry {
             }
         }
         results
+    }
+
+    /// Metadata providers restricted to `providers`; `None` yields all.
+    fn filtered_metadata<'a>(
+        &'a self,
+        providers: Option<&'a HashSet<Provider>>,
+    ) -> impl Iterator<Item = &'a Arc<dyn MetadataProvider>> {
+        self.metadata
+            .iter()
+            .filter(move |p| providers.is_none_or(|filter| filter.contains(&p.id())))
     }
 
     /// Get a specific metadata provider by ID.
@@ -170,12 +188,14 @@ fn log_search_error(provider: Provider, resource: &str, error: &super::ProviderE
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::ProviderRegistry;
     use crate::{
         db::provider::Provider,
         providers::{
             DownloadSource,
-            mock::{TestLinkedTrackResolver, TestSearchTrackResolver},
+            mock::{TestLinkedTrackResolver, TestMetadataProvider, TestSearchTrackResolver},
         },
     };
 
@@ -194,5 +214,24 @@ mod tests {
             registry.download_source(Provider::Tidal),
             Some(DownloadSource::Search(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn search_fans_out_only_to_filtered_providers() {
+        let mut registry = ProviderRegistry::new();
+        registry.register_metadata(std::sync::Arc::new(TestMetadataProvider::new(
+            Provider::Tidal,
+        )));
+        registry.register_metadata(std::sync::Arc::new(TestMetadataProvider::new(
+            Provider::Deezer,
+        )));
+
+        let all = registry.search_artists_all("query", None).await;
+        assert_eq!(all.len(), 2);
+
+        let filter: HashSet<Provider> = [Provider::Deezer].into();
+        let filtered = registry.search_artists_all("query", Some(&filter)).await;
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].0, Provider::Deezer);
     }
 }

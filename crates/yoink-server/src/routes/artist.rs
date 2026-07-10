@@ -107,9 +107,7 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
     get,
     path = "/search",
     tag = TAG,
-    params(
-        ("query" = String, Query, description = "Artist search query")
-    ),
+    params(SearchQuery),
     responses(
         (status = 200, description = "Search results across all providers", body = Vec<SearchArtistResult>),
         (status = 503, description = "Provider search unavailable"),

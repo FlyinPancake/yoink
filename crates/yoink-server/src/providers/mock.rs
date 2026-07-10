@@ -4,7 +4,8 @@ use crate::{
     api::Quality,
     db::provider::Provider,
     providers::{
-        DownloadTrackContext, LinkedTrackResolver, PlaybackInfo, ProviderError, SearchTrackResolver,
+        DownloadTrackContext, LinkedTrackResolver, MetadataProvider, PlaybackInfo, ProviderArtist,
+        ProviderError, SearchTrackResolver,
     },
 };
 
@@ -24,6 +25,55 @@ impl SearchTrackResolver for MockProvider {
         Ok(PlaybackInfo::DirectUrl(
             "https://example.com/mock.mp3".to_string(),
         ))
+    }
+}
+
+pub(crate) struct TestMetadataProvider {
+    provider: Provider,
+}
+
+impl TestMetadataProvider {
+    pub(crate) fn new(provider: Provider) -> Self {
+        Self { provider }
+    }
+}
+
+#[async_trait]
+impl MetadataProvider for TestMetadataProvider {
+    fn id(&self) -> Provider {
+        self.provider
+    }
+
+    async fn search_artists(&self, _query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
+        Ok(vec![ProviderArtist {
+            external_id: format!("{}-artist", self.provider),
+            name: self.provider.to_string(),
+            image_ref: None,
+            url: None,
+            disambiguation: None,
+            artist_type: None,
+            country: None,
+            tags: Vec::new(),
+            popularity: None,
+        }])
+    }
+
+    async fn fetch_albums(
+        &self,
+        _external_artist_id: &str,
+    ) -> Result<Vec<super::ProviderAlbum>, ProviderError> {
+        Ok(Vec::new())
+    }
+
+    async fn fetch_tracks(
+        &self,
+        _external_album_id: &str,
+    ) -> Result<Vec<super::ProviderTrack>, ProviderError> {
+        Ok(Vec::new())
+    }
+
+    fn image_url(&self, image_ref: &str, _size: u16) -> String {
+        format!("https://example.test/{image_ref}")
     }
 }
 
