@@ -1507,8 +1507,10 @@ export interface operations {
     search_albums: {
         parameters: {
             query: {
-                /** @description Album search query */
                 query: string;
+                /** @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
+ *     Omitted or empty searches all enabled providers. */
+                providers?: string | null;
             };
             header?: never;
             path?: never;
@@ -2066,8 +2068,10 @@ export interface operations {
     search_artists: {
         parameters: {
             query: {
-                /** @description Artist search query */
                 query: string;
+                /** @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
+ *     Omitted or empty searches all enabled providers. */
+                providers?: string | null;
             };
             header?: never;
             path?: never;
@@ -2988,6 +2992,9 @@ export interface operations {
         parameters: {
             query: {
                 query: string;
+                /** @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
+ *     Omitted or empty searches all enabled providers. */
+                providers?: string | null;
             };
             header?: never;
             path?: never;
@@ -3080,6 +3087,9 @@ export interface operations {
         parameters: {
             query: {
                 query: string;
+                /** @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
+ *     Omitted or empty searches all enabled providers. */
+                providers?: string | null;
             };
             header?: never;
             path?: never;

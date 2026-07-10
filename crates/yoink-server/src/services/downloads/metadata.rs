@@ -1,6 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::Path;
 
+use crate::{
+    error::{AppError, AppResult},
+    providers::ProviderTrackMetadata,
+};
 use lofty::{
     config::WriteOptions,
     file::{AudioFile, TaggedFileExt},
@@ -9,9 +13,6 @@ use lofty::{
     probe::Probe,
     tag::{Tag, TagType},
 };
-use serde_json::Value;
-
-use crate::error::{AppError, AppResult};
 
 use super::io::extract_year;
 
@@ -26,11 +27,7 @@ pub(crate) struct TrackMetadata<'a> {
     pub disc_number: Option<u32>,
     pub total_tracks: u32,
     pub release_date: &'a str,
-    #[expect(dead_code)]
-    pub track_extra: &'a HashMap<String, Value>,
-    #[expect(dead_code)]
-    pub album_extra: &'a HashMap<String, Value>,
-    pub track_info_extra: Option<&'a HashMap<String, Value>>,
+    pub provider_metadata: Option<&'a ProviderTrackMetadata>,
     pub lyrics_text: Option<&'a str>,
     pub cover_art_jpeg: Option<&'a [u8]>,
 }
@@ -72,35 +69,29 @@ pub(crate) fn write_audio_metadata(meta: &TrackMetadata<'_>) -> AppResult<()> {
         tag.insert_text(ItemKey::Lyrics, lyrics.to_string());
     }
 
-    if let Some(info) = meta.track_info_extra {
-        if let Some(isrc) = value_as_string(info.get("isrc")) {
-            tag.insert_text(ItemKey::Isrc, isrc);
+    if let Some(info) = meta.provider_metadata {
+        if let Some(isrc) = &info.isrc {
+            tag.insert_text(ItemKey::Isrc, isrc.clone());
         }
-        if let Some(copyright) = value_as_string(info.get("copyright")) {
-            tag.insert_text(ItemKey::CopyrightMessage, copyright);
+        if let Some(copyright) = &info.copyright {
+            tag.insert_text(ItemKey::CopyrightMessage, copyright.clone());
         }
-        if let Some(version) = value_as_string(info.get("version"))
+        if let Some(version) = &info.version
             && !version.trim().is_empty()
         {
-            tag.insert_text(ItemKey::TrackSubtitle, version);
+            tag.insert_text(ItemKey::TrackSubtitle, version.clone());
         }
-        if let Some(initial_key) = value_as_string(info.get("key")) {
-            tag.insert_text(ItemKey::InitialKey, initial_key);
+        if let Some(initial_key) = &info.initial_key {
+            tag.insert_text(ItemKey::InitialKey, initial_key.clone());
         }
-        if let Some(bpm) = value_as_string(info.get("bpm")) {
-            tag.insert_text(ItemKey::IntegerBpm, bpm);
+        if let Some(bpm) = info.bpm {
+            tag.insert_text(ItemKey::IntegerBpm, bpm.to_string());
         }
-        if let Some(track_gain) = value_as_string(info.get("trackReplayGain")) {
-            tag.insert_text(ItemKey::ReplayGainTrackGain, track_gain);
+        if let Some(track_gain) = info.track_replay_gain {
+            tag.insert_text(ItemKey::ReplayGainTrackGain, track_gain.to_string());
         }
-        if let Some(track_peak) = value_as_string(info.get("trackPeakAmplitude")) {
-            tag.insert_text(ItemKey::ReplayGainTrackPeak, track_peak);
-        }
-        if let Some(album_gain) = value_as_string(info.get("albumReplayGain")) {
-            tag.insert_text(ItemKey::ReplayGainAlbumGain, album_gain);
-        }
-        if let Some(album_peak) = value_as_string(info.get("albumPeakAmplitude")) {
-            tag.insert_text(ItemKey::ReplayGainAlbumPeak, album_peak);
+        if let Some(track_peak) = info.track_peak_amplitude {
+            tag.insert_text(ItemKey::ReplayGainTrackPeak, track_peak.to_string());
         }
     }
 
@@ -114,15 +105,6 @@ pub(crate) fn write_audio_metadata(meta: &TrackMetadata<'_>) -> AppResult<()> {
         );
     }
 
-    // TODO: remove this, when removing the "extra" fields
-    // if tag_type == TagType::VorbisComments {
-    // write_extra_vorbis(tag, "TIDAL_TRACK_", meta.track_extra);
-    // write_extra_vorbis(tag, "TIDAL_ALBUM_", meta.album_extra);
-    // if let Some(info) = meta.track_info_extra {
-    //     write_extra_vorbis(tag, "TIDAL_INFO_", info);
-    // }
-    // }
-
     tagged_file
         .save_to_path(meta.path, WriteOptions::default())
         .map_err(|err| AppError::metadata("save metadata tags", err.to_string()))?;
@@ -133,19 +115,9 @@ fn preferred_tag_type(_meta: &TrackMetadata<'_>, tagged_file: &impl TaggedFileEx
     tagged_file.primary_tag_type()
 }
 
-fn value_as_string(value: Option<&Value>) -> Option<String> {
-    match value {
-        Some(Value::String(s)) => Some(s.clone()),
-        Some(Value::Number(n)) => Some(n.to_string()),
-        Some(Value::Bool(b)) => Some(b.to_string()),
-        _ => None,
-    }
-}
-
 pub(crate) fn build_full_artist_string(
     title: &str,
-    track_extra: &HashMap<String, Value>,
-    track_info_extra: Option<&HashMap<String, Value>>,
+    provider_metadata: Option<&ProviderTrackMetadata>,
     fallback_artist: &str,
 ) -> String {
     let mut artists = Vec::<String>::new();
@@ -154,9 +126,10 @@ pub(crate) fn build_full_artist_string(
     {
         let mut push_artist = |name: &str| push_unique_artist(name, &mut artists, &mut seen);
 
-        collect_artists_from_map(track_extra, &mut push_artist);
-        if let Some(extra) = track_info_extra {
-            collect_artists_from_map(extra, &mut push_artist);
+        if let Some(metadata) = provider_metadata {
+            for artist in &metadata.artists {
+                push_artist(artist);
+            }
         }
         for featured in parse_featured_artists(title) {
             push_artist(&featured);
@@ -178,33 +151,6 @@ fn push_unique_artist(name: &str, artists: &mut Vec<String>, seen: &mut HashSet<
     let key = trimmed.to_ascii_lowercase();
     if seen.insert(key) {
         artists.push(trimmed.to_string());
-    }
-}
-
-fn collect_artists_from_map(map: &HashMap<String, Value>, push: &mut dyn FnMut(&str)) {
-    for key in ["artists", "artist"] {
-        if let Some(value) = map.get(key) {
-            collect_artist_names(value, push);
-        }
-    }
-}
-
-fn collect_artist_names(value: &Value, push: &mut dyn FnMut(&str)) {
-    match value {
-        Value::String(s) => push(s),
-        Value::Array(items) => {
-            for item in items {
-                collect_artist_names(item, push);
-            }
-        }
-        Value::Object(obj) => {
-            if let Some(Value::String(name)) = obj.get("name") {
-                push(name);
-            } else if let Some(Value::String(name)) = obj.get("title") {
-                push(name);
-            }
-        }
-        _ => {}
     }
 }
 
@@ -239,23 +185,18 @@ fn parse_featured_artists(title: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::path::Path;
     use std::process::Command;
 
+    use super::*;
     use lofty::{
         file::{FileType, TaggedFile, TaggedFileExt},
         probe::Probe,
         properties::FileProperties,
         tag::TagType,
     };
-    use serde_json::{Value, json};
-
-    use super::*;
 
     fn test_meta<'a>(path: &'a Path, cover_art_jpeg: Option<&'a [u8]>) -> TrackMetadata<'a> {
-        let track_extra = Box::leak(Box::new(HashMap::new()));
-        let album_extra = Box::leak(Box::new(HashMap::new()));
         TrackMetadata {
             path,
             title: "Track",
@@ -266,9 +207,7 @@ mod tests {
             disc_number: Some(1),
             total_tracks: 1,
             release_date: "2024-01-01",
-            track_extra,
-            album_extra,
-            track_info_extra: None,
+            provider_metadata: None,
             lyrics_text: None,
             cover_art_jpeg,
         }
@@ -345,112 +284,60 @@ mod tests {
     // ── build_full_artist_string ────────────────────────────────
 
     #[test]
-    fn build_artist_from_track_extra_array_of_objects() {
-        let mut track_extra = HashMap::new();
-        track_extra.insert(
-            "artists".to_string(),
-            json!([{"name": "Artist A"}, {"name": "Artist B"}]),
-        );
-        let result = build_full_artist_string("Song", &track_extra, None, "Fallback");
+    fn build_artist_from_provider_metadata() {
+        let metadata = ProviderTrackMetadata {
+            artists: vec!["Artist A".to_string(), "Artist B".to_string()],
+            ..Default::default()
+        };
+        let result = build_full_artist_string("Song", Some(&metadata), "Fallback");
         assert_eq!(result, "Artist A; Artist B");
     }
 
     #[test]
-    fn build_artist_from_track_extra_string() {
-        let mut track_extra = HashMap::new();
-        track_extra.insert("artist".to_string(), json!("Solo Artist"));
-        let result = build_full_artist_string("Song", &track_extra, None, "Fallback");
+    fn build_artist_from_single_provider_artist() {
+        let metadata = ProviderTrackMetadata {
+            artists: vec!["Solo Artist".to_string()],
+            ..Default::default()
+        };
+        let result = build_full_artist_string("Song", Some(&metadata), "Fallback");
         assert_eq!(result, "Solo Artist");
     }
 
     #[test]
     fn build_artist_deduplicates_case_insensitive() {
-        let mut track_extra = HashMap::new();
-        track_extra.insert(
-            "artists".to_string(),
-            json!([{"name": "Artist"}, {"name": "artist"}]),
-        );
-        let result = build_full_artist_string("Song", &track_extra, None, "Fallback");
+        let metadata = ProviderTrackMetadata {
+            artists: vec!["Artist".to_string(), "artist".to_string()],
+            ..Default::default()
+        };
+        let result = build_full_artist_string("Song", Some(&metadata), "Fallback");
         assert_eq!(result, "Artist");
     }
 
     #[test]
-    fn build_artist_falls_back_when_no_extra() {
-        let track_extra = HashMap::new();
-        let result = build_full_artist_string(
-            "Song Without Featured",
-            &track_extra,
-            None,
-            "Fallback Artist",
-        );
+    fn build_artist_falls_back_without_provider_metadata() {
+        let result = build_full_artist_string("Song Without Featured", None, "Fallback Artist");
         assert_eq!(result, "Fallback Artist");
     }
 
     #[test]
     fn build_artist_merges_featured_from_title() {
-        let mut track_extra = HashMap::new();
-        track_extra.insert("artists".to_string(), json!([{"name": "Main Artist"}]));
+        let metadata = ProviderTrackMetadata {
+            artists: vec!["Main Artist".to_string()],
+            ..Default::default()
+        };
         let result =
-            build_full_artist_string("Song (feat. Featured One)", &track_extra, None, "Fallback");
+            build_full_artist_string("Song (feat. Featured One)", Some(&metadata), "Fallback");
         assert_eq!(result, "Main Artist; Featured One");
     }
 
     #[test]
-    fn build_artist_deduplicates_featured_with_extra() {
-        let mut track_extra = HashMap::new();
-        track_extra.insert(
-            "artists".to_string(),
-            json!([{"name": "Main"}, {"name": "Featured"}]),
-        );
-        // Featured is already in extra, so title feat should not add duplicate
-        let result =
-            build_full_artist_string("Song (feat. Featured)", &track_extra, None, "Fallback");
+    fn build_artist_deduplicates_featured_with_provider_metadata() {
+        let metadata = ProviderTrackMetadata {
+            artists: vec!["Main".to_string(), "Featured".to_string()],
+            ..Default::default()
+        };
+        let result = build_full_artist_string("Song (feat. Featured)", Some(&metadata), "Fallback");
         assert_eq!(result, "Main; Featured");
-    }
-
-    #[test]
-    fn build_artist_merges_track_info_extra() {
-        let track_extra = HashMap::new();
-        let mut info_extra = HashMap::new();
-        info_extra.insert("artists".to_string(), json!([{"name": "Info Artist"}]));
-        let result = build_full_artist_string("Song", &track_extra, Some(&info_extra), "Fallback");
-        assert_eq!(result, "Info Artist");
-    }
-
-    #[test]
-    fn build_artist_title_key_fallback() {
-        let mut track_extra = HashMap::new();
-        track_extra.insert(
-            "artists".to_string(),
-            json!([{"title": "Artist Via Title Key"}]),
-        );
-        let result = build_full_artist_string("Song", &track_extra, None, "Fallback");
-        assert_eq!(result, "Artist Via Title Key");
-    }
-
-    // ── value_as_string ─────────────────────────────────────────
-
-    #[test]
-    fn value_as_string_from_string() {
-        assert_eq!(
-            value_as_string(Some(&json!("hello"))),
-            Some("hello".to_string())
-        );
-    }
-
-    #[test]
-    fn value_as_string_from_number() {
-        assert_eq!(value_as_string(Some(&json!(42))), Some("42".to_string()));
-    }
-
-    #[test]
-    fn value_as_string_from_null() {
-        assert_eq!(value_as_string(Some(&Value::Null)), None);
-    }
-
-    #[test]
-    fn value_as_string_from_none() {
-        assert_eq!(value_as_string(None), None);
     }
 
     #[test]

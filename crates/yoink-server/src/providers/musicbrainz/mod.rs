@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use musicbrainz_rs::{
@@ -372,10 +372,6 @@ impl MetadataProvider for MusicBrainzProvider {
         Provider::MusicBrainz
     }
 
-    fn display_name(&self) -> &str {
-        "MusicBrainz"
-    }
-
     async fn search_artists(&self, query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
         let lucene_query = ArtistSearchQuery::query_builder().artist(query).build();
 
@@ -463,7 +459,7 @@ impl MetadataProvider for MusicBrainzProvider {
     async fn fetch_tracks(
         &self,
         external_album_id: &str,
-    ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError> {
+    ) -> Result<Vec<ProviderTrack>, ProviderError> {
         // external_album_id is a release group MBID
         // Find the best concrete release for this group
         let release = self
@@ -488,8 +484,6 @@ impl MetadataProvider for MusicBrainzProvider {
             })?;
 
         let mut tracks = Vec::new();
-        let album_extra = HashMap::new();
-
         if let Some(media) = full_release.media {
             for medium in &media {
                 let disc_number = medium.position.unwrap_or(1);
@@ -504,18 +498,6 @@ impl MetadataProvider for MusicBrainzProvider {
                         let duration_ms = track.length.unwrap_or(0);
                         let duration_secs = duration_ms / 1000;
 
-                        let recording_id = track
-                            .recording
-                            .as_ref()
-                            .map(|r| r.id.clone())
-                            .unwrap_or_default();
-
-                        let mut extra = HashMap::new();
-                        extra.insert("mb_recording_id".to_string(), Value::String(recording_id));
-                        if let Some(ref isrc_val) = isrc {
-                            extra.insert("isrc".to_string(), Value::String(isrc_val.clone()));
-                        }
-
                         tracks.push(ProviderTrack {
                             external_id: track.id.clone(),
                             title: track.title.clone(),
@@ -525,23 +507,13 @@ impl MetadataProvider for MusicBrainzProvider {
                             duration_secs: duration_secs.try_into().unwrap_or(0),
                             isrc,
                             explicit: false,
-                            extra,
                         });
                     }
                 }
             }
         }
 
-        Ok((tracks, album_extra))
-    }
-
-    async fn fetch_track_info_extra(
-        &self,
-        _external_track_id: &str,
-    ) -> Option<HashMap<String, Value>> {
-        // Track IDs in MB are release-specific track IDs, not much extra to fetch.
-        // ISRCs are already extracted during fetch_tracks via recordings.
-        None
+        Ok(tracks)
     }
 
     fn validate_image_id(&self, image_id: &str) -> bool {
@@ -560,28 +532,6 @@ impl MetadataProvider for MusicBrainzProvider {
             1200
         };
         format!("https://coverartarchive.org/release-group/{image_ref}/front-{caa_size}")
-    }
-
-    async fn fetch_cover_art_bytes(&self, image_ref: &str) -> Option<Vec<u8>> {
-        let url = format!("https://coverartarchive.org/release-group/{image_ref}/front-1200");
-        let resp = self
-            .http
-            .get(&url)
-            .timeout(Duration::from_secs(30))
-            .send()
-            .await
-            .ok()?;
-
-        if !resp.status().is_success() {
-            warn!(
-                status = %resp.status(),
-                image_ref,
-                "Cover Art Archive returned non-success for release-group"
-            );
-            return None;
-        }
-
-        resp.bytes().await.ok().map(|b| b.to_vec())
     }
 
     async fn fetch_artist_bio(&self, external_artist_id: &str) -> Option<String> {

@@ -342,7 +342,6 @@ mod tests {
     use async_trait::async_trait;
     use chrono::NaiveDate;
     use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
-    use serde_json::Value;
 
     use crate::{
         db::{
@@ -366,10 +365,6 @@ mod tests {
             Provider::Tidal
         }
 
-        fn display_name(&self) -> &str {
-            "Test Album Provider"
-        }
-
         async fn search_artists(&self, _query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
             Ok(Vec::new())
         }
@@ -388,23 +383,12 @@ mod tests {
         async fn fetch_tracks(
             &self,
             _external_album_id: &str,
-        ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError> {
-            Ok((Vec::new(), HashMap::new()))
-        }
-
-        async fn fetch_track_info_extra(
-            &self,
-            _external_track_id: &str,
-        ) -> Option<HashMap<String, Value>> {
-            None
+        ) -> Result<Vec<ProviderTrack>, ProviderError> {
+            Ok(Vec::new())
         }
 
         fn image_url(&self, image_ref: &str, size: u16) -> String {
             format!("https://example.test/{image_ref}/{size}")
-        }
-
-        async fn fetch_cover_art_bytes(&self, _image_ref: &str) -> Option<Vec<u8>> {
-            None
         }
     }
 

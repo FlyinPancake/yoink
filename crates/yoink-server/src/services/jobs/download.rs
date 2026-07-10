@@ -1,6 +1,7 @@
 use std::{
     cmp::Reverse,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
+    future::Future,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -12,7 +13,10 @@ use crate::{
         provider::Provider, track, track_artist, track_provider_link,
     },
     error::{AppError, AppResult},
-    providers::{DownloadSource, DownloadTrackContext},
+    providers::{
+        DownloadSource, DownloadTrackContext, LinkedTrackResolver, PlaybackInfo,
+        ProviderTrackMetadata, SearchTrackResolver,
+    },
     services::{
         self,
         downloads::{
@@ -58,32 +62,32 @@ fn ready_jobs() -> [JobStatus; 2] {
 }
 
 #[derive(Debug, Clone)]
-enum PlannedTrackDownload {
-    Id {
-        track: track::ModelEx,
-        external_ids: Vec<String>,
-        quality: Quality,
-    },
-    Metadata {
-        track: track::ModelEx,
-        metadata: DownloadTrackContext,
-        quality: Quality,
-    },
+struct LinkedTrackPlan {
+    track: track::ModelEx,
+    external_ids: Vec<String>,
+    quality: Quality,
 }
 
-impl PlannedTrackDownload {
-    fn track(&self) -> &track::ModelEx {
-        match self {
-            PlannedTrackDownload::Id { track, .. } => track,
-            PlannedTrackDownload::Metadata { track, .. } => track,
-        }
-    }
+#[derive(Debug, Clone)]
+struct SearchTrackPlan {
+    track: track::ModelEx,
+    metadata: DownloadTrackContext,
+    quality: Quality,
+}
 
-    fn quality(&self) -> Quality {
-        match self {
-            PlannedTrackDownload::Id { quality, .. } => *quality,
-            PlannedTrackDownload::Metadata { quality, .. } => *quality,
-        }
+trait TrackPlan {
+    fn track(&self) -> &track::ModelEx;
+}
+
+impl TrackPlan for LinkedTrackPlan {
+    fn track(&self) -> &track::ModelEx {
+        &self.track
+    }
+}
+
+impl TrackPlan for SearchTrackPlan {
+    fn track(&self) -> &track::ModelEx {
+        &self.track
     }
 }
 
@@ -106,14 +110,8 @@ pub(crate) async fn enqueue_download_album_job(
         .registry
         .download_sources()
         .iter()
-        .filter_map(|s| {
-            let p = s.id();
-            if providers.contains(&p) || !s.requires_linked_provider() {
-                Some(p)
-            } else {
-                None
-            }
-        })
+        .filter(|source| source.is_available_for(&providers))
+        .map(DownloadSource::id)
         .collect::<Vec<_>>();
 
     providers.sort_by_key(|p| Reverse(provider_priority(*p)));
@@ -147,14 +145,8 @@ pub(crate) async fn enqueue_download_track_job(
         .registry
         .download_sources()
         .iter()
-        .filter_map(|s| {
-            let p = s.id();
-            if providers.contains(&p) || !s.requires_linked_provider() {
-                Some(p)
-            } else {
-                None
-            }
-        })
+        .filter(|source| source.is_available_for(&providers))
+        .map(DownloadSource::id)
         .collect();
 
     providers.sort_by_key(|p| Reverse(provider_priority(*p)));
@@ -247,14 +239,6 @@ async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppRe
 
     let quality = album.requested_quality.unwrap_or(state.default_quality);
 
-    let mut planned_tracks = VecDeque::new();
-
-    if dl_provider.requires_linked_provider() {
-        plan_tracks_by_id(payload, &album, quality, &mut planned_tracks)?
-    } else {
-        plan_tracks_by_metadata(&album, quality, &mut planned_tracks);
-    }
-
     let album_artist = album
         .fetch_primary_artist(&state.db)
         .await?
@@ -274,13 +258,28 @@ async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppRe
 
     let temp_dir = tempfile::tempdir()?;
 
-    let mut join_set = enqueue_tracks(
-        state.clone(),
-        dl_provider,
-        temp_dir.path().to_path_buf(),
-        planned_tracks,
-    )
-    .await?;
+    let mut join_set = match dl_provider {
+        DownloadSource::Linked(source) => {
+            let planned_tracks = plan_tracks_by_id(payload, &album, quality)?;
+            enqueue_linked_tracks(
+                state.clone(),
+                source,
+                temp_dir.path().to_path_buf(),
+                planned_tracks,
+            )
+            .await?
+        }
+        DownloadSource::Search(source) => {
+            let planned_tracks = plan_tracks_by_metadata(&album, quality, &album_artist);
+            enqueue_search_tracks(
+                state.clone(),
+                source,
+                temp_dir.path().to_path_buf(),
+                planned_tracks,
+            )
+            .await?
+        }
+    };
 
     let total_tracks = album.tracks.len() as f32;
     let mut completed_tracks = 0.0_f32;
@@ -430,13 +429,6 @@ async fn process_track_download_job(state: AppState, job: job::ModelEx) -> AppRe
         .or(album.requested_quality)
         .unwrap_or(state.default_quality);
 
-    let mut planned_tracks = VecDeque::with_capacity(1);
-    if dl_provider.requires_linked_provider() {
-        planned_tracks.push_back(plan_track_by_id(payload.provider, &target_track, quality)?);
-    } else {
-        planned_tracks.push_back(plan_track_by_metadata(&album, &target_track, quality));
-    }
-
     let album_artist = album
         .fetch_primary_artist(&state.db)
         .await?
@@ -456,14 +448,35 @@ async fn process_track_download_job(state: AppState, job: job::ModelEx) -> AppRe
 
     let temp_dir = tempfile::tempdir()?;
 
-    let total_tracks = planned_tracks.len() as f32;
-    let mut join_set = enqueue_tracks(
-        state.clone(),
-        dl_provider,
-        temp_dir.path().to_path_buf(),
-        planned_tracks,
-    )
-    .await?;
+    let total_tracks = 1.0_f32;
+    let mut join_set = match dl_provider {
+        DownloadSource::Linked(source) => {
+            let planned_tracks =
+                VecDeque::from([plan_track_by_id(payload.provider, &target_track, quality)?]);
+            enqueue_linked_tracks(
+                state.clone(),
+                source,
+                temp_dir.path().to_path_buf(),
+                planned_tracks,
+            )
+            .await?
+        }
+        DownloadSource::Search(source) => {
+            let planned_tracks = VecDeque::from([plan_track_by_metadata(
+                &album,
+                &target_track,
+                quality,
+                &album_artist,
+            )]);
+            enqueue_search_tracks(
+                state.clone(),
+                source,
+                temp_dir.path().to_path_buf(),
+                planned_tracks,
+            )
+            .await?
+        }
+    };
 
     let mut completed_tracks = 0.0;
     let mut job = job;
@@ -538,9 +551,6 @@ async fn enrich_track_metadata(
     track: &track::ModelEx,
     path: &PathBuf,
 ) -> AppResult<()> {
-    // TODO: having to refetch provider metadata here is not ideal
-    // we should cache it during sync and only fill metadata from local db during download
-    // it has worked like this so far, but it feels off
     let mut track_providers: Vec<_> = track.provider_links.iter().collect();
     track_providers.sort_by_key(|tp| Reverse(provider_priority(tp.provider)));
 
@@ -559,16 +569,40 @@ async fn enrich_track_metadata(
         .metadata_provider(primary_provider)
         .expect("this should pass");
 
-    let track_info_extra = md_provider
-        .fetch_track_info_extra(primary_provider_id)
-        .await;
+    let mut artist_links = track.track_artists.iter().collect::<Vec<_>>();
+    artist_links.sort_by_key(|link| link.priority);
+    let local_metadata = ProviderTrackMetadata {
+        artists: artist_links
+            .into_iter()
+            .filter_map(|link| {
+                track
+                    .artists
+                    .iter()
+                    .find(|artist| artist.id == link.artist_id)
+                    .map(|artist| artist.name.clone())
+            })
+            .collect(),
+        isrc: track.isrc.clone(),
+        version: track.version.clone(),
+        ..Default::default()
+    };
 
-    let track_artist = build_full_artist_string(
-        &track.title,
-        &track_info_extra.clone().unwrap_or_default(),
-        None,
-        album_artist,
-    );
+    let provider_metadata = match md_provider.fetch_track_metadata(primary_provider_id).await {
+        Ok(Some(metadata)) => metadata.with_fallback(local_metadata),
+        Ok(None) => local_metadata,
+        Err(error) => {
+            tracing::warn!(
+                provider = %primary_provider,
+                provider_track_id = primary_provider_id,
+                error = %error,
+                "Could not fetch supplemental track metadata"
+            );
+            local_metadata
+        }
+    };
+
+    let track_artist =
+        build_full_artist_string(&track.title, Some(&provider_metadata), album_artist);
 
     let lyrics = if state.download_lyrics {
         let duration_secs = match track.duration {
@@ -602,10 +636,7 @@ async fn enrich_track_metadata(
         disc_number: track.disc_number.map(|n| n as u32),
         total_tracks: album.tracks.len() as u32,
         release_date: &release_date,
-        // TODO remove these, as they are not used anymore
-        track_extra: &HashMap::new(),
-        album_extra: &HashMap::new(),
-        track_info_extra: track_info_extra.as_ref(),
+        provider_metadata: Some(&provider_metadata),
         lyrics_text: lyrics.as_ref().and_then(|b| b.embedded_text.as_deref()),
         cover_art_jpeg: cover_art_jpeg.as_deref(),
     };
@@ -641,7 +672,8 @@ async fn move_downloaded_track(
 ) -> Result<PathBuf, AppError> {
     let container = sniff_media_container(&temp_path).await?;
 
-    // TODO maybe move this warning to the provider resolver, since if a provider is returning a non-flac hi-res stream, it's likely an error on its end
+    // The actual container is only knowable after resolution and download, so
+    // validate it here rather than trusting a provider's requested quality.
     if quality == Quality::HiRes
         && container != MediaContainer::Mp4
         && container != MediaContainer::Flac
@@ -687,48 +719,78 @@ async fn move_downloaded_track(
     Ok(full_path)
 }
 
-async fn enqueue_tracks(
+async fn enqueue_linked_tracks(
     state: AppState,
-    dl_provider: Arc<dyn DownloadSource>,
+    resolver: Arc<dyn LinkedTrackResolver>,
     temp_dir_path: PathBuf,
-    planned_tracks: VecDeque<PlannedTrackDownload>,
+    planned_tracks: VecDeque<LinkedTrackPlan>,
 ) -> Result<JoinSet<AppResult<(track::ModelEx, PathBuf, Quality)>>, AppError> {
+    enqueue_tracks(
+        state,
+        temp_dir_path,
+        planned_tracks,
+        move |plan: LinkedTrackPlan| {
+            let resolver = Arc::clone(&resolver);
+            async move {
+                let playback = resolver.resolve(&plan.external_ids, &plan.quality).await?;
+                AppResult::Ok((plan.track, playback, plan.quality))
+            }
+        },
+    )
+    .await
+}
+
+async fn enqueue_search_tracks(
+    state: AppState,
+    resolver: Arc<dyn SearchTrackResolver>,
+    temp_dir_path: PathBuf,
+    planned_tracks: VecDeque<SearchTrackPlan>,
+) -> Result<JoinSet<AppResult<(track::ModelEx, PathBuf, Quality)>>, AppError> {
+    enqueue_tracks(
+        state,
+        temp_dir_path,
+        planned_tracks,
+        move |plan: SearchTrackPlan| {
+            let resolver = Arc::clone(&resolver);
+            async move {
+                let playback = resolver.resolve(&plan.metadata, &plan.quality).await?;
+                AppResult::Ok((plan.track, playback, plan.quality))
+            }
+        },
+    )
+    .await
+}
+
+async fn enqueue_tracks<P, Resolve, ResolveFuture>(
+    state: AppState,
+    temp_dir_path: PathBuf,
+    planned_tracks: VecDeque<P>,
+    resolve: Resolve,
+) -> Result<JoinSet<AppResult<(track::ModelEx, PathBuf, Quality)>>, AppError>
+where
+    P: TrackPlan + Send + 'static,
+    Resolve: Fn(P) -> ResolveFuture + Clone + Send + 'static,
+    ResolveFuture:
+        Future<Output = AppResult<(track::ModelEx, PlaybackInfo, Quality)>> + Send + 'static,
+{
     let mut join_set = tokio::task::JoinSet::new();
     let semaphore = Arc::new(tokio::sync::Semaphore::new(
         state.download_max_parallel_tracks.max(1),
     ));
-    for track in planned_tracks {
+    for plan in planned_tracks {
         let permit = semaphore
             .clone()
             .acquire_owned()
             .await
             .expect("aquire DL permit shouldn't fail");
-        let dl_provider = dl_provider.clone();
+        let resolve = resolve.clone();
         let temp_dir_path = temp_dir_path.clone();
 
         let state = state.clone();
 
         join_set.spawn(async move {
-            let temp_path = temp_dir_path.join(format!("{}.part", track.track().title));
-            let quality = track.quality();
-            let (track_model, pb_info) = match track {
-                PlannedTrackDownload::Id {
-                    external_ids,
-                    quality,
-                    track,
-                } => (
-                    track,
-                    dl_provider.resolve_by_id(&external_ids, &quality).await?,
-                ),
-                PlannedTrackDownload::Metadata {
-                    metadata,
-                    quality,
-                    track,
-                } => (
-                    track,
-                    dl_provider.resolve_by_metadata(&metadata, &quality).await?,
-                ),
-            };
+            let temp_path = temp_dir_path.join(format!("{}.part", plan.track().title));
+            let (track_model, pb_info, quality) = resolve(plan).await?;
 
             match pb_info {
                 crate::providers::PlaybackInfo::DirectUrl(url) => {
@@ -773,8 +835,7 @@ fn plan_tracks_by_id(
     payload: &DownloadAlbumJobPayload,
     album: &album::ModelEx,
     quality: Quality,
-    planned_tracks: &mut VecDeque<PlannedTrackDownload>,
-) -> Result<(), AppError> {
+) -> Result<VecDeque<LinkedTrackPlan>, AppError> {
     if album
         .provider_links
         .iter()
@@ -791,18 +852,18 @@ fn plan_tracks_by_id(
         ));
     }
 
-    for track in &album.tracks {
-        planned_tracks.push_back(plan_track_by_id(payload.provider, track, quality)?);
-    }
-
-    Ok(())
+    album
+        .tracks
+        .iter()
+        .map(|track| plan_track_by_id(payload.provider, track, quality))
+        .collect()
 }
 
 fn plan_track_by_id(
     provider: Provider,
     track: &track::ModelEx,
     quality: Quality,
-) -> Result<PlannedTrackDownload, AppError> {
+) -> Result<LinkedTrackPlan, AppError> {
     let external_ids: Vec<_> = track
         .provider_links
         .iter()
@@ -827,7 +888,7 @@ fn plan_track_by_id(
         ));
     }
 
-    Ok(PlannedTrackDownload::Id {
+    Ok(LinkedTrackPlan {
         track: track.clone(),
         external_ids,
         quality,
@@ -837,33 +898,36 @@ fn plan_track_by_id(
 fn plan_tracks_by_metadata(
     album: &album::ModelEx,
     quality: Quality,
-    planned_tracks: &mut VecDeque<PlannedTrackDownload>,
-) {
-    for track in &album.tracks {
-        planned_tracks.push_back(plan_track_by_metadata(album, track, quality));
-    }
+    album_artist: &str,
+) -> VecDeque<SearchTrackPlan> {
+    album
+        .tracks
+        .iter()
+        .map(|track| plan_track_by_metadata(album, track, quality, album_artist))
+        .collect()
 }
 
 fn plan_track_by_metadata(
     album: &album::ModelEx,
     track: &track::ModelEx,
     quality: Quality,
-) -> PlannedTrackDownload {
+    album_artist: &str,
+) -> SearchTrackPlan {
     let primary_artist_id = track
         .track_artists
         .iter()
         .min_by_key(|ta| ta.priority)
         .map(|ta| ta.artist_id);
-    let artist_name = if let Some(primary_artist_id) = primary_artist_id {
+    let track_artist = if let Some(primary_artist_id) = primary_artist_id {
         track
             .artists
             .iter()
             .find(|artist| artist.id == primary_artist_id)
-            .map(|artist| artist.name.clone())
-            .unwrap_or_else(|| "Unknown Artist".to_string())
+            .map(|artist| artist.name.as_str())
     } else {
-        "Unknown Artist".to_string()
+        None
     };
+    let artist_name = search_artist_name(track_artist, album_artist);
 
     let metadata = DownloadTrackContext {
         artist_name,
@@ -874,11 +938,18 @@ fn plan_track_by_metadata(
         duration_secs: track.duration.map(|d| d as u32),
     };
 
-    PlannedTrackDownload::Metadata {
+    SearchTrackPlan {
         track: track.clone(),
         metadata,
         quality,
     }
+}
+
+fn search_artist_name(track_artist: Option<&str>, album_artist: &str) -> String {
+    track_artist
+        .filter(|artist| !artist.trim().is_empty())
+        .unwrap_or(album_artist)
+        .to_string()
 }
 
 pub(crate) async fn download_worker(state: AppState) -> AppResult<()> {
@@ -942,19 +1013,36 @@ mod tests {
 
     use sea_orm::{ActiveModelBehavior, ActiveModelTrait, ActiveValue::Set};
 
-    use super::{enqueue_download_album_job, enqueue_download_track_job};
+    use super::{enqueue_download_album_job, enqueue_download_track_job, search_artist_name};
     use crate::{
         db::{self, provider::Provider, wanted_status::WantedStatus},
-        providers::mock::TestDownloadSource,
+        providers::{
+            DownloadSource,
+            mock::{TestLinkedTrackResolver, TestSearchTrackResolver},
+        },
         services::jobs::Job,
         test_support,
     };
 
     fn registry_with_tidal_and_soulseek() -> crate::providers::registry::ProviderRegistry {
         let mut registry = crate::providers::registry::ProviderRegistry::new();
-        registry.register_download(Arc::new(TestDownloadSource::new(Provider::Soulseek, false)));
-        registry.register_download(Arc::new(TestDownloadSource::new(Provider::Tidal, true)));
+        registry.register_download(DownloadSource::Search(Arc::new(
+            TestSearchTrackResolver::new(Provider::Soulseek),
+        )));
+        registry.register_download(DownloadSource::Linked(Arc::new(
+            TestLinkedTrackResolver::new(Provider::Tidal),
+        )));
         registry
+    }
+
+    #[test]
+    fn search_artist_falls_back_to_album_artist() {
+        assert_eq!(search_artist_name(None, "Noisia"), "Noisia");
+        assert_eq!(search_artist_name(Some(""), "Noisia"), "Noisia");
+        assert_eq!(
+            search_artist_name(Some("Foreign Beggars"), "Noisia"),
+            "Foreign Beggars"
+        );
     }
 
     #[tokio::test]
@@ -984,6 +1072,25 @@ mod tests {
             panic!("expected track download job");
         };
         assert_eq!(payload.provider, Provider::Tidal);
+    }
+
+    #[tokio::test]
+    async fn enqueue_download_track_job_uses_search_source_without_provider_link() {
+        let state =
+            test_support::test_state_with_registry(registry_with_tidal_and_soulseek()).await;
+        let album = test_support::seed_album(&state, "Unlinked Album", WantedStatus::Wanted).await;
+        let track =
+            test_support::seed_track(&state, album.id, "Unlinked Track", 1, WantedStatus::Wanted)
+                .await;
+
+        let job = enqueue_download_track_job(&state, track.id)
+            .await
+            .expect("enqueue track download");
+
+        let Job::DownloadTrack { payload } = job.data else {
+            panic!("expected track download job");
+        };
+        assert_eq!(payload.provider, Provider::Soulseek);
     }
 
     #[tokio::test]

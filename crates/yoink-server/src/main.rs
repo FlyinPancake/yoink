@@ -197,7 +197,9 @@ fn build_registry(app_config: &AppConfig) -> ProviderRegistry {
                 .map(|u| u.to_string()),
         ));
         registry.register_metadata(Arc::clone(&tidal) as Arc<dyn providers::MetadataProvider>);
-        registry.register_download(Arc::clone(&tidal) as Arc<dyn providers::DownloadSource>);
+        registry.register_download(providers::DownloadSource::Linked(
+            Arc::clone(&tidal) as Arc<dyn providers::LinkedTrackResolver>
+        ));
         info!("Tidal provider enabled");
     }
 
@@ -226,7 +228,9 @@ fn build_registry(app_config: &AppConfig) -> ProviderRegistry {
             app_config.slskd_password.clone(),
             app_config.slskd_downloads_dir.clone(),
         ));
-        registry.register_download(Arc::clone(&soulseek) as Arc<dyn providers::DownloadSource>);
+        registry.register_download(providers::DownloadSource::Search(
+            Arc::clone(&soulseek) as Arc<dyn providers::SearchTrackResolver>
+        ));
         info!("SoulSeek download source enabled");
     }
 

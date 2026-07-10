@@ -1,12 +1,10 @@
-use std::{collections::HashMap, num::NonZeroU32, time::Duration};
+use std::{num::NonZeroU32, time::Duration};
 
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use governor::{Quota, RateLimiter, clock::DefaultClock, state::InMemoryState, state::NotKeyed};
 use serde::Deserialize;
-use serde_json::Value;
 use snafu::{ResultExt, ensure};
-use tracing::warn;
 
 use crate::{
     db::provider::Provider,
@@ -336,10 +334,6 @@ impl MetadataProvider for DeezerProvider {
         Provider::Deezer
     }
 
-    fn display_name(&self) -> &str {
-        "Deezer"
-    }
-
     async fn search_artists(&self, query: &str) -> Result<Vec<ProviderArtist>, ProviderError> {
         let url = Self::api_url("/search/artist", &[("q", query), ("limit", "25")]);
         let artists: DeezerList<DeezerArtist> = self.deezer_get(&url).await?;
@@ -437,40 +431,23 @@ impl MetadataProvider for DeezerProvider {
     async fn fetch_tracks(
         &self,
         external_album_id: &str,
-    ) -> Result<(Vec<ProviderTrack>, HashMap<String, Value>), ProviderError> {
+    ) -> Result<Vec<ProviderTrack>, ProviderError> {
         let url = format!("{DEEZER_API_BASE}/album/{external_album_id}/tracks?limit=200");
         let tracks = self.deezer_get_all::<DeezerTrack>(&url).await?;
 
-        let album_extra = HashMap::new();
-
-        let provider_tracks = tracks
+        Ok(tracks
             .into_iter()
-            .map(|t| {
-                let extra = HashMap::new();
-
-                ProviderTrack {
-                    external_id: t.id.to_string(),
-                    title: t.title,
-                    version: t.title_version.filter(|v| !v.is_empty()),
-                    track_number: t.track_position.unwrap_or(1),
-                    disc_number: t.disk_number,
-                    duration_secs: t.duration,
-                    isrc: t.isrc.filter(|s| !s.is_empty()),
-                    explicit: t.explicit_lyrics,
-                    extra,
-                }
+            .map(|t| ProviderTrack {
+                external_id: t.id.to_string(),
+                title: t.title,
+                version: t.title_version.filter(|v| !v.is_empty()),
+                track_number: t.track_position.unwrap_or(1),
+                disc_number: t.disk_number,
+                duration_secs: t.duration,
+                isrc: t.isrc.filter(|s| !s.is_empty()),
+                explicit: t.explicit_lyrics,
             })
-            .collect();
-
-        Ok((provider_tracks, album_extra))
-    }
-
-    async fn fetch_track_info_extra(
-        &self,
-        _external_track_id: &str,
-    ) -> Option<HashMap<String, Value>> {
-        // Deezer provides ISRC directly in track listings; no extra call needed.
-        None
+            .collect())
     }
 
     fn validate_image_id(&self, image_id: &str) -> bool {
@@ -499,33 +476,6 @@ impl MetadataProvider for DeezerProvider {
         };
 
         format!("https://cdn-images.dzcdn.net/images/{img_type}/{md5}/{sz}x{sz}-000000-80-0-0.jpg")
-    }
-
-    async fn fetch_cover_art_bytes(&self, image_ref: &str) -> Option<Vec<u8>> {
-        // Determine image type from ref prefix.
-        let (img_type, md5) = if let Some(stripped) = image_ref.strip_prefix("artist:") {
-            ("artist", stripped)
-        } else {
-            ("cover", image_ref)
-        };
-        let url = format!(
-            "https://cdn-images.dzcdn.net/images/{img_type}/{md5}/1000x1000-000000-80-0-0.jpg"
-        );
-
-        self.rate_limiter.until_ready().await;
-
-        let resp = self.http.get(&url).send().await.ok()?;
-
-        if !resp.status().is_success() {
-            warn!(
-                status = %resp.status(),
-                image_ref,
-                "Deezer CDN returned non-success for cover art"
-            );
-            return None;
-        }
-
-        resp.bytes().await.ok().map(|b| b.to_vec())
     }
 
     async fn fetch_artist_image_ref(

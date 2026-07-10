@@ -399,7 +399,9 @@ mod tests {
     #[tokio::test]
     async fn toggle_album_monitor_updates_album_and_track_statuses() {
         let mut registry = ProviderRegistry::new();
-        registry.register_download(Arc::new(MockProvider {}));
+        registry.register_download(crate::providers::DownloadSource::Search(Arc::new(
+            MockProvider {},
+        )));
 
         let state = test_support::test_state_with_registry(registry).await;
 

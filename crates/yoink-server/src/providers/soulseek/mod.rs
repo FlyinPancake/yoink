@@ -6,6 +6,7 @@
 
 pub(crate) mod matching;
 pub(crate) mod models;
+mod slskd_types;
 pub(crate) mod transfer;
 pub(crate) mod util;
 
@@ -15,6 +16,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
 use tokio::sync::{RwLock, Semaphore};
@@ -32,7 +34,7 @@ use self::{
     transfer::{is_complete_success, is_failure},
     util::{dedup_queries, normalize, percent_encode_path, sanitize_relative_path},
 };
-use super::{DownloadSource, DownloadTrackContext, PlaybackInfo, ProviderError};
+use super::{DownloadTrackContext, PlaybackInfo, ProviderError, SearchTrackResolver};
 
 // ── Source ───────────────────────────────────────────────────────────
 
@@ -50,11 +52,20 @@ pub(crate) struct SoulSeekSource {
 impl SoulSeekSource {
     pub fn new(
         http: reqwest::Client,
-        slskd_base_url: Url,
+        mut slskd_base_url: Url,
         username: String,
         password: String,
         downloads_dir: String,
     ) -> Self {
+        // `Url::join` treats a base path without a trailing slash as a file.
+        // Normalize it once so reverse-proxy prefixes such as `/slskd` are kept.
+        if !slskd_base_url.path().ends_with('/') {
+            let path = format!("{}/", slskd_base_url.path());
+            slskd_base_url.set_path(&path);
+        }
+        slskd_base_url.set_query(None);
+        slskd_base_url.set_fragment(None);
+
         Self {
             http,
             slskd_base_url,
@@ -67,31 +78,15 @@ impl SoulSeekSource {
     }
 }
 
-// ── DownloadSource trait ────────────────────────────────────────────
+// ── SearchTrackResolver trait ──────────────────────────────────────
 
 #[async_trait]
-impl DownloadSource for SoulSeekSource {
+impl SearchTrackResolver for SoulSeekSource {
     fn id(&self) -> Provider {
         Provider::Soulseek
     }
 
-    fn requires_linked_provider(&self) -> bool {
-        false
-    }
-
-    async fn resolve_by_id(
-        &self,
-        _external_track_ids: &[String],
-        _quality: &Quality,
-    ) -> Result<PlaybackInfo, ProviderError> {
-        NotSupportedSnafu {
-            provider: Provider::Soulseek,
-            operation: "resolve_by_id".to_string(),
-        }
-        .fail()
-    }
-
-    async fn resolve_by_metadata(
+    async fn resolve(
         &self,
         ctx: &DownloadTrackContext,
         quality: &Quality,
@@ -232,7 +227,15 @@ impl SoulSeekSource {
     ) -> Result<Vec<SearchResponse>, ProviderError> {
         for query in dedup_queries(queries) {
             let search = self.start_search(&query).await?;
-            let responses = self.poll_search_responses(&search.id, 75).await?;
+            let responses = self.poll_search_responses(&search.id, 75).await;
+            if let Err(error) = self.delete_search(&search.id).await {
+                warn!(
+                    search_id = search.id,
+                    error = %error,
+                    "failed to clean up SoulSeek search"
+                );
+            }
+            let responses = responses?;
             if !responses.is_empty() {
                 debug!(query = %query, count = responses.len(), "SoulSeek search hit");
                 return Ok(responses);
@@ -246,6 +249,15 @@ impl SoulSeekSource {
 // ── slskd API interaction ───────────────────────────────────────────
 
 impl SoulSeekSource {
+    fn endpoint(&self, path: &str) -> Result<Url, ProviderError> {
+        self.slskd_base_url
+            .join(path.trim_start_matches('/'))
+            .map_err(|error| ProviderError::InvalidResponse {
+                provider: Provider::Soulseek,
+                reason: format!("invalid slskd API path {path}: {error}"),
+            })
+    }
+
     async fn auth_token(&self) -> Result<Option<String>, ProviderError> {
         if self.username.is_empty() || self.password.is_empty() {
             return Ok(None);
@@ -255,10 +267,10 @@ impl SoulSeekSource {
             return Ok(Some(token));
         }
 
-        let url = format!("{}/api/v0/session", self.slskd_base_url);
+        let url = self.endpoint("/api/v0/session")?;
         let payload = LoginRequest {
-            username: self.username.clone(),
-            password: self.password.clone(),
+            username: Some(self.username.clone()),
+            password: Some(self.password.clone()),
         };
 
         let resp = self
@@ -285,7 +297,10 @@ impl SoulSeekSource {
             operation: "slskd login response".to_string(),
         })?;
 
-        let token = token_resp.token;
+        let token = token_resp.token.context(AuthSnafu {
+            provider: Provider::Soulseek,
+            reason: "slskd login response did not contain a token",
+        })?;
         *self.token.write().await = Some(token.clone());
         Ok(Some(token))
     }
@@ -296,36 +311,33 @@ impl SoulSeekSource {
         path: &str,
         body: &B,
     ) -> Result<T, ProviderError> {
-        let token = self.auth_token().await?;
-        let url = format!("{}{}", self.slskd_base_url, path);
-        let mut req = self
-            .http
-            .post(url)
-            .json(body)
-            .timeout(Duration::from_secs(30));
-        if let Some(t) = token {
-            req = req.bearer_auth(t);
-        }
+        let url = self.endpoint(path)?;
+        let mut auth_retry = false;
+        let resp = loop {
+            let token = self.auth_token().await?;
+            let mut req = self
+                .http
+                .post(url.clone())
+                .json(body)
+                .timeout(Duration::from_secs(30));
+            if let Some(token) = &token {
+                req = req.bearer_auth(token);
+            }
 
-        let resp = req.send().await.context(ReqwestSnafu {
-            provider: Provider::Soulseek,
-            operation: format!("slskd POST {path}"),
-        })?;
+            let resp = req.send().await.context(ReqwestSnafu {
+                provider: Provider::Soulseek,
+                operation: format!("slskd POST {path}"),
+            })?;
+            if !auth_retry && token.is_some() && is_auth_rejection(resp.status()) {
+                self.invalidate_token(token.as_deref()).await;
+                auth_retry = true;
+                continue;
+            }
+            break resp;
+        };
 
         if !resp.status().is_success() {
-            let status = resp.status();
-            if status.as_u16() == 429 {
-                return RateLimitedSnafu {
-                    provider: Provider::Soulseek,
-                    reason: format!("slskd POST {path} returned {status}"),
-                }
-                .fail();
-            }
-            return InvalidResponseSnafu {
-                provider: Provider::Soulseek,
-                reason: format!("slskd POST {path} returned {status}"),
-            }
-            .fail();
+            return Err(response_error(resp, &format!("slskd POST {path}")).await);
         }
 
         resp.json().await.context(ReqwestSnafu {
@@ -336,38 +348,73 @@ impl SoulSeekSource {
 
     /// Authenticated GET that deserializes a JSON response.
     async fn get_json<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T, ProviderError> {
-        let token = self.auth_token().await?;
-        let url = format!("{}{}", self.slskd_base_url, path);
-        let mut req = self.http.get(url).timeout(Duration::from_secs(30));
-        if let Some(t) = token {
-            req = req.bearer_auth(t);
-        }
+        let url = self.endpoint(path)?;
+        let mut auth_retry = false;
+        let resp = loop {
+            let token = self.auth_token().await?;
+            let mut req = self.http.get(url.clone()).timeout(Duration::from_secs(30));
+            if let Some(token) = &token {
+                req = req.bearer_auth(token);
+            }
 
-        let resp = req.send().await.context(ReqwestSnafu {
-            provider: Provider::Soulseek,
-            operation: format!("slskd GET {path}"),
-        })?;
+            let resp = req.send().await.context(ReqwestSnafu {
+                provider: Provider::Soulseek,
+                operation: format!("slskd GET {path}"),
+            })?;
+            if !auth_retry && token.is_some() && is_auth_rejection(resp.status()) {
+                self.invalidate_token(token.as_deref()).await;
+                auth_retry = true;
+                continue;
+            }
+            break resp;
+        };
 
         if !resp.status().is_success() {
-            let status = resp.status();
-            if status.as_u16() == 429 {
-                return RateLimitedSnafu {
-                    provider: Provider::Soulseek,
-                    reason: format!("slskd GET {path} returned {status}"),
-                }
-                .fail();
-            }
-            return InvalidResponseSnafu {
-                provider: Provider::Soulseek,
-                reason: format!("slskd GET {path} returned {status}"),
-            }
-            .fail();
+            return Err(response_error(resp, &format!("slskd GET {path}")).await);
         }
 
         resp.json().await.context(ReqwestSnafu {
             provider: Provider::Soulseek,
             operation: format!("slskd GET {path} decode"),
         })
+    }
+
+    async fn invalidate_token(&self, rejected_token: Option<&str>) {
+        let mut cached = self.token.write().await;
+        if cached.as_deref() == rejected_token {
+            *cached = None;
+        }
+    }
+
+    async fn delete_search(&self, search_id: &str) -> Result<(), ProviderError> {
+        let path = format!("/api/v0/searches/{search_id}");
+        let url = self.endpoint(&path)?;
+        let mut auth_retry = false;
+        let resp = loop {
+            let token = self.auth_token().await?;
+            let mut req = self
+                .http
+                .delete(url.clone())
+                .timeout(Duration::from_secs(30));
+            if let Some(token) = &token {
+                req = req.bearer_auth(token);
+            }
+
+            let resp = req.send().await.context(ReqwestSnafu {
+                provider: Provider::Soulseek,
+                operation: "slskd search cleanup",
+            })?;
+            if !auth_retry && token.is_some() && is_auth_rejection(resp.status()) {
+                self.invalidate_token(token.as_deref()).await;
+                auth_retry = true;
+                continue;
+            }
+            break resp;
+        };
+        if resp.status().is_success() || resp.status() == StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        Err(response_error(resp, &format!("slskd DELETE {path}")).await)
     }
 
     /// Kick off a search, retrying on 429 rate-limit responses.
@@ -381,11 +428,8 @@ impl SoulSeekSource {
         };
 
         let req = SearchRequest {
-            id: None,
-            search_text: query.to_string(),
-            search_timeout: None,
-            response_limit: None,
-            file_limit: None,
+            search_text: Some(query.to_string()),
+            ..Default::default()
         };
 
         let mut delay_secs = 1u64;
@@ -468,31 +512,36 @@ impl SoulSeekSource {
         );
         let body = vec![QueueDownloadRequest {
             filename: filename.to_string(),
-            size,
+            size: Some(size),
         }];
 
-        let token = self.auth_token().await?;
-        let url = format!("{}{}", self.slskd_base_url, path);
-        let mut req = self
-            .http
-            .post(url)
-            .json(&body)
-            .timeout(Duration::from_secs(30));
-        if let Some(t) = token {
-            req = req.bearer_auth(t);
-        }
+        let url = self.endpoint(&path)?;
+        let mut auth_retry = false;
+        let resp = loop {
+            let token = self.auth_token().await?;
+            let mut req = self
+                .http
+                .post(url.clone())
+                .json(&body)
+                .timeout(Duration::from_secs(30));
+            if let Some(token) = &token {
+                req = req.bearer_auth(token);
+            }
 
-        let resp = req.send().await.context(ReqwestSnafu {
-            provider: Provider::Soulseek,
-            operation: "enqueue download",
-        })?;
+            let resp = req.send().await.context(ReqwestSnafu {
+                provider: Provider::Soulseek,
+                operation: "enqueue download",
+            })?;
+            if !auth_retry && token.is_some() && is_auth_rejection(resp.status()) {
+                self.invalidate_token(token.as_deref()).await;
+                auth_retry = true;
+                continue;
+            }
+            break resp;
+        };
 
         if !resp.status().is_success() {
-            return InvalidResponseSnafu {
-                provider: Provider::Soulseek,
-                reason: format!("enqueue download returned {}", resp.status()),
-            }
-            .fail();
+            return Err(response_error(resp, "slskd enqueue download").await);
         }
 
         Ok(())
@@ -612,6 +661,39 @@ fn is_rate_limited(err: &ProviderError) -> bool {
     msg.contains("429") || msg.contains("too many requests")
 }
 
+fn is_auth_rejection(status: StatusCode) -> bool {
+    matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
+}
+
+async fn response_error(resp: reqwest::Response, operation: &str) -> ProviderError {
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    let body = body.trim();
+    let reason = if body.is_empty() {
+        format!("{operation} returned {status}")
+    } else {
+        let truncated: String = body.chars().take(500).collect();
+        format!("{operation} returned {status}: {truncated}")
+    };
+
+    if status == StatusCode::TOO_MANY_REQUESTS {
+        ProviderError::RateLimited {
+            provider: Provider::Soulseek,
+            reason,
+        }
+    } else if is_auth_rejection(status) {
+        ProviderError::Auth {
+            provider: Provider::Soulseek,
+            reason,
+        }
+    } else {
+        ProviderError::InvalidResponse {
+            provider: Provider::Soulseek,
+            reason,
+        }
+    }
+}
+
 // ── Tests ───────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -645,6 +727,36 @@ mod tests {
                 .and_then(|e| e.to_str())
                 .map(|s| s.to_string()),
         }
+    }
+
+    fn test_source(base_url: &str) -> SoulSeekSource {
+        SoulSeekSource::new(
+            reqwest::Client::new(),
+            base_url.parse().expect("slskd base url parse"),
+            "".to_string(),
+            "".to_string(),
+            "/tmp/slskd-downloads".to_string(),
+        )
+    }
+
+    #[test]
+    fn endpoint_does_not_add_a_double_slash() {
+        let source = test_source("http://127.0.0.1:5030");
+
+        assert_eq!(
+            source.endpoint("/api/v0/searches").unwrap().as_str(),
+            "http://127.0.0.1:5030/api/v0/searches"
+        );
+    }
+
+    #[test]
+    fn endpoint_preserves_reverse_proxy_prefix() {
+        let source = test_source("https://example.com/slskd");
+
+        assert_eq!(
+            source.endpoint("/api/v0/searches").unwrap().as_str(),
+            "https://example.com/slskd/api/v0/searches"
+        );
     }
 
     fn transfer_with_state(state: &str) -> Transfer {
@@ -689,15 +801,7 @@ mod tests {
 
     #[test]
     fn resolve_local_download_paths_includes_leaf_directory_variant() {
-        let source = SoulSeekSource::new(
-            reqwest::Client::new(),
-            "http://127.0.0.1:5030"
-                .parse()
-                .expect("slskd base url parse"),
-            "".to_string(),
-            "".to_string(),
-            "/tmp/slskd-downloads".to_string(),
-        );
+        let source = test_source("http://127.0.0.1:5030");
 
         let paths = source.resolve_local_download_paths(
             Some("audiophile\\ATMOS\\Frank Zappa\\Over-Nite Sensation"),
@@ -749,7 +853,7 @@ mod tests {
     }
 
     #[test]
-    fn album_bundle_selection_prefers_track_number_over_title() {
+    fn album_bundle_selection_rejects_track_number_with_wrong_title() {
         let ctx = test_context("Song One", 2, 2);
         let responses = vec![SearchResponse {
             username: "user1".to_string(),
@@ -759,8 +863,81 @@ mod tests {
             ],
         }];
 
-        let candidate = pick_from_album_bundle(&responses, &ctx, &Quality::Lossless)
-            .expect("expected complete album candidate");
-        assert!(candidate.filename.contains("02 - Interlude"));
+        let candidate = pick_from_album_bundle(&responses, &ctx, &Quality::Lossless);
+        assert!(candidate.is_none());
+    }
+
+    #[test]
+    fn single_track_selection_ignores_non_audio_files() {
+        let ctx = test_context("Song One", 1, 1);
+        let responses = vec![SearchResponse {
+            username: "user1".to_string(),
+            files: vec![search_file("The Artist/The Album/Song One.jpg", 100)],
+        }];
+
+        assert!(pick_best_candidate(&responses, &ctx, &Quality::Lossless).is_none());
+    }
+
+    #[test]
+    fn single_track_selection_detects_extension_from_filename() {
+        let ctx = test_context("Song One", 1, 1);
+        let mut file = search_file("The Artist/The Album/Song One.FLAC", 100);
+        file.extension = None;
+        let responses = vec![SearchResponse {
+            username: "user1".to_string(),
+            files: vec![file],
+        }];
+
+        let candidate = pick_best_candidate(&responses, &ctx, &Quality::Lossless)
+            .expect("expected audio candidate");
+        assert!(candidate.filename.ends_with("Song One.FLAC"));
+    }
+
+    #[test]
+    fn single_track_selection_rejects_title_substring_from_different_song() {
+        let ctx = DownloadTrackContext {
+            artist_name: "Noisia".to_string(),
+            album_title: "Split The Atom".to_string(),
+            track_title: "Machine Gun".to_string(),
+            track_number: Some(1),
+            album_track_count: Some(19),
+            duration_secs: Some(245),
+        };
+        let mut wrong = search_file(
+            "shared/_Untagged/Klute_Unknown Artist/_Unknown Album/03 - Machine Gun Etiquette.flac",
+            50_730_582,
+        );
+        wrong.length = Some(444);
+        let responses = vec![SearchResponse {
+            username: "peer".to_string(),
+            files: vec![wrong],
+        }];
+
+        assert!(pick_best_candidate(&responses, &ctx, &Quality::Lossless).is_none());
+    }
+
+    #[test]
+    fn single_track_selection_accepts_compatible_title_and_duration() {
+        let ctx = DownloadTrackContext {
+            artist_name: "Noisia".to_string(),
+            album_title: "Split The Atom".to_string(),
+            track_title: "Machine Gun".to_string(),
+            track_number: Some(1),
+            album_track_count: Some(19),
+            duration_secs: Some(245),
+        };
+        let mut correct = search_file(
+            "Noisia/Split The Atom/01 - Noisia - Machine Gun (Original Mix).flac",
+            30_000_000,
+        );
+        correct.length = Some(245);
+        let responses = vec![SearchResponse {
+            username: "peer".to_string(),
+            files: vec![correct],
+        }];
+
+        let candidate = pick_best_candidate(&responses, &ctx, &Quality::Lossless)
+            .expect("expected compatible candidate");
+        assert!(candidate.filename.contains("Machine Gun (Original Mix)"));
     }
 }

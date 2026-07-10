@@ -17,19 +17,38 @@ const SEARCH_ARTIST_IMAGE_SIZE: u16 = 320;
 pub struct SearchQuery {
     #[serde(deserialize_with = "serde_trim::string_trim")]
     pub query: String,
+    /// Comma-separated provider ids to search (e.g. `tidal,deezer`).
+    /// Omitted or empty searches all enabled providers.
+    #[serde(default)]
+    pub providers: Option<String>,
+}
+
+impl SearchQuery {
+    /// Parses `providers` into a filter set. Unknown ids are ignored; an
+    /// omitted/empty param (or one with no valid ids) means no filtering.
+    pub fn provider_filter(&self) -> Option<HashSet<db::provider::Provider>> {
+        let filter: HashSet<_> = self
+            .providers
+            .as_deref()?
+            .split(',')
+            .filter_map(|p| p.trim().parse().ok())
+            .collect();
+        (!filter.is_empty()).then_some(filter)
+    }
 }
 
 pub async fn search_aritsts(
     db: &DatabaseConnection,
     provider_registry: &ProviderRegistry,
-    SearchQuery { query }: &SearchQuery,
+    search_query: &SearchQuery,
 ) -> AppResult<Vec<SearchArtistResult>> {
+    let query = &search_query.query;
     if query.is_empty() {
         return Ok(vec![]);
     }
 
     let artists: Vec<SearchArtistResult> = provider_registry
-        .search_artists_all(query)
+        .search_artists_all(query, search_query.provider_filter().as_ref())
         .await
         .into_iter()
         .flat_map(|(provider, results)| {
@@ -87,10 +106,11 @@ pub async fn search_aritsts(
 pub async fn search_albums(
     db: &DatabaseConnection,
     provider_registry: &ProviderRegistry,
-    SearchQuery { query }: &SearchQuery,
+    search_query: &SearchQuery,
 ) -> AppResult<Vec<SearchAlbumResult>> {
+    let query = &search_query.query;
     let albums: Vec<_> = provider_registry
-        .search_albums_all(query)
+        .search_albums_all(query, search_query.provider_filter().as_ref())
         .await
         .into_iter()
         .flat_map(|(provider, results)| {
@@ -155,10 +175,11 @@ pub async fn search_albums(
 pub async fn search_tracks(
     db: &DatabaseConnection,
     provider_registry: &ProviderRegistry,
-    SearchQuery { query }: &SearchQuery,
+    search_query: &SearchQuery,
 ) -> AppResult<Vec<SearchTrackResult>> {
+    let query = &search_query.query;
     let tracks: Vec<_> = provider_registry
-        .search_tracks_all(query)
+        .search_tracks_all(query, search_query.provider_filter().as_ref())
         .await
         .into_iter()
         .flat_map(|(provider, results)| {
@@ -237,4 +258,44 @@ pub async fn search_all(
         albums: search_albums(db, provider_registry, query).await?,
         tracks: search_tracks(db, provider_registry, query).await?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SearchQuery;
+    use crate::db::provider::Provider;
+
+    fn query_with_providers(providers: Option<&str>) -> SearchQuery {
+        SearchQuery {
+            query: "test".to_string(),
+            providers: providers.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn provider_filter_parses_comma_separated_ids() {
+        let filter = query_with_providers(Some("tidal, deezer"))
+            .provider_filter()
+            .unwrap();
+        assert_eq!(filter, [Provider::Tidal, Provider::Deezer].into());
+    }
+
+    #[test]
+    fn provider_filter_ignores_unknown_ids() {
+        let filter = query_with_providers(Some("tidal,spotify"))
+            .provider_filter()
+            .unwrap();
+        assert_eq!(filter, [Provider::Tidal].into());
+    }
+
+    #[test]
+    fn provider_filter_is_none_when_omitted_empty_or_all_invalid() {
+        assert!(query_with_providers(None).provider_filter().is_none());
+        assert!(query_with_providers(Some("")).provider_filter().is_none());
+        assert!(
+            query_with_providers(Some("spotify,qobuz"))
+                .provider_filter()
+                .is_none()
+        );
+    }
 }

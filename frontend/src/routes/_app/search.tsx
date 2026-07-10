@@ -61,6 +61,13 @@ function useAddedItemKeys(): Set<string> {
 function SearchPage() {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
+  // Providers the user has excluded from search, persisted as a comma-separated
+  // list. Storing the disabled set (rather than the enabled one) means newly
+  // configured providers default to being searched.
+  const [disabledProviders, setDisabledProviders] = useLocalStorage<string>(
+    "search-disabled-providers",
+    "",
+  );
   const [artistsOpen, setArtistsOpen] = useLocalStorage<"false" | "true">(
     "search-artists-open",
     "true",
@@ -74,10 +81,33 @@ function SearchPage() {
     "true",
   );
 
+  const { data: availableProviders } = $api.useQuery("get", "/api/provider", {});
+
+  const disabledSet = new Set(disabledProviders.split(",").filter(Boolean));
+  const activeProviders = (availableProviders ?? []).filter((p) => !disabledSet.has(p));
+
+  const toggleProvider = (provider: string) => {
+    const next = new Set(disabledSet);
+    if (next.has(provider)) {
+      next.delete(provider);
+    } else if (activeProviders.length > 1) {
+      // Keep at least one provider active — searching nothing is never useful.
+      next.add(provider);
+    }
+    setDisabledProviders([...next].join(","));
+  };
+
   const { data, isLoading, isError } = $api.useQuery(
     "get",
     "/api/search",
-    { params: { query: { query: submitted } } },
+    {
+      params: {
+        query: {
+          query: submitted,
+          providers: disabledSet.size > 0 ? activeProviders.join(",") : undefined,
+        },
+      },
+    },
     { enabled: submitted.length > 0 },
   );
 
@@ -103,15 +133,47 @@ function SearchPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="relative max-w-xl">
-        <SearchIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search for artists, albums, tracks..."
-          className="w-full rounded-lg border bg-background py-2.5 pr-4 pl-10 text-sm ring-ring transition-shadow outline-none placeholder:text-muted-foreground focus:ring-2"
-        />
+      <form onSubmit={handleSubmit} className="max-w-xl space-y-3">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <SearchIcon className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search for artists, albums, tracks..."
+              className="w-full rounded-lg border bg-background py-2.5 pr-4 pl-10 text-sm ring-ring transition-shadow outline-none placeholder:text-muted-foreground focus:ring-2"
+            />
+          </div>
+          <Button type="submit" disabled={query.trim().length === 0}>
+            <SearchIcon className="mr-1 size-4" />
+            Search
+          </Button>
+        </div>
+
+        {availableProviders && availableProviders.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Providers:</span>
+            {availableProviders.map((provider) => {
+              const active = !disabledSet.has(provider);
+              return (
+                <button
+                  key={provider}
+                  type="button"
+                  onClick={() => toggleProvider(provider)}
+                  aria-pressed={active}
+                >
+                  <Badge
+                    variant={active ? "default" : "outline"}
+                    className={active ? "" : "text-muted-foreground opacity-60"}
+                  >
+                    {providerDisplayName(provider)}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </form>
 
       {isLoading && (
