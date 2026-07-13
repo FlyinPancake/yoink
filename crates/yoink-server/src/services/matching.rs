@@ -419,13 +419,7 @@ fn best_artist_candidate(
                 .partial_cmp(&right.1)
                 .unwrap_or(std::cmp::Ordering::Equal)
         })
-        .and_then(|best| {
-            if (best.1 * 100.0).round() >= f64::from(ARTIST_CONFIDENCE_MIN) {
-                Some(best)
-            } else {
-                None
-            }
-        })
+        .filter(|best| (best.1 * 100.0).round() >= f64::from(ARTIST_CONFIDENCE_MIN))
 }
 
 fn count_isrc_overlap(left: &[ProviderTrack], right: &[ProviderTrack]) -> usize {

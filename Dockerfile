@@ -9,7 +9,7 @@ COPY frontend/ .
 RUN bun run build
 
 # ── Stage 2: Chef — compute Rust dependency recipe ──────────
-FROM docker.io/library/rust:1.95-alpine3.23 AS chef
+FROM docker.io/library/rust:1.97-alpine3.24 AS chef
 
 RUN apk add --no-cache curl ca-certificates
 
@@ -57,7 +57,7 @@ RUN mkdir -p frontend/dist && \
 RUN cargo build --release --bin yoink-server
 
 # ── Stage 5: Runtime ─────────────────────────────────────────
-FROM docker.io/library/alpine:3.23
+FROM docker.io/library/alpine:3.24
 
 RUN apk add --no-cache su-exec
 

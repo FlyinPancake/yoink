@@ -389,7 +389,7 @@ impl MetadataProvider for MusicBrainzProvider {
             .into_iter()
             .take(25)
             .map(|a| {
-                let url = format!("https://musicbrainz.org/artist/{}", &a.id);
+                let url = format!("https://musicbrainz.org/artist/{}", a.id);
                 let disambiguation = if a.disambiguation.is_empty() {
                     None
                 } else {
@@ -441,7 +441,7 @@ impl MetadataProvider for MusicBrainzProvider {
                     .and_then(|d| d.into_naive_date(1980, 1, 1).ok());
                 // Use release group MBID as cover art ref (for Cover Art Archive)
                 let cover_ref = Some(rg.id.clone());
-                let url = Some(format!("https://musicbrainz.org/release-group/{}", &rg.id));
+                let url = Some(format!("https://musicbrainz.org/release-group/{}", rg.id));
 
                 ProviderAlbum {
                     external_id: rg.id,
@@ -568,7 +568,7 @@ impl MetadataProvider for MusicBrainzProvider {
                 let release_date = rg.first_release_date.map(|d| d.0);
 
                 let cover_ref = Some(rg.id.clone());
-                let url = Some(format!("https://musicbrainz.org/release-group/{}", &rg.id));
+                let url = Some(format!("https://musicbrainz.org/release-group/{}", rg.id));
 
                 // Extract primary artist from artist credits.
                 let (artist_name, artist_external_id) = rg
