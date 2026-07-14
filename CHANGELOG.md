@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.7](https://github.com/FlyinPancake/yoink/compare/v0.1.6...v0.1.7) (2026-07-13)
+
+
+### Bug Fixes
+
+* **tidal:** add lossless manifest support ([#78](https://github.com/FlyinPancake/yoink/issues/78)) ([37d82ab](https://github.com/FlyinPancake/yoink/commit/37d82abd211796a30b60df2ba67b83aa6beb44d4))
+
+
+### Code Refactoring
+
+* generic jobs support ([#64](https://github.com/FlyinPancake/yoink/issues/64)) ([bdbd4fb](https://github.com/FlyinPancake/yoink/commit/bdbd4fb690146c87ddd62a97710e24d1c7558051))
+* **providers:** migrate errors to snafu ([#75](https://github.com/FlyinPancake/yoink/issues/75)) ([e5693e7](https://github.com/FlyinPancake/yoink/commit/e5693e7f7fb1822044d81f3ef223331868957d5f))
+
 ## [0.1.6](https://github.com/FlyinPancake/yoink/compare/v0.1.5...v0.1.6) (2026-04-24)
 
 
