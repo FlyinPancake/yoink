@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/FlyinPancake/yoink/compare/v0.1.7...v0.1.8) (2026-07-15)
+
+
+### Features
+
+* add interactive soulseek DLs ([#107](https://github.com/FlyinPancake/yoink/issues/107)) ([576068a](https://github.com/FlyinPancake/yoink/commit/576068a36673e69732cedec22e99d28008308f66))
+
 ## [0.1.7](https://github.com/FlyinPancake/yoink/compare/v0.1.6...v0.1.7) (2026-07-13)
 
 
