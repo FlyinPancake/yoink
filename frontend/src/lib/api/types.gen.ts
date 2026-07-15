@@ -1334,10 +1334,16 @@ export interface components {
             has_free_upload_slot: boolean;
             /**
              * Format: int32
-             * @description How many of the album's tracks the automatic matcher can pair with a
-             *     file in this folder.
+             * @description How many of the album's tracks strictly title-match a file in this
+             *     folder.
              */
             matched_tracks: number;
+            /**
+             * Format: int32
+             * @description How many of the album's tracks a manual download would actually fetch
+             *     from this folder (strict matches plus track-number fallback).
+             */
+            pairable_tracks: number;
             /** Format: int32 */
             queue_length: number;
             /** Format: int32 */

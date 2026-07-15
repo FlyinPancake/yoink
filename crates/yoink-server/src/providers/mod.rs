@@ -55,6 +55,8 @@ pub(crate) enum ProviderError {
     Unavailable { provider: Provider, reason: String },
     #[snafu(display("{provider} invalid response: {reason}"))]
     InvalidResponse { provider: Provider, reason: String },
+    #[snafu(display("{provider} invalid manual selection: {reason}"))]
+    InvalidSelection { provider: Provider, reason: String },
 
     #[snafu(display("{provider} operation not supported: {operation}"))]
     NotSupported {
@@ -328,9 +330,12 @@ pub(crate) struct ManualAlbumCandidate {
     pub username: String,
     pub folder: String,
     pub files: Vec<ManualAlbumFile>,
-    /// How many of the album's tracks the automatic matcher can pair with a
-    /// file in this folder.
+    /// How many of the album's tracks strictly title-match a file in this
+    /// folder.
     pub matched_tracks: u32,
+    /// How many of the album's tracks a manual download would actually fetch
+    /// from this folder (strict matches plus track-number fallback).
+    pub pairable_tracks: u32,
     pub total_size: i64,
     pub score: i32,
     pub has_free_upload_slot: bool,

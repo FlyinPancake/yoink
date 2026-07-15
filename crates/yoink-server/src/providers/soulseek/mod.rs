@@ -35,7 +35,10 @@ use self::{
     },
     models::*,
     transfer::{is_complete_success, is_failure},
-    util::{dedup_queries, normalize, percent_encode_path, sanitize_relative_path},
+    util::{
+        dedup_queries, normalize, normalized_parent_dir, percent_encode_path,
+        sanitize_relative_path,
+    },
 };
 use super::{DownloadTrackContext, PlaybackInfo, ProviderError, SearchTrackResolver};
 
@@ -102,9 +105,15 @@ impl SearchTrackResolver for SoulSeekSource {
     ) -> Result<PlaybackInfo, ProviderError> {
         // Try album-bundle search first, then fall back to per-track search.
         // Each phase yields ranked candidates; failed or unverifiable
-        // downloads fall through to the next candidate.
-        let bundle_candidates = self.find_album_bundle_candidates(ctx, quality).await?;
-        let (path, mut last_error) = self.try_candidates(bundle_candidates, ctx).await;
+        // downloads fall through to the next candidate. An album-search
+        // failure must not disable the per-track fallback.
+        let (path, mut last_error) = match self.find_album_bundle_candidates(ctx, quality).await {
+            Ok(bundle_candidates) => self.try_candidates(bundle_candidates, ctx).await,
+            Err(error) => {
+                warn!(error = %error, "SoulSeek album bundle search failed; trying per-track search");
+                (None, Some(error))
+            }
+        };
         if let Some(path) = path {
             return Ok(PlaybackInfo::LocalFile(path));
         }
@@ -137,13 +146,20 @@ impl SearchTrackResolver for SoulSeekSource {
         quality: &Quality,
     ) -> Result<Vec<ManualSearchCandidate>, ProviderError> {
         // Merge album-level and track-level search results so the user sees
-        // both loose files and complete album folders.
-        let mut responses = self.search_album_queries(ctx, quality).await?;
+        // both loose files and complete album folders. Either search may
+        // fail on its own; error out only when neither produced anything.
+        let (mut responses, album_error) = match self.search_album_queries(ctx, quality).await {
+            Ok(responses) => (responses, None),
+            Err(error) => {
+                warn!(error = %error, "manual album search failed; using track results only");
+                (Vec::new(), Some(error))
+            }
+        };
         match self.search_track_queries(ctx).await {
             Ok(track_responses) => responses.extend(track_responses),
             Err(error) => {
                 if responses.is_empty() {
-                    return Err(error);
+                    return Err(album_error.unwrap_or(error));
                 }
                 warn!(error = %error, "manual track search failed; using album results only");
             }
@@ -178,6 +194,24 @@ impl SearchTrackResolver for SoulSeekSource {
         ctx: &DownloadTrackContext,
         quality: &Quality,
     ) -> Result<PlaybackInfo, ProviderError> {
+        // The file listing is round-tripped through the client, so make sure
+        // every entry actually lives in the folder the user picked before
+        // trusting it.
+        if let Some(stray) = selection
+            .files
+            .iter()
+            .find(|file| normalized_parent_dir(&file.filename) != selection.folder)
+        {
+            return InvalidSelectionSnafu {
+                provider: Provider::Soulseek,
+                reason: format!(
+                    "file '{}' is not in the chosen folder '{}'",
+                    stray.filename, selection.folder
+                ),
+            }
+            .fail();
+        }
+
         let chosen = choose_manual_album_file(&selection.files, &selection.username, ctx, quality)
             .context(NotFoundSnafu {
                 provider: Provider::Soulseek,
@@ -1363,6 +1397,108 @@ mod tests {
         let mut extended = search_file("Noisia/Split The Atom/01 - Machine Gun.flac", 60_000_000);
         extended.length = Some(420);
         let responses = vec![search_response("peer", vec![extended])];
+
+        assert!(rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_matches_when_catalog_title_has_mix_credit() {
+        // MusicBrainz title carries a mix credit the file drops.
+        let ctx = DownloadTrackContext {
+            track_title: "Thinking of You (David Riva mix)".to_string(),
+            duration_secs: None,
+            ..machine_gun_context()
+        };
+        let file = search_file(
+            "Noisia/Split The Atom/03 - Thinking Of You.flac",
+            30_000_000,
+        );
+        let responses = vec![search_response("peer", vec![file])];
+
+        assert!(!rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_core_title_still_rejects_wrong_versions() {
+        // Core-title matching must not open the door to instrumentals.
+        let ctx = DownloadTrackContext {
+            track_title: "Thinking of You (David Riva mix)".to_string(),
+            duration_secs: None,
+            ..machine_gun_context()
+        };
+        let file = search_file(
+            "Noisia/Split The Atom/03 - Thinking Of You (Instrumental).flac",
+            30_000_000,
+        );
+        let responses = vec![search_response("peer", vec![file])];
+
+        assert!(rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    fn unity_mixers_context(title: &str, number: u32) -> DownloadTrackContext {
+        DownloadTrackContext {
+            artist_name: "The Unity Mixers".to_string(),
+            album_title: "Dance Computer 95 2".to_string(),
+            track_title: title.to_string(),
+            track_number: Some(number),
+            album_track_count: Some(36),
+            duration_secs: None,
+        }
+    }
+
+    #[test]
+    fn single_track_selection_fuzzy_matches_word_variations() {
+        // Catalog says "Thinking of You", the file says "Think Of You", and
+        // the file carries an original-artist credit — both must be bridged.
+        let ctx = unity_mixers_context("Thinking of You (David Riva mix)", 3);
+        let file = search_file(
+            "The Unity Mixers/Dance Computer 95 Vol. 2/03 Whigfield - Think Of You (David Riva Mix).flac",
+            30_000_000,
+        );
+        let responses = vec![search_response("peer", vec![file])];
+
+        assert!(!rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_trusts_artist_credit_prefix_in_album_folder() {
+        // "NN Original Artist - Title" naming, no duration metadata: the
+        // album folder context vouches for it.
+        let ctx = unity_mixers_context("You Took My Lovin'", 8);
+        let file = search_file(
+            "The Unity Mixers/Dance Computer 95 Vol. 2/08 Real McCoy - You Took My Lovin'.flac",
+            30_000_000,
+        );
+        let responses = vec![search_response("peer", vec![file])];
+
+        assert!(!rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_trailing_segment_rejects_extended_titles() {
+        // Album context is not enough when the trailing segment is a
+        // different, longer title.
+        let ctx = machine_gun_context(); // "Machine Gun", 245s
+        let mut wrong = search_file(
+            "Noisia/Split The Atom/01 Klute - Machine Gun Etiquette.flac",
+            30_000_000,
+        );
+        wrong.length = None;
+        let responses = vec![search_response("peer", vec![wrong])];
+
+        assert!(rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_fuzzy_does_not_bridge_prefix_extensions() {
+        // "Fire" must not fuzzy-match "Firewater".
+        let ctx = DownloadTrackContext {
+            track_title: "Fire".to_string(),
+            duration_secs: None,
+            ..machine_gun_context()
+        };
+        let file = search_file("Noisia/Split The Atom/01 - Firewater.flac", 30_000_000);
+        let responses = vec![search_response("peer", vec![file])];
 
         assert!(rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
     }

@@ -154,6 +154,7 @@ pub(crate) fn rank_all_files(
             std::cmp::Reverse(candidate.score),
         )
     });
+    candidates.truncate(50);
     candidates
 }
 
@@ -188,7 +189,19 @@ fn score_file(
     // when all tokens are present but interleaved with other text.
     score += containment_score(&filename, &filename_tokens, artist, 45, 35);
     score += containment_score(&filename, &filename_tokens, album, 20, 14);
-    score += containment_score(&filename, &filename_tokens, title, 60, 40);
+    let title_score = containment_score(&filename, &filename_tokens, title, 60, 40);
+    score += if title_score > 0 {
+        title_score
+    } else {
+        // Reduced credit when only the parenthetical-free core title matches
+        // ("Thinking of You (David Riva mix)" vs "03 - Thinking Of You").
+        let core = normalize(&strip_parentheticals(&ctx.track_title));
+        if core.is_empty() || core == title {
+            0
+        } else {
+            containment_score(&filename, &filename_tokens, &core, 40, 28)
+        }
+    };
 
     // Duration proximity
     if let Some(len) = file.length
@@ -249,11 +262,60 @@ fn is_plausible_match(
     candidate_duration: Option<u32>,
     ctx: &DownloadTrackContext,
 ) -> bool {
-    let title_tokens = tokens(&ctx.track_title);
-    if title_tokens.is_empty() {
+    let full_tokens = tokens(&ctx.track_title);
+    if full_tokens.is_empty() {
         return false;
     }
 
+    if title_match_is_plausible(
+        &full_tokens,
+        &full_tokens,
+        filename,
+        candidate_duration,
+        ctx,
+    ) {
+        return true;
+    }
+
+    // Catalog titles often carry mix credits the files drop ("Thinking of
+    // You (David Riva mix)" vs "03 - Thinking Of You"): retry with the
+    // parenthetical-free core title. The full title still governs which
+    // version markers are allowed.
+    let core_tokens = tokens(&strip_parentheticals(&ctx.track_title));
+    if !core_tokens.is_empty() && core_tokens.len() < full_tokens.len() {
+        return title_match_is_plausible(
+            &core_tokens,
+            &full_tokens,
+            filename,
+            candidate_duration,
+            ctx,
+        );
+    }
+    false
+}
+
+/// Remove `(...)` and `[...]` segments, keeping the surrounding text.
+fn strip_parentheticals(value: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0i32;
+    for c in value.chars() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = (depth - 1).max(0),
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn title_match_is_plausible(
+    title_tokens: &[String],
+    requested_tokens: &[String],
+    filename: &str,
+    candidate_duration: Option<u32>,
+    ctx: &DownloadTrackContext,
+) -> bool {
     let normalized_path = filename.replace('\\', "/");
     let stem = Path::new(&normalized_path)
         .file_stem()
@@ -263,12 +325,9 @@ fn is_plausible_match(
 
     let mut remaining = stem_tokens.clone();
     let mut missing = 0usize;
-    for expected in &title_tokens {
-        match remaining.iter().position(|token| token == expected) {
-            Some(position) => {
-                remaining.remove(position);
-            }
-            None => missing += 1,
+    for expected in title_tokens {
+        if !take_token_match(&mut remaining, expected) {
+            missing += 1;
         }
     }
 
@@ -308,7 +367,7 @@ fn is_plausible_match(
     };
     if version_check_tokens.iter().any(|token| {
         WRONG_VERSION_TOKENS.contains(&token.as_str())
-            && !title_tokens.contains(token)
+            && !requested_tokens.contains(token)
             && !album_tokens.contains(token)
     }) {
         return false;
@@ -327,16 +386,30 @@ fn is_plausible_match(
         false
     };
 
+    let normalized_filename = normalize(filename);
+    let has_context = (!artist_tokens.is_empty()
+        && !is_unknown_artist(&ctx.artist_name)
+        && normalized_filename.contains(&normalize(&ctx.artist_name)))
+        || (!album_tokens.is_empty() && normalized_filename.contains(&normalize(&ctx.album_title)));
+
+    // Compilation-style "NN Original Artist - Title" naming: when the path
+    // vouches for the album or artist and a trailing segment holds exactly
+    // the title, trust it like a strong match — the unrecognized tokens are
+    // an artist credit, not a different song.
+    let trailing_title =
+        missing == 0 && has_context && trailing_segment_matches_title(stem, title_tokens);
+    let trusted_title = strong_title || trailing_title;
+
     let duration_diff = candidate_duration
         .zip(ctx.duration_secs)
         .map(|(candidate, expected)| candidate.abs_diff(expected));
     if let (Some(diff), Some(expected)) = (duration_diff, ctx.duration_secs) {
         // Provider durations can be well off for the same recording (megamix
-        // segment boundaries, pressing differences), so a strong title match
+        // segment boundaries, pressing differences), so a trusted title match
         // gets a generous bound and relies on the score penalty instead. A
         // weak match keeps the tight bound: there duration is the main
         // defense against a different song.
-        let tolerance = if strong_title {
+        let tolerance = if trusted_title {
             45.max(expected / 3)
         } else {
             8.max(expected / 20)
@@ -346,17 +419,64 @@ fn is_plausible_match(
         }
     }
 
-    if strong_title {
+    if trusted_title {
         return true;
     }
 
-    let normalized_filename = normalize(filename);
-    let has_context = (!artist_tokens.is_empty()
-        && !is_unknown_artist(&ctx.artist_name)
-        && normalized_filename.contains(&normalize(&ctx.artist_name)))
-        || (!album_tokens.is_empty() && normalized_filename.contains(&normalize(&ctx.album_title)));
-
     has_context && duration_diff.is_some_and(|diff| diff <= 3)
+}
+
+/// Match a title token against the candidate's tokens, removing the matched
+/// token. Falls back to jaro-winkler for word variations ("think" vs
+/// "thinking"); short tokens must match exactly.
+fn take_token_match(remaining: &mut Vec<String>, expected: &str) -> bool {
+    if let Some(position) = remaining.iter().position(|token| token == expected) {
+        remaining.remove(position);
+        return true;
+    }
+    if expected.len() < 4 {
+        return false;
+    }
+
+    // The length cap keeps prefix-extended words apart ("fire" vs
+    // "firewater" scores 0.89 on jaro-winkler alone).
+    let best = remaining
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| token.len() >= 4 && token.len().abs_diff(expected.len()) <= 3)
+        .map(|(index, token)| (index, strsim::jaro_winkler(token, expected)))
+        .max_by(|a, b| a.1.total_cmp(&b.1));
+    if let Some((index, score)) = best
+        && score >= FUZZY_TOKEN_MIN
+    {
+        remaining.remove(index);
+        return true;
+    }
+    false
+}
+
+/// Minimum jaro-winkler similarity for a fuzzy token match. High enough that
+/// "night" vs "light" fails while "think" vs "thinking" passes.
+const FUZZY_TOKEN_MIN: f64 = 0.87;
+
+/// Whether the last `-`-separated segment of the stem contains the title
+/// (exact or fuzzy per token) with only digit/noise extras.
+fn trailing_segment_matches_title(stem: &str, title_tokens: &[String]) -> bool {
+    let last_segment = stem.rsplit('-').next().unwrap_or(stem);
+    let mut remaining = tokens(last_segment);
+    if remaining.is_empty() {
+        return false;
+    }
+
+    for expected in title_tokens {
+        if !take_token_match(&mut remaining, expected) {
+            return false;
+        }
+    }
+
+    remaining.iter().all(|token| {
+        token.chars().all(|c| c.is_ascii_digit()) || TITLE_NOISE_TOKENS.contains(&token.as_str())
+    })
 }
 
 /// After removing the title from the space-stripped stem, decide whether the
@@ -598,7 +718,16 @@ pub(crate) fn rank_album_folders(
     let mut candidates: Vec<ManualAlbumCandidate> = group_files_into_bundles(responses)
         .into_iter()
         .map(|((username, folder), files)| {
+            // Strict matching only: the bare track-number fallback in
+            // `pick_manual_bundle_file` is for after the user vouched for a
+            // folder, and would let unrelated numbered files inflate the
+            // count here.
             let matched_tracks = tracks
+                .iter()
+                .filter(|ctx| choose_track_from_bundle(&files, ctx, quality).is_some())
+                .count() as u32;
+            // What a manual download of this folder would actually fetch.
+            let pairable_tracks = tracks
                 .iter()
                 .filter(|ctx| pick_manual_bundle_file(&files, ctx, quality).is_some())
                 .count() as u32;
@@ -621,6 +750,7 @@ pub(crate) fn rank_album_folders(
                     })
                     .collect(),
                 matched_tracks,
+                pairable_tracks,
                 score,
                 has_free_upload_slot: peer.is_some_and(|resp| resp.has_free_upload_slot),
                 queue_length: peer.map(|resp| resp.queue_length).unwrap_or(0),
@@ -630,11 +760,54 @@ pub(crate) fn rank_album_folders(
 
     candidates.sort_by_key(|candidate| {
         (
+            std::cmp::Reverse(candidate.pairable_tracks),
             std::cmp::Reverse(candidate.matched_tracks),
             std::cmp::Reverse(candidate.score),
         )
     });
     candidates.truncate(50);
+
+    if let Some(best) = candidates.first()
+        && (best.matched_tracks as usize) < tracks.len()
+    {
+        // List strictly-unmatched titles (same logic as `matched_tracks`); the
+        // number fallback may still pair some of these at download time.
+        let bundle: Vec<AlbumBundleFile> = best
+            .files
+            .iter()
+            .map(|file| AlbumBundleFile {
+                username: best.username.clone(),
+                filename: file.filename.clone(),
+                size: file.size,
+                extension: file.extension.clone().unwrap_or_default(),
+                track_number: parse_track_number(&file.filename),
+                length: file.length_secs,
+                bit_rate: file.bit_rate,
+            })
+            .collect();
+        let unmatched: Vec<&str> = tracks
+            .iter()
+            .filter(|ctx| choose_track_from_bundle(&bundle, ctx, quality).is_none())
+            .map(|ctx| ctx.track_title.as_str())
+            .take(8)
+            .collect();
+        let sample_files: Vec<&str> = best
+            .files
+            .iter()
+            .take(3)
+            .map(|file| file.filename.as_str())
+            .collect();
+        tracing::debug!(
+            folder = best.folder,
+            matched = best.matched_tracks,
+            pairable = best.pairable_tracks,
+            total = tracks.len(),
+            ?unmatched,
+            ?sample_files,
+            "best album folder has unpaired tracks"
+        );
+    }
+
     candidates
 }
 

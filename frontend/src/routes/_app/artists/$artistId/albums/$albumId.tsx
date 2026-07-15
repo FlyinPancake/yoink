@@ -815,7 +815,7 @@ function ManualAlbumCandidateRow({
   onDownloaded: () => void;
 }) {
   const isThisPending = mutation.isPending && mutation.variables.body.folder === candidate.folder;
-  const fullMatch = candidate.matched_tracks >= trackCount;
+  const fullMatch = candidate.pairable_tracks >= trackCount;
 
   return (
     <div className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-blue-500/3 dark:hover:bg-blue-500/5">
@@ -828,6 +828,7 @@ function ManualAlbumCandidateRow({
           <span>{candidate.files.length} files</span>
           <span>{formatFileSize(candidate.total_size)}</span>
           <span>score {candidate.score}</span>
+          <span>{candidate.matched_tracks} title-matched</span>
           {!candidate.has_free_upload_slot && candidate.queue_length > 0 && (
             <span>queue {candidate.queue_length}</span>
           )}
@@ -840,8 +841,9 @@ function ManualAlbumCandidateRow({
             ? "shrink-0 bg-green-500/10 text-green-600"
             : "shrink-0 bg-amber-500/10 text-amber-600"
         }
+        title="Tracks a download of this folder would fetch"
       >
-        {candidate.matched_tracks}/{trackCount} tracks
+        {candidate.pairable_tracks}/{trackCount} tracks
       </Badge>
 
       <Button
