@@ -29,12 +29,18 @@ use crate::{
 };
 
 use self::{
-    matching::{pick_best_candidate, pick_from_album_bundle},
+    matching::{
+        choose_manual_album_file, rank_album_bundles, rank_album_folders, rank_all_files,
+        rank_candidates,
+    },
     models::*,
     transfer::{is_complete_success, is_failure},
     util::{dedup_queries, normalize, percent_encode_path, sanitize_relative_path},
 };
 use super::{DownloadTrackContext, PlaybackInfo, ProviderError, SearchTrackResolver};
+
+/// How many ranked candidates to attempt before giving up on a track.
+const MAX_DOWNLOAD_ATTEMPTS: usize = 3;
 
 // ── Source ───────────────────────────────────────────────────────────
 
@@ -47,6 +53,8 @@ pub(crate) struct SoulSeekSource {
     token: RwLock<Option<String>>,
     /// slskd allows only one concurrent `POST /searches` operation.
     search_request_gate: Semaphore,
+    /// slskd also allows only one concurrent download-enqueue operation.
+    transfer_request_gate: Semaphore,
 }
 
 impl SoulSeekSource {
@@ -74,6 +82,7 @@ impl SoulSeekSource {
             downloads_dir: PathBuf::from(downloads_dir.trim()),
             token: RwLock::new(None),
             search_request_gate: Semaphore::new(1),
+            transfer_request_gate: Semaphore::new(1),
         }
     }
 }
@@ -92,54 +101,125 @@ impl SearchTrackResolver for SoulSeekSource {
         quality: &Quality,
     ) -> Result<PlaybackInfo, ProviderError> {
         // Try album-bundle search first, then fall back to per-track search.
-        let candidate = match self.find_album_bundle_candidate(ctx, quality).await? {
-            Some(c) => c,
-            None => self.find_single_track_candidate(ctx, quality).await?,
-        };
+        // Each phase yields ranked candidates; failed or unverifiable
+        // downloads fall through to the next candidate.
+        let bundle_candidates = self.find_album_bundle_candidates(ctx, quality).await?;
+        let (path, mut last_error) = self.try_candidates(bundle_candidates, ctx).await;
+        if let Some(path) = path {
+            return Ok(PlaybackInfo::LocalFile(path));
+        }
 
-        self.enqueue_download(&candidate.username, &candidate.filename, candidate.size)
-            .await?;
-
-        let local_path = match self
-            .wait_for_download(&candidate.username, &candidate.filename, 180)
-            .await
-        {
-            Ok(path) => path,
-            Err(e) => {
-                warn!(
-                    username = candidate.username,
-                    filename = candidate.filename,
-                    error = %e,
-                    "SoulSeek transfer did not complete in time"
-                );
-                return Err(e);
+        match self.find_single_track_candidates(ctx, quality).await {
+            Ok(candidates) => {
+                let (path, error) = self.try_candidates(candidates, ctx).await;
+                if let Some(path) = path {
+                    return Ok(PlaybackInfo::LocalFile(path));
+                }
+                last_error = error.or(last_error);
             }
-        };
+            // A transfer failure from the bundle phase is more informative
+            // than "no single-track candidate found".
+            Err(error) => last_error = last_error.or(Some(error)),
+        }
 
-        Ok(PlaybackInfo::LocalFile(local_path))
+        Err(last_error.unwrap_or_else(|| {
+            NotFoundSnafu {
+                provider: Provider::Soulseek,
+                resource: format!("suitable candidate for '{}'", ctx.track_title),
+            }
+            .build()
+        }))
+    }
+
+    async fn manual_search(
+        &self,
+        ctx: &DownloadTrackContext,
+        quality: &Quality,
+    ) -> Result<Vec<ManualSearchCandidate>, ProviderError> {
+        // Merge album-level and track-level search results so the user sees
+        // both loose files and complete album folders.
+        let mut responses = self.search_album_queries(ctx, quality).await?;
+        match self.search_track_queries(ctx).await {
+            Ok(track_responses) => responses.extend(track_responses),
+            Err(error) => {
+                if responses.is_empty() {
+                    return Err(error);
+                }
+                warn!(error = %error, "manual track search failed; using album results only");
+            }
+        }
+
+        Ok(rank_all_files(&responses, ctx, quality))
+    }
+
+    async fn fetch_file(
+        &self,
+        selection: &ManualDownloadSelection,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        self.fetch_chosen_file(&selection.username, &selection.filename, selection.size)
+            .await
+    }
+
+    async fn manual_album_search(
+        &self,
+        tracks: &[DownloadTrackContext],
+        quality: &Quality,
+    ) -> Result<Vec<ManualAlbumCandidate>, ProviderError> {
+        let Some(first) = tracks.first() else {
+            return Ok(Vec::new());
+        };
+        let responses = self.search_album_queries(first, quality).await?;
+        Ok(rank_album_folders(&responses, tracks, quality))
+    }
+
+    async fn fetch_album_file(
+        &self,
+        selection: &ManualAlbumSelection,
+        ctx: &DownloadTrackContext,
+        quality: &Quality,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        let chosen = choose_manual_album_file(&selection.files, &selection.username, ctx, quality)
+            .context(NotFoundSnafu {
+                provider: Provider::Soulseek,
+                resource: format!(
+                    "file matching '{}' in chosen folder {}",
+                    ctx.track_title, selection.folder
+                ),
+            })?;
+
+        self.fetch_chosen_file(&selection.username, &chosen.filename, chosen.size)
+            .await
     }
 }
 
 // ── High-level search strategies ────────────────────────────────────
 
 impl SoulSeekSource {
-    async fn find_album_bundle_candidate(
+    async fn find_album_bundle_candidates(
         &self,
         ctx: &DownloadTrackContext,
         quality: &Quality,
-    ) -> Result<Option<matching::Candidate>, ProviderError> {
+    ) -> Result<Vec<matching::Candidate>, ProviderError> {
         let responses = self.search_album_queries(ctx, quality).await?;
         if responses.is_empty() {
-            return Ok(None);
+            return Ok(Vec::new());
         }
-        Ok(pick_from_album_bundle(&responses, ctx, quality))
+        let candidates = rank_album_bundles(&responses, ctx, quality);
+        debug!(
+            track = ctx.track_title,
+            responses = responses.len(),
+            files = responses.iter().map(|r| r.files.len()).sum::<usize>(),
+            candidates = candidates.len(),
+            "SoulSeek album bundle ranking"
+        );
+        Ok(candidates)
     }
 
-    async fn find_single_track_candidate(
+    async fn find_single_track_candidates(
         &self,
         ctx: &DownloadTrackContext,
         quality: &Quality,
-    ) -> Result<matching::Candidate, ProviderError> {
+    ) -> Result<Vec<matching::Candidate>, ProviderError> {
         let responses = self.search_track_queries(ctx).await?;
 
         ensure!(
@@ -150,10 +230,91 @@ impl SoulSeekSource {
             }
         );
 
-        pick_best_candidate(&responses, ctx, quality).context(NotFoundSnafu {
-            provider: Provider::Soulseek,
-            resource: format!("suitable candidate for '{}'", ctx.track_title),
-        })
+        let candidates = rank_candidates(&responses, ctx, quality);
+        debug!(
+            track = ctx.track_title,
+            responses = responses.len(),
+            files = responses.iter().map(|r| r.files.len()).sum::<usize>(),
+            candidates = candidates.len(),
+            "SoulSeek single-track ranking"
+        );
+        ensure!(
+            !candidates.is_empty(),
+            NotFoundSnafu {
+                provider: Provider::Soulseek,
+                resource: format!("suitable candidate for '{}'", ctx.track_title),
+            }
+        );
+        Ok(candidates)
+    }
+
+    /// Attempt up to [`MAX_DOWNLOAD_ATTEMPTS`] candidates in ranked order.
+    /// Returns the first verified local file, plus the last error when every
+    /// attempt failed.
+    async fn try_candidates(
+        &self,
+        candidates: Vec<matching::Candidate>,
+        ctx: &DownloadTrackContext,
+    ) -> (Option<PathBuf>, Option<ProviderError>) {
+        let mut last_error = None;
+
+        for candidate in candidates.into_iter().take(MAX_DOWNLOAD_ATTEMPTS) {
+            match self.download_and_verify(&candidate, ctx).await {
+                Ok(path) => return (Some(path), None),
+                Err(error) => {
+                    warn!(
+                        username = candidate.username,
+                        filename = candidate.filename,
+                        error = %error,
+                        "SoulSeek candidate failed; trying next"
+                    );
+                    last_error = Some(error);
+                }
+            }
+        }
+
+        (None, last_error)
+    }
+
+    /// Download a specific user-chosen file. Only checks the result is
+    /// readable audio — no duration second-guessing, the user picked it
+    /// deliberately.
+    async fn fetch_chosen_file(
+        &self,
+        username: &str,
+        filename: &str,
+        size: i64,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        debug!(username, filename, "SoulSeek manual download enqueueing");
+        self.enqueue_download(username, filename, size).await?;
+        let local_path = self.wait_for_download(username, filename, 300).await?;
+        probe_audio_duration(&local_path).await?;
+        Ok(PlaybackInfo::LocalFile(local_path))
+    }
+
+    async fn download_and_verify(
+        &self,
+        candidate: &matching::Candidate,
+        ctx: &DownloadTrackContext,
+    ) -> Result<PathBuf, ProviderError> {
+        debug!(
+            username = candidate.username,
+            filename = candidate.filename,
+            score = candidate.score,
+            "SoulSeek download enqueueing"
+        );
+        self.enqueue_download(&candidate.username, &candidate.filename, candidate.size)
+            .await?;
+        let local_path = self
+            .wait_for_download(&candidate.username, &candidate.filename, 180)
+            .await?;
+        verify_downloaded_file(&local_path, candidate, ctx).await?;
+        debug!(
+            filename = candidate.filename,
+            path = %local_path.display(),
+            "SoulSeek download verified"
+        );
+        Ok(local_path)
     }
 
     /// Build track-level queries from most precise to broadest and return the
@@ -500,7 +661,46 @@ impl SoulSeekSource {
 // ── Download / transfer ─────────────────────────────────────────────
 
 impl SoulSeekSource {
+    /// Enqueue a download, serialized through the transfer gate and retried
+    /// with backoff: slskd rejects concurrent enqueue operations with 429.
     async fn enqueue_download(
+        &self,
+        username: &str,
+        filename: &str,
+        size: i64,
+    ) -> Result<(), ProviderError> {
+        let Ok(_permit) = self.transfer_request_gate.acquire().await else {
+            return UnavailableSnafu {
+                provider: Provider::Soulseek,
+                reason: "transfer gate closed",
+            }
+            .fail();
+        };
+
+        let mut delay_secs = 1u64;
+        for attempt in 1..=6 {
+            match self.enqueue_download_once(username, filename, size).await {
+                Ok(()) => return Ok(()),
+                Err(err) if is_rate_limited(&err) && attempt < 6 => {
+                    warn!(
+                        username,
+                        filename, attempt, delay_secs, "slskd enqueue rate-limited; retrying"
+                    );
+                    tokio::time::sleep(Duration::from_secs(delay_secs)).await;
+                    delay_secs = (delay_secs * 2).min(8);
+                }
+                Err(err) => return Err(err),
+            }
+        }
+
+        RateLimitedSnafu {
+            provider: Provider::Soulseek,
+            reason: "download enqueue failed after retries",
+        }
+        .fail()
+    }
+
+    async fn enqueue_download_once(
         &self,
         username: &str,
         filename: &str,
@@ -653,6 +853,83 @@ impl SoulSeekSource {
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
+/// Read the real duration of a downloaded file, failing if it is not
+/// parseable audio at all.
+async fn probe_audio_duration(path: &Path) -> Result<Duration, ProviderError> {
+    use lofty::{file::AudioFile, probe::Probe};
+
+    let probe_path = path.to_path_buf();
+    let probed = tokio::task::spawn_blocking(move || {
+        Probe::open(&probe_path)
+            .and_then(|probe| probe.read())
+            .map(|file| file.properties().duration())
+    })
+    .await;
+
+    match probed {
+        Ok(Ok(duration)) => Ok(duration),
+        Ok(Err(error)) => InvalidResponseSnafu {
+            provider: Provider::Soulseek,
+            reason: format!(
+                "downloaded file {} is not readable audio: {error}",
+                path.display()
+            ),
+        }
+        .fail(),
+        Err(error) => InvalidResponseSnafu {
+            provider: Provider::Soulseek,
+            reason: format!("audio probe task failed for {}: {error}", path.display()),
+        }
+        .fail(),
+    }
+}
+
+/// Probe the downloaded file and check it is readable audio with a credible
+/// duration, so a bad grab falls through to the next candidate instead of
+/// landing in the library.
+///
+/// The primary duration reference is what the peer advertised in the search
+/// result — matching already vetted that value, and comparing against it
+/// catches truncated transfers and lying peers. Only when nothing was
+/// advertised do we fall back to the catalog duration, generously: it can be
+/// legitimately far off for the same recording (megamix segment boundaries,
+/// pressing differences).
+async fn verify_downloaded_file(
+    path: &Path,
+    candidate: &matching::Candidate,
+    ctx: &DownloadTrackContext,
+) -> Result<(), ProviderError> {
+    let duration = probe_audio_duration(path).await?;
+
+    let actual = u32::try_from(duration.as_secs()).unwrap_or(u32::MAX);
+    if let Some(reported) = candidate.reported_length {
+        ensure!(
+            actual.abs_diff(reported) <= 10,
+            InvalidResponseSnafu {
+                provider: Provider::Soulseek,
+                reason: format!(
+                    "downloaded file {} lasts {actual}s but the peer advertised {reported}s",
+                    path.display()
+                ),
+            }
+        );
+    } else if let Some(expected) = ctx.duration_secs {
+        let tolerance = 45.max(expected / 3);
+        ensure!(
+            actual.abs_diff(expected) <= tolerance,
+            InvalidResponseSnafu {
+                provider: Provider::Soulseek,
+                reason: format!(
+                    "downloaded file {} lasts {actual}s but roughly {expected}s was expected",
+                    path.display()
+                ),
+            }
+        );
+    }
+
+    Ok(())
+}
+
 fn is_rate_limited(err: &ProviderError) -> bool {
     if matches!(err, ProviderError::RateLimited { .. }) {
         return true;
@@ -726,6 +1003,16 @@ mod tests {
                 .extension()
                 .and_then(|e| e.to_str())
                 .map(|s| s.to_string()),
+        }
+    }
+
+    fn search_response(username: &str, files: Vec<SearchFile>) -> SearchResponse {
+        SearchResponse {
+            username: username.to_string(),
+            files,
+            has_free_upload_slot: false,
+            queue_length: 0,
+            upload_speed: 0,
         }
     }
 
@@ -823,59 +1110,91 @@ mod tests {
     #[test]
     fn album_bundle_selection_requires_complete_track_count() {
         let ctx = test_context("Song Two", 2, 3);
-        let responses = vec![SearchResponse {
-            username: "user1".to_string(),
-            files: vec![
+        let responses = vec![search_response(
+            "user1",
+            vec![
                 search_file("The Artist/The Album/01 - Song One.flac", 100),
                 search_file("The Artist/The Album/02 - Song Two.flac", 100),
             ],
-        }];
+        )];
 
-        let candidate = pick_from_album_bundle(&responses, &ctx, &Quality::Lossless);
-        assert!(candidate.is_none());
+        assert!(rank_album_bundles(&responses, &ctx, &Quality::Lossless).is_empty());
     }
 
     #[test]
     fn album_bundle_selection_picks_requested_track_from_complete_bundle() {
         let ctx = test_context("Song Two", 2, 2);
-        let responses = vec![SearchResponse {
-            username: "user1".to_string(),
-            files: vec![
+        let responses = vec![search_response(
+            "user1",
+            vec![
                 search_file("The Artist/The Album/01 - Song One.flac", 100),
                 search_file("The Artist/The Album/02 - Song Two.flac", 100),
             ],
-        }];
+        )];
 
-        let candidate = pick_from_album_bundle(&responses, &ctx, &Quality::Lossless)
+        let candidates = rank_album_bundles(&responses, &ctx, &Quality::Lossless);
+        let candidate = candidates
+            .first()
             .expect("expected complete album candidate");
         assert_eq!(candidate.username, "user1");
         assert!(candidate.filename.contains("02 - Song Two"));
     }
 
     #[test]
-    fn album_bundle_selection_rejects_track_number_with_wrong_title() {
+    fn album_bundle_selection_falls_back_to_title_when_numbering_differs() {
+        // The DB says track 2, but this pressing has the song at position 1:
+        // the title match must win over the track number.
         let ctx = test_context("Song One", 2, 2);
-        let responses = vec![SearchResponse {
-            username: "user1".to_string(),
-            files: vec![
+        let responses = vec![search_response(
+            "user1",
+            vec![
                 search_file("The Artist/The Album/01 - Song One.flac", 100),
                 search_file("The Artist/The Album/02 - Interlude.flac", 100),
             ],
-        }];
+        )];
 
-        let candidate = pick_from_album_bundle(&responses, &ctx, &Quality::Lossless);
-        assert!(candidate.is_none());
+        let candidates = rank_album_bundles(&responses, &ctx, &Quality::Lossless);
+        let candidate = candidates.first().expect("expected title-matched track");
+        assert!(candidate.filename.contains("01 - Song One"));
+    }
+
+    #[test]
+    fn album_bundle_selection_rejects_bundle_without_any_title_match() {
+        let ctx = test_context("Song Three", 2, 2);
+        let responses = vec![search_response(
+            "user1",
+            vec![
+                search_file("The Artist/The Album/01 - Song One.flac", 100),
+                search_file("The Artist/The Album/02 - Interlude.flac", 100),
+            ],
+        )];
+
+        assert!(rank_album_bundles(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn album_bundle_selection_rejects_folder_without_artist_or_album_context() {
+        let ctx = test_context("Song Two", 2, 2);
+        let responses = vec![search_response(
+            "user1",
+            vec![
+                search_file("shared/random stuff/01 - Song One.flac", 100),
+                search_file("shared/random stuff/02 - Song Two.flac", 100),
+            ],
+        )];
+
+        assert!(rank_album_bundles(&responses, &ctx, &Quality::Lossless).is_empty());
     }
 
     #[test]
     fn single_track_selection_ignores_non_audio_files() {
         let ctx = test_context("Song One", 1, 1);
-        let responses = vec![SearchResponse {
-            username: "user1".to_string(),
-            files: vec![search_file("The Artist/The Album/Song One.jpg", 100)],
-        }];
+        let responses = vec![search_response(
+            "user1",
+            vec![search_file("The Artist/The Album/Song One.jpg", 100)],
+        )];
 
-        assert!(pick_best_candidate(&responses, &ctx, &Quality::Lossless).is_none());
+        assert!(rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
     }
 
     #[test]
@@ -883,61 +1202,174 @@ mod tests {
         let ctx = test_context("Song One", 1, 1);
         let mut file = search_file("The Artist/The Album/Song One.FLAC", 100);
         file.extension = None;
-        let responses = vec![SearchResponse {
-            username: "user1".to_string(),
-            files: vec![file],
-        }];
+        let responses = vec![search_response("user1", vec![file])];
 
-        let candidate = pick_best_candidate(&responses, &ctx, &Quality::Lossless)
-            .expect("expected audio candidate");
+        let candidates = rank_candidates(&responses, &ctx, &Quality::Lossless);
+        let candidate = candidates.first().expect("expected audio candidate");
         assert!(candidate.filename.ends_with("Song One.FLAC"));
     }
 
-    #[test]
-    fn single_track_selection_rejects_title_substring_from_different_song() {
-        let ctx = DownloadTrackContext {
+    fn machine_gun_context() -> DownloadTrackContext {
+        DownloadTrackContext {
             artist_name: "Noisia".to_string(),
             album_title: "Split The Atom".to_string(),
             track_title: "Machine Gun".to_string(),
             track_number: Some(1),
             album_track_count: Some(19),
             duration_secs: Some(245),
-        };
+        }
+    }
+
+    #[test]
+    fn single_track_selection_rejects_title_substring_from_different_song() {
+        let ctx = machine_gun_context();
         let mut wrong = search_file(
             "shared/_Untagged/Klute_Unknown Artist/_Unknown Album/03 - Machine Gun Etiquette.flac",
             50_730_582,
         );
         wrong.length = Some(444);
-        let responses = vec![SearchResponse {
-            username: "peer".to_string(),
-            files: vec![wrong],
-        }];
+        let responses = vec![search_response("peer", vec![wrong])];
 
-        assert!(pick_best_candidate(&responses, &ctx, &Quality::Lossless).is_none());
+        assert!(rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
     }
 
     #[test]
     fn single_track_selection_accepts_compatible_title_and_duration() {
-        let ctx = DownloadTrackContext {
-            artist_name: "Noisia".to_string(),
-            album_title: "Split The Atom".to_string(),
-            track_title: "Machine Gun".to_string(),
-            track_number: Some(1),
-            album_track_count: Some(19),
-            duration_secs: Some(245),
-        };
+        let ctx = machine_gun_context();
         let mut correct = search_file(
             "Noisia/Split The Atom/01 - Noisia - Machine Gun (Original Mix).flac",
             30_000_000,
         );
         correct.length = Some(245);
-        let responses = vec![SearchResponse {
-            username: "peer".to_string(),
-            files: vec![correct],
-        }];
+        let responses = vec![search_response("peer", vec![correct])];
 
-        let candidate = pick_best_candidate(&responses, &ctx, &Quality::Lossless)
-            .expect("expected compatible candidate");
+        let candidates = rank_candidates(&responses, &ctx, &Quality::Lossless);
+        let candidate = candidates.first().expect("expected compatible candidate");
         assert!(candidate.filename.contains("Machine Gun (Original Mix)"));
+    }
+
+    #[test]
+    fn single_track_selection_rejects_wrong_version_markers() {
+        let ctx = machine_gun_context();
+        let mut instrumental = search_file(
+            "Noisia/Split The Atom/01 - Noisia - Machine Gun (Instrumental).flac",
+            30_000_000,
+        );
+        instrumental.length = Some(245);
+        let responses = vec![search_response("peer", vec![instrumental])];
+
+        assert!(rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_allows_version_marker_requested_in_title() {
+        let ctx = DownloadTrackContext {
+            track_title: "Machine Gun (16 Bit Remix)".to_string(),
+            ..machine_gun_context()
+        };
+        let mut remix = search_file(
+            "Noisia/Split The Atom/19 - Machine Gun (16 Bit Remix).flac",
+            30_000_000,
+        );
+        remix.length = Some(245);
+        let responses = vec![search_response("peer", vec![remix])];
+
+        assert!(!rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_forgives_one_missing_token_with_context() {
+        // Title "Machine Gun Part 2" vs filename "... Machine Gun Pt 2 ...":
+        // one token differs, but artist context and duration line up.
+        let ctx = DownloadTrackContext {
+            track_title: "Machine Gun Part 2".to_string(),
+            ..machine_gun_context()
+        };
+        let mut close = search_file(
+            "Noisia/Split The Atom/02 - Noisia - Machine Gun Pt 2.flac",
+            30_000_000,
+        );
+        close.length = Some(245);
+        let responses = vec![search_response("peer", vec![close])];
+
+        assert!(!rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_ranks_multiple_candidates_best_first() {
+        let ctx = machine_gun_context();
+        let mut flac = search_file("Noisia/Split The Atom/01 - Machine Gun.flac", 30_000_000);
+        flac.length = Some(245);
+        let mut mp3 = search_file("Noisia/Split The Atom/01 - Machine Gun.mp3", 8_000_000);
+        mp3.length = Some(245);
+        let responses = vec![search_response("peer", vec![mp3, flac])];
+
+        let candidates = rank_candidates(&responses, &ctx, &Quality::Lossless);
+        assert_eq!(candidates.len(), 2);
+        assert!(candidates[0].filename.ends_with(".flac"));
+        assert!(candidates[0].score > candidates[1].score);
+    }
+
+    #[test]
+    fn single_track_selection_matches_joined_and_split_words() {
+        // "Sky High" requested, file says "Skyhigh" — and vice versa.
+        let ctx = DownloadTrackContext {
+            track_title: "Sky High".to_string(),
+            ..machine_gun_context()
+        };
+        let mut joined = search_file("Noisia/Split The Atom/02 - Skyhigh.flac", 30_000_000);
+        joined.length = Some(245);
+        let responses = vec![search_response("peer", vec![joined])];
+        assert!(!rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+
+        let ctx = DownloadTrackContext {
+            track_title: "Skyhigh".to_string(),
+            ..machine_gun_context()
+        };
+        let mut split = search_file("Noisia/Split The Atom/02 - Sky High.flac", 30_000_000);
+        split.length = Some(245);
+        let responses = vec![search_response("peer", vec![split])];
+        assert!(!rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_compact_match_rejects_unrelated_leftover() {
+        // "Machine Gun" is a compact substring of "Machine Gun Etiquette",
+        // but the leftover is another song's title, not noise.
+        let ctx = machine_gun_context();
+        let mut wrong = search_file("random/03 - MachineGun Etiquette.flac", 30_000_000);
+        wrong.length = None;
+        let responses = vec![search_response("peer", vec![wrong])];
+
+        assert!(rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_tolerates_moderate_duration_drift_on_strong_title() {
+        // Megamix segment boundaries and pressing differences shift durations
+        // by tens of seconds; an exact title match must survive that.
+        let ctx = machine_gun_context(); // expects 245s
+        let mut drifted = search_file("Noisia/Split The Atom/01 - Machine Gun.flac", 30_000_000);
+        drifted.length = Some(200);
+        let responses = vec![search_response("peer", vec![drifted])];
+
+        assert!(!rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn single_track_selection_still_rejects_grossly_wrong_duration() {
+        // A same-named file nearly twice as long is a different version.
+        let ctx = machine_gun_context(); // expects 245s
+        let mut extended = search_file("Noisia/Split The Atom/01 - Machine Gun.flac", 60_000_000);
+        extended.length = Some(420);
+        let responses = vec![search_response("peer", vec![extended])];
+
+        assert!(rank_candidates(&responses, &ctx, &Quality::Lossless).is_empty());
+    }
+
+    #[test]
+    fn normalize_transliterates_accented_characters() {
+        assert_eq!(normalize("Beyoncé"), "beyonce");
+        assert_eq!(normalize("Sigur Rós"), "sigur ros");
     }
 }

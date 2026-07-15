@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use migration::MigratorTrait;
 use sea_orm::DatabaseConnection;
@@ -15,6 +18,9 @@ pub(crate) struct AppState {
     pub(crate) db: DatabaseConnection,
     pub(crate) download_notify: Arc<Notify>,
     pub(crate) shutdown: CancellationToken,
+    /// The download job currently being processed, with a token that cancels
+    /// just that job (not the whole worker).
+    pub(crate) active_download_job: Arc<Mutex<Option<(uuid::Uuid, CancellationToken)>>>,
     pub(crate) sse_tx: broadcast::Sender<()>,
     pub(crate) music_root: PathBuf,
     pub(crate) default_quality: Quality,
@@ -54,6 +60,7 @@ impl AppState {
             db: conn,
             download_notify: Arc::new(Notify::new()),
             shutdown: CancellationToken::new(),
+            active_download_job: Arc::new(Mutex::new(None)),
             sse_tx,
             music_root,
             default_quality,

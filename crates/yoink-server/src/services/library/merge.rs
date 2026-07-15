@@ -720,6 +720,7 @@ mod tests {
                 payload: DownloadAlbumJobPayload {
                     album_id: source_album.id,
                     provider: Provider::Tidal,
+                    manual: None,
                 },
             },
         )

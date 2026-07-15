@@ -286,6 +286,67 @@ pub(crate) trait LinkedTrackResolver: Send + Sync {
     ) -> Result<PlaybackInfo, ProviderError>;
 }
 
+/// A single file offered by a peer, surfaced for manual (interactive) search
+/// so the user can override automatic candidate selection.
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+pub(crate) struct ManualSearchCandidate {
+    pub username: String,
+    pub filename: String,
+    pub size: i64,
+    pub length_secs: Option<u32>,
+    pub bit_rate: Option<u32>,
+    pub extension: Option<String>,
+    /// The automatic matcher's score for this file.
+    pub score: i32,
+    /// Whether the automatic matcher would consider this file at all.
+    pub plausible: bool,
+    pub has_free_upload_slot: bool,
+    pub queue_length: u32,
+}
+
+/// A user-chosen file to download, bypassing automatic candidate selection.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+pub(crate) struct ManualDownloadSelection {
+    pub username: String,
+    pub filename: String,
+    pub size: i64,
+}
+
+/// One file inside a peer's album folder.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+pub(crate) struct ManualAlbumFile {
+    pub filename: String,
+    pub size: i64,
+    pub length_secs: Option<u32>,
+    pub bit_rate: Option<u32>,
+    pub extension: Option<String>,
+}
+
+/// A peer's album folder surfaced for manual (interactive) album search.
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+pub(crate) struct ManualAlbumCandidate {
+    pub username: String,
+    pub folder: String,
+    pub files: Vec<ManualAlbumFile>,
+    /// How many of the album's tracks the automatic matcher can pair with a
+    /// file in this folder.
+    pub matched_tracks: u32,
+    pub total_size: i64,
+    pub score: i32,
+    pub has_free_upload_slot: bool,
+    pub queue_length: u32,
+}
+
+/// A user-chosen album folder to download, bypassing automatic selection.
+/// Carries the file listing the user saw so the job doesn't have to search
+/// again.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+pub(crate) struct ManualAlbumSelection {
+    pub username: String,
+    pub folder: String,
+    pub files: Vec<ManualAlbumFile>,
+}
+
 /// Resolves playback by searching with locally stored track metadata.
 #[async_trait]
 pub(crate) trait SearchTrackResolver: Send + Sync {
@@ -297,6 +358,56 @@ pub(crate) trait SearchTrackResolver: Send + Sync {
         metadata: &DownloadTrackContext,
         quality: &Quality,
     ) -> Result<PlaybackInfo, ProviderError>;
+
+    /// List every candidate file the search surfaces, scored but unfiltered,
+    /// for the user to choose from manually.
+    async fn manual_search(
+        &self,
+        _metadata: &DownloadTrackContext,
+        _quality: &Quality,
+    ) -> Result<Vec<ManualSearchCandidate>, ProviderError> {
+        Err(ProviderError::NotSupported {
+            provider: self.id(),
+            operation: "manual_search".to_string(),
+        })
+    }
+
+    /// Download a specific user-chosen file, bypassing candidate selection.
+    async fn fetch_file(
+        &self,
+        _selection: &ManualDownloadSelection,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        Err(ProviderError::NotSupported {
+            provider: self.id(),
+            operation: "fetch_file".to_string(),
+        })
+    }
+
+    /// List candidate album folders for an album's tracks, best-matched
+    /// first, for the user to choose from manually.
+    async fn manual_album_search(
+        &self,
+        _tracks: &[DownloadTrackContext],
+        _quality: &Quality,
+    ) -> Result<Vec<ManualAlbumCandidate>, ProviderError> {
+        Err(ProviderError::NotSupported {
+            provider: self.id(),
+            operation: "manual_album_search".to_string(),
+        })
+    }
+
+    /// Download one track's file out of a user-chosen album folder.
+    async fn fetch_album_file(
+        &self,
+        _selection: &ManualAlbumSelection,
+        _metadata: &DownloadTrackContext,
+        _quality: &Quality,
+    ) -> Result<PlaybackInfo, ProviderError> {
+        Err(ProviderError::NotSupported {
+            provider: self.id(),
+            operation: "fetch_album_file".to_string(),
+        })
+    }
 }
 
 /// An enabled download source and the lookup strategy it supports.

@@ -174,6 +174,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/album/{album_id}/manual-download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manual Download
+         * @description Enqueue a download of a specific user-chosen album folder, bypassing
+         *     automatic candidate selection.
+         */
+        post: operations["manual_download_album"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/album/{album_id}/manual-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manual Search
+         * @description Interactive search: returns candidate album folders peers offer for this
+         *     album, best-matched first, so the user can pick one manually. Can take up
+         *     to a minute.
+         */
+        get: operations["manual_search_album"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/album/{album_id}/monitor": {
         parameters: {
             query?: never;
@@ -885,6 +928,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/track/{track_id}/manual-download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manual Download
+         * @description Enqueue a download of a specific user-chosen file for this track,
+         *     bypassing automatic candidate selection.
+         */
+        post: operations["manual_download_track"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/track/{track_id}/manual-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manual Search
+         * @description Interactive search: returns every candidate file the download provider
+         *     surfaces for this track, including ones the automatic matcher would
+         *     reject, so the user can pick one manually. Can take up to a minute.
+         */
+        get: operations["manual_search_track"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/wanted": {
         parameters: {
             query?: never;
@@ -1123,9 +1209,11 @@ export interface components {
         DownloadAlbumJobPayload: {
             /** Format: uuid */
             album_id: string;
+            manual?: null | components["schemas"]["ManualAlbumSelection"];
             provider: components["schemas"]["Provider"];
         };
         DownloadTrackJobPayload: {
+            manual?: null | components["schemas"]["ManualDownloadSelection"];
             provider: components["schemas"]["Provider"];
             /** Format: uuid */
             track_id: string;
@@ -1239,11 +1327,83 @@ export interface components {
             password: string;
             username: string;
         };
+        /** @description A peer's album folder surfaced for manual (interactive) album search. */
+        ManualAlbumCandidate: {
+            files: components["schemas"]["ManualAlbumFile"][];
+            folder: string;
+            has_free_upload_slot: boolean;
+            /**
+             * Format: int32
+             * @description How many of the album's tracks the automatic matcher can pair with a
+             *     file in this folder.
+             */
+            matched_tracks: number;
+            /** Format: int32 */
+            queue_length: number;
+            /** Format: int32 */
+            score: number;
+            /** Format: int64 */
+            total_size: number;
+            username: string;
+        };
+        /** @description One file inside a peer's album folder. */
+        ManualAlbumFile: {
+            /** Format: int32 */
+            bit_rate?: number | null;
+            extension?: string | null;
+            filename: string;
+            /** Format: int32 */
+            length_secs?: number | null;
+            /** Format: int64 */
+            size: number;
+        };
+        /**
+         * @description A user-chosen album folder to download, bypassing automatic selection.
+         *     Carries the file listing the user saw so the job doesn't have to search
+         *     again.
+         */
+        ManualAlbumSelection: {
+            files: components["schemas"]["ManualAlbumFile"][];
+            folder: string;
+            username: string;
+        };
+        /** @description A user-chosen file to download, bypassing automatic candidate selection. */
+        ManualDownloadSelection: {
+            filename: string;
+            /** Format: int64 */
+            size: number;
+            username: string;
+        };
         /**
          * @description How files are integrated into the music library during an external import.
          * @enum {string}
          */
         ManualImportMode: "copy" | "hardlink";
+        /**
+         * @description A single file offered by a peer, surfaced for manual (interactive) search
+         *     so the user can override automatic candidate selection.
+         */
+        ManualSearchCandidate: {
+            /** Format: int32 */
+            bit_rate?: number | null;
+            extension?: string | null;
+            filename: string;
+            has_free_upload_slot: boolean;
+            /** Format: int32 */
+            length_secs?: number | null;
+            /** @description Whether the automatic matcher would consider this file at all. */
+            plausible: boolean;
+            /** Format: int32 */
+            queue_length: number;
+            /**
+             * Format: int32
+             * @description The automatic matcher's score for this file.
+             */
+            score: number;
+            /** Format: int64 */
+            size: number;
+            username: string;
+        };
         /** @enum {string} */
         MatchKind: "fuzzy" | "isrc_exact";
         /** @enum {string} */
@@ -1508,8 +1668,10 @@ export interface operations {
         parameters: {
             query: {
                 query: string;
-                /** @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
- *     Omitted or empty searches all enabled providers. */
+                /**
+                 * @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
+                 *     Omitted or empty searches all enabled providers.
+                 */
                 providers?: string | null;
             };
             header?: never;
@@ -1722,6 +1884,82 @@ export interface operations {
             };
             /** @description Failed to remove album files */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    manual_download_album: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualAlbumSelection"];
+            };
+        };
+        responses: {
+            /** @description Manual album download job enqueued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to enqueue download */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    manual_search_album: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Album UUID */
+                album_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidate album folders, best-matched first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualAlbumCandidate"][];
+                };
+            };
+            /** @description Album not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No search-capable download provider available */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2069,8 +2307,10 @@ export interface operations {
         parameters: {
             query: {
                 query: string;
-                /** @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
- *     Omitted or empty searches all enabled providers. */
+                /**
+                 * @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
+                 *     Omitted or empty searches all enabled providers.
+                 */
                 providers?: string | null;
             };
             header?: never;
@@ -2992,8 +3232,10 @@ export interface operations {
         parameters: {
             query: {
                 query: string;
-                /** @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
- *     Omitted or empty searches all enabled providers. */
+                /**
+                 * @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
+                 *     Omitted or empty searches all enabled providers.
+                 */
                 providers?: string | null;
             };
             header?: never;
@@ -3087,8 +3329,10 @@ export interface operations {
         parameters: {
             query: {
                 query: string;
-                /** @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
- *     Omitted or empty searches all enabled providers. */
+                /**
+                 * @description Comma-separated provider ids to search (e.g. `tidal,deezer`).
+                 *     Omitted or empty searches all enabled providers.
+                 */
                 providers?: string | null;
             };
             header?: never;
@@ -3107,6 +3351,82 @@ export interface operations {
                 };
             };
             /** @description Provider search unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    manual_download_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library track id */
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualDownloadSelection"];
+            };
+        };
+        responses: {
+            /** @description Manual download job enqueued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Track not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed to enqueue download */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    manual_search_track: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Library track id */
+                track_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All candidate files found for the track, best-scored first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualSearchCandidate"][];
+                };
+            };
+            /** @description Track not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No search-capable download provider available */
             503: {
                 headers: {
                     [name: string]: unknown;

@@ -45,12 +45,18 @@ use uuid::Uuid;
 pub(crate) struct DownloadAlbumJobPayload {
     pub album_id: uuid::Uuid,
     pub provider: Provider,
+    /// User-chosen album folder that bypasses automatic candidate selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manual: Option<crate::providers::ManualAlbumSelection>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub(crate) struct DownloadTrackJobPayload {
     pub track_id: uuid::Uuid,
     pub provider: Provider,
+    /// User-chosen file that bypasses automatic candidate selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manual: Option<crate::providers::ManualDownloadSelection>,
 }
 
 fn download_jobs() -> [JobKind; 2] {
@@ -121,7 +127,11 @@ pub(crate) async fn enqueue_download_album_job(
         .copied()
         .ok_or(AppError::download("provider", "no providers available"))?;
 
-    let payload = DownloadAlbumJobPayload { album_id, provider };
+    let payload = DownloadAlbumJobPayload {
+        album_id,
+        provider,
+        manual: None,
+    };
     let job = Job::DownloadAlbum { payload };
     enqueue_job(state, job).await
 }
@@ -156,7 +166,11 @@ pub(crate) async fn enqueue_download_track_job(
         .copied()
         .ok_or(AppError::download("provider", "no providers available"))?;
 
-    let payload = DownloadTrackJobPayload { track_id, provider };
+    let payload = DownloadTrackJobPayload {
+        track_id,
+        provider,
+        manual: None,
+    };
     let job = Job::DownloadTrack { payload };
     enqueue_job(state, job).await
 }
@@ -183,6 +197,173 @@ pub(crate) async fn retry_album_download(state: &AppState, album_id: Uuid) -> Ap
     // enqueue a new DL job for the album
     enqueue_download_album_job(state, album_id).await?;
     Ok(())
+}
+
+/// Load a track's album context and build its search plan, plus the
+/// preferred search-capable download source.
+async fn search_source_and_plan(
+    state: &AppState,
+    track_id: Uuid,
+) -> AppResult<(Provider, Arc<dyn SearchTrackResolver>, SearchTrackPlan)> {
+    let Some(track) = track::Entity::find_by_id(track_id).one(&state.db).await? else {
+        return Err(AppError::not_found("track", Some(track_id.to_string())));
+    };
+
+    let Some(album) = album::Entity::load()
+        .filter_by_id(track.album_id)
+        .with(album_provider_link::Entity)
+        .with(track::Entity)
+        .with((track::Entity, track_provider_link::Entity))
+        .with((track::Entity, track_artist::Entity))
+        .with((track::Entity, artist::Entity))
+        .one(&state.db)
+        .await?
+    else {
+        return Err(AppError::not_found(
+            "album",
+            Some(track.album_id.to_string()),
+        ));
+    };
+
+    let target_track = album
+        .tracks
+        .iter()
+        .find(|track| track.id == track_id)
+        .cloned()
+        .ok_or_else(|| AppError::not_found("track", Some(track_id.to_string())))?;
+
+    let (provider, source) = state
+        .registry
+        .download_sources()
+        .iter()
+        .filter_map(|source| match source {
+            DownloadSource::Search(resolver) => Some((source.id(), Arc::clone(resolver))),
+            DownloadSource::Linked(_) => None,
+        })
+        .max_by_key(|(provider, _)| provider_priority(*provider))
+        .ok_or_else(|| {
+            AppError::download("provider", "no search-capable download provider available")
+        })?;
+
+    let quality = target_track
+        .quality_override
+        .or(album.requested_quality)
+        .unwrap_or(state.default_quality);
+
+    let album_artist = album
+        .fetch_primary_artist(&state.db)
+        .await?
+        .map(|a| a.name)
+        .unwrap_or("Unknown".to_string());
+
+    let plan = plan_track_by_metadata(&album, &target_track, quality, &album_artist);
+    Ok((provider, source, plan))
+}
+
+/// Run an interactive (manual) search for a track and return every candidate
+/// the provider surfaces, scored but unfiltered.
+pub(crate) async fn manual_search_track(
+    state: &AppState,
+    track_id: Uuid,
+) -> AppResult<Vec<crate::providers::ManualSearchCandidate>> {
+    let (_, source, plan) = search_source_and_plan(state, track_id).await?;
+    Ok(source.manual_search(&plan.metadata, &plan.quality).await?)
+}
+
+/// Build search plans for every track of an album, plus the preferred
+/// search-capable download source.
+async fn album_search_source_and_plans(
+    state: &AppState,
+    album_id: Uuid,
+) -> AppResult<(
+    Provider,
+    Arc<dyn SearchTrackResolver>,
+    VecDeque<SearchTrackPlan>,
+)> {
+    let Some(album) = album::Entity::load()
+        .filter_by_id(album_id)
+        .with(album_provider_link::Entity)
+        .with(track::Entity)
+        .with((track::Entity, track_provider_link::Entity))
+        .with((track::Entity, track_artist::Entity))
+        .with((track::Entity, artist::Entity))
+        .one(&state.db)
+        .await?
+    else {
+        return Err(AppError::not_found("album", Some(album_id.to_string())));
+    };
+
+    let (provider, source) = state
+        .registry
+        .download_sources()
+        .iter()
+        .filter_map(|source| match source {
+            DownloadSource::Search(resolver) => Some((source.id(), Arc::clone(resolver))),
+            DownloadSource::Linked(_) => None,
+        })
+        .max_by_key(|(provider, _)| provider_priority(*provider))
+        .ok_or_else(|| {
+            AppError::download("provider", "no search-capable download provider available")
+        })?;
+
+    let quality = album.requested_quality.unwrap_or(state.default_quality);
+    let album_artist = album
+        .fetch_primary_artist(&state.db)
+        .await?
+        .map(|a| a.name)
+        .unwrap_or("Unknown".to_string());
+
+    let plans = plan_tracks_by_metadata(&album, quality, &album_artist);
+    Ok((provider, source, plans))
+}
+
+/// Run an interactive (manual) search for an album and return candidate
+/// folders, best-matched first.
+pub(crate) async fn manual_search_album(
+    state: &AppState,
+    album_id: Uuid,
+) -> AppResult<Vec<crate::providers::ManualAlbumCandidate>> {
+    let (_, source, plans) = album_search_source_and_plans(state, album_id).await?;
+    let quality = plans
+        .front()
+        .map(|plan| plan.quality)
+        .unwrap_or(state.default_quality);
+    let tracks: Vec<DownloadTrackContext> = plans.into_iter().map(|plan| plan.metadata).collect();
+    Ok(source.manual_album_search(&tracks, &quality).await?)
+}
+
+/// Enqueue an album download job for a specific user-chosen folder.
+pub(crate) async fn enqueue_manual_album_download_job(
+    state: &AppState,
+    album_id: Uuid,
+    selection: crate::providers::ManualAlbumSelection,
+) -> AppResult<job::Model> {
+    // Validates the album exists and a search source is configured.
+    let (provider, _, _) = album_search_source_and_plans(state, album_id).await?;
+
+    let payload = DownloadAlbumJobPayload {
+        album_id,
+        provider,
+        manual: Some(selection),
+    };
+    enqueue_job(state, Job::DownloadAlbum { payload }).await
+}
+
+/// Enqueue a download job for a specific user-chosen file.
+pub(crate) async fn enqueue_manual_download_job(
+    state: &AppState,
+    track_id: Uuid,
+    selection: crate::providers::ManualDownloadSelection,
+) -> AppResult<job::Model> {
+    // Validates the track exists and a search source is configured.
+    let (provider, _, _) = search_source_and_plan(state, track_id).await?;
+
+    let payload = DownloadTrackJobPayload {
+        track_id,
+        provider,
+        manual: Some(selection),
+    };
+    enqueue_job(state, Job::DownloadTrack { payload }).await
 }
 
 async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppResult<job::ModelEx> {
@@ -258,9 +439,11 @@ async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppRe
 
     let temp_dir = tempfile::tempdir()?;
 
+    let planned_count;
     let mut join_set = match dl_provider {
         DownloadSource::Linked(source) => {
             let planned_tracks = plan_tracks_by_id(payload, &album, quality)?;
+            planned_count = planned_tracks.len();
             enqueue_linked_tracks(
                 state.clone(),
                 source,
@@ -271,18 +454,35 @@ async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppRe
         }
         DownloadSource::Search(source) => {
             let planned_tracks = plan_tracks_by_metadata(&album, quality, &album_artist);
-            enqueue_search_tracks(
-                state.clone(),
-                source,
-                temp_dir.path().to_path_buf(),
-                planned_tracks,
-            )
-            .await?
+            planned_count = planned_tracks.len();
+            if let Some(selection) = payload.manual.clone() {
+                enqueue_manual_album_tracks(
+                    state.clone(),
+                    source,
+                    temp_dir.path().to_path_buf(),
+                    planned_tracks,
+                    selection,
+                )
+                .await?
+            } else {
+                enqueue_search_tracks(
+                    state.clone(),
+                    source,
+                    temp_dir.path().to_path_buf(),
+                    planned_tracks,
+                )
+                .await?
+            }
         }
     };
 
-    let total_tracks = album.tracks.len() as f32;
+    let total_tracks = planned_count.max(1) as f32;
     let mut completed_tracks = 0.0_f32;
+
+    // A user-chosen folder may not cover every track: download everything it
+    // can and report the stragglers at the end instead of aborting mid-album.
+    let best_effort = payload.manual.is_some();
+    let mut track_errors: Vec<String> = Vec::new();
 
     // let job = job.into_active_model();
     let mut job = job;
@@ -311,6 +511,10 @@ async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppRe
         let (track, temp_path, quality) = match dl_result {
             Ok(plan) => plan,
             Err(err) => {
+                if best_effort {
+                    track_errors.push(err.to_string());
+                    continue;
+                }
                 return Err(err);
             }
         };
@@ -349,6 +553,25 @@ async fn process_album_download_job(state: AppState, job: job::ModelEx) -> AppRe
     }
 
     drop(temp_dir);
+
+    if !track_errors.is_empty() {
+        let shown = track_errors.iter().take(3).cloned().collect::<Vec<_>>();
+        let suffix = if track_errors.len() > shown.len() {
+            format!(" (and {} more)", track_errors.len() - shown.len())
+        } else {
+            String::new()
+        };
+        return Err(AppError::download(
+            "album",
+            format!(
+                "{} of {} tracks failed: {}{}",
+                track_errors.len(),
+                planned_count,
+                shown.join("; "),
+                suffix
+            ),
+        ));
+    }
 
     album
         .into_active_model()
@@ -468,13 +691,24 @@ async fn process_track_download_job(state: AppState, job: job::ModelEx) -> AppRe
                 quality,
                 &album_artist,
             )]);
-            enqueue_search_tracks(
-                state.clone(),
-                source,
-                temp_dir.path().to_path_buf(),
-                planned_tracks,
-            )
-            .await?
+            if let Some(selection) = payload.manual.clone() {
+                enqueue_manual_track(
+                    state.clone(),
+                    source,
+                    temp_dir.path().to_path_buf(),
+                    planned_tracks,
+                    selection,
+                )
+                .await?
+            } else {
+                enqueue_search_tracks(
+                    state.clone(),
+                    source,
+                    temp_dir.path().to_path_buf(),
+                    planned_tracks,
+                )
+                .await?
+            }
         }
     };
 
@@ -761,6 +995,57 @@ async fn enqueue_search_tracks(
     .await
 }
 
+/// Download each album track out of a user-chosen album folder instead of
+/// resolving by search.
+async fn enqueue_manual_album_tracks(
+    state: AppState,
+    resolver: Arc<dyn SearchTrackResolver>,
+    temp_dir_path: PathBuf,
+    planned_tracks: VecDeque<SearchTrackPlan>,
+    selection: crate::providers::ManualAlbumSelection,
+) -> Result<JoinSet<AppResult<(track::ModelEx, PathBuf, Quality)>>, AppError> {
+    enqueue_tracks(
+        state,
+        temp_dir_path,
+        planned_tracks,
+        move |plan: SearchTrackPlan| {
+            let resolver = Arc::clone(&resolver);
+            let selection = selection.clone();
+            async move {
+                let playback = resolver
+                    .fetch_album_file(&selection, &plan.metadata, &plan.quality)
+                    .await?;
+                AppResult::Ok((plan.track, playback, plan.quality))
+            }
+        },
+    )
+    .await
+}
+
+/// Download a specific user-chosen file instead of resolving by search.
+async fn enqueue_manual_track(
+    state: AppState,
+    resolver: Arc<dyn SearchTrackResolver>,
+    temp_dir_path: PathBuf,
+    planned_tracks: VecDeque<SearchTrackPlan>,
+    selection: crate::providers::ManualDownloadSelection,
+) -> Result<JoinSet<AppResult<(track::ModelEx, PathBuf, Quality)>>, AppError> {
+    enqueue_tracks(
+        state,
+        temp_dir_path,
+        planned_tracks,
+        move |plan: SearchTrackPlan| {
+            let resolver = Arc::clone(&resolver);
+            let selection = selection.clone();
+            async move {
+                let playback = resolver.fetch_file(&selection).await?;
+                AppResult::Ok((plan.track, playback, plan.quality))
+            }
+        },
+    )
+    .await
+}
+
 async fn enqueue_tracks<P, Resolve, ResolveFuture>(
     state: AppState,
     temp_dir_path: PathBuf,
@@ -855,6 +1140,7 @@ fn plan_tracks_by_id(
     album
         .tracks
         .iter()
+        .filter(|track| track.status != WantedStatus::Acquired)
         .map(|track| plan_track_by_id(payload.provider, track, quality))
         .collect()
 }
@@ -895,6 +1181,8 @@ fn plan_track_by_id(
     })
 }
 
+/// Plan every album track that is not already acquired, so retries after a
+/// partial failure only fetch what is missing.
 fn plan_tracks_by_metadata(
     album: &album::ModelEx,
     quality: Quality,
@@ -903,6 +1191,7 @@ fn plan_tracks_by_metadata(
     album
         .tracks
         .iter()
+        .filter(|track| track.status != WantedStatus::Acquired)
         .map(|track| plan_track_by_metadata(album, track, quality, album_artist))
         .collect()
 }
@@ -935,7 +1224,9 @@ fn plan_track_by_metadata(
         track_title: track.title.clone(),
         track_number: track.track_number.map(|n| n as u32),
         album_track_count: Some(album.tracks.len()),
-        duration_secs: track.duration.map(|d| d as u32),
+        // Providers sometimes store 0 for unknown durations; treat as absent
+        // so matching doesn't hard-reject every candidate.
+        duration_secs: track.duration.filter(|&d| d > 0).map(|d| d as u32),
     };
 
     SearchTrackPlan {
@@ -952,8 +1243,30 @@ fn search_artist_name(track_artist: Option<&str>, album_artist: &str) -> String 
         .to_string()
 }
 
+/// Reset download jobs left `Running` by a previous process. Nothing is
+/// actually running them anymore, so they would otherwise sit orphaned:
+/// invisible to the worker and impossible to cancel.
+async fn requeue_orphaned_jobs(state: &AppState) -> AppResult<()> {
+    let orphaned = job::Entity::find()
+        .filter(job::Column::JobKind.is_in(download_jobs()))
+        .filter(job::Column::Status.eq(JobStatus::Running))
+        .all(&state.db)
+        .await?;
+
+    for job in orphaned {
+        tracing::warn!(job_id = %job.id, "Requeueing download job orphaned by restart");
+        job.into_active_model()
+            .into_ex()
+            .set_status(JobStatus::Queued)
+            .update(&state.db)
+            .await?;
+    }
+    Ok(())
+}
+
 pub(crate) async fn download_worker(state: AppState) -> AppResult<()> {
     tracing::info!("Download worker starting");
+    requeue_orphaned_jobs(&state).await?;
     loop {
         if state.shutdown.is_cancelled() {
             tracing::info!("Download worker shutting down");
@@ -979,21 +1292,52 @@ pub(crate) async fn download_worker(state: AppState) -> AppResult<()> {
             continue;
         };
 
-        let job_result = match &job.data {
-            Job::DownloadAlbum { .. } => {
-                process_album_download_job(state.clone(), job.clone().into_ex()).await
-            }
-            Job::DownloadTrack { .. } => {
-                process_track_download_job(state.clone(), job.clone().into_ex()).await
-            }
+        let cancel_token = state.shutdown.child_token();
+        *state
+            .active_download_job
+            .lock()
+            .expect("active download job lock") = Some((job.id, cancel_token.clone()));
+
+        // Cancelling the token drops the processing future, which aborts any
+        // per-track tasks still in its JoinSet.
+        let job_result = tokio::select! {
+            biased;
+            _ = cancel_token.cancelled() => None,
+            result = async {
+                match &job.data {
+                    Job::DownloadAlbum { .. } => {
+                        process_album_download_job(state.clone(), job.clone().into_ex()).await
+                    }
+                    Job::DownloadTrack { .. } => {
+                        process_track_download_job(state.clone(), job.clone().into_ex()).await
+                    }
+                }
+            } => Some(result),
         };
 
+        *state
+            .active_download_job
+            .lock()
+            .expect("active download job lock") = None;
+
         let job = match job_result {
-            Ok(job) => {
+            None => {
+                if state.shutdown.is_cancelled() {
+                    // Server shutdown, not a user cancel: leave the job
+                    // Running so requeue_orphaned_jobs resumes it next start.
+                    tracing::info!("Download worker shutting down mid-job");
+                    return Ok(());
+                }
+                tracing::info!("Job {} was cancelled", job.id);
+                job.into_active_model()
+                    .into_ex()
+                    .set_status(JobStatus::Cancelled)
+            }
+            Some(Ok(job)) => {
                 tracing::info!("Job {} completed successfully", job.id);
                 job.into_active_model().set_status(JobStatus::Succeeded)
             }
-            Err(err) => {
+            Some(Err(err)) => {
                 tracing::error!(error = %err, "Job {} failed with error", job.id);
                 // TODO increment attempts instead of at the start of the job
                 job.into_active_model()
@@ -1004,6 +1348,7 @@ pub(crate) async fn download_worker(state: AppState) -> AppResult<()> {
         };
 
         job.set_finished_at(Utc::now()).update(&state.db).await?;
+        state.notify_sse();
     }
 }
 

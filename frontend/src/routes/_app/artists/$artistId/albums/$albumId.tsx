@@ -5,7 +5,9 @@ import {
   CheckIcon,
   DownloadIcon,
   ExternalLinkIcon,
+  Loader2Icon,
   RefreshCwIcon,
+  SearchIcon,
   Trash2Icon,
 } from "lucide-react";
 
@@ -22,6 +24,8 @@ import {
 import {
   useAcceptMatchSuggestion,
   useDismissMatchSuggestion,
+  useManualAlbumDownload,
+  useManualDownload,
   useRemoveAlbumFiles,
   useRetryDownload,
   useSetAlbumQuality,
@@ -44,6 +48,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Album = components["schemas"]["Album"];
 type TrackInfo = components["schemas"]["TrackInfo"];
@@ -53,6 +64,8 @@ type JobResponse = components["schemas"]["JobResponse"];
 type Quality = components["schemas"]["Quality"];
 type ArtistWithPriority = components["schemas"]["ArtistWithPriority"];
 type AlbumType = components["schemas"]["AlbumType"];
+type ManualSearchCandidate = components["schemas"]["ManualSearchCandidate"];
+type ManualAlbumCandidate = components["schemas"]["ManualAlbumCandidate"];
 
 export const Route = createFileRoute("/_app/artists/$artistId/albums/$albumId")({
   component: AlbumDetailPage,
@@ -226,6 +239,7 @@ function AlbumDetailContent({
   artistIdParam: string;
 }) {
   const [showRemoveFiles, setShowRemoveFiles] = useState(false);
+  const [showManualSearch, setShowManualSearch] = useState(false);
 
   const toggleAlbumMonitor = useToggleAlbumMonitor();
   const removeAlbumFiles = useRemoveAlbumFiles();
@@ -303,6 +317,10 @@ function AlbumDetailContent({
                 {retryDownload.isPending ? "Starting..." : "Download"}
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={() => setShowManualSearch(true)}>
+              <SearchIcon className="mr-1.5 size-3.5" />
+              Interactive Search
+            </Button>
             <MonitorButton
               monitored={album.monitored}
               onToggleMonitor={() =>
@@ -469,6 +487,16 @@ function AlbumDetailContent({
         )}
       </div>
 
+      {/* ── Album interactive search dialog ────────────────── */}
+      {showManualSearch && (
+        <ManualAlbumSearchDialog
+          album={album}
+          trackCount={trackCount}
+          open={showManualSearch}
+          onOpenChange={setShowManualSearch}
+        />
+      )}
+
       {/* ── Remove files dialog ────────────────────────────── */}
       <AlertDialog open={showRemoveFiles} onOpenChange={setShowRemoveFiles}>
         <AlertDialogContent>
@@ -613,9 +641,10 @@ function TrackRow({
 }) {
   const toggleTrackMonitor = useToggleSingleTrackMonitor();
   const setTrackQuality = useSetTrackQuality();
+  const [showManualSearch, setShowManualSearch] = useState(false);
 
   return (
-    <div className="flex items-center gap-3 px-5 py-2.5 transition-colors duration-100 hover:bg-blue-500/3 dark:hover:bg-blue-500/5">
+    <div className="group flex items-center gap-3 px-5 py-2.5 transition-colors duration-100 hover:bg-blue-500/3 dark:hover:bg-blue-500/5">
       {/* Track status indicator */}
       <TrackStatusIndicator
         trackId={track.id}
@@ -669,9 +698,329 @@ function TrackRow({
         )}
       </div>
 
+      <Button
+        variant="ghost"
+        size="sm"
+        className="size-6 shrink-0 p-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100"
+        title="Interactive search"
+        onClick={() => setShowManualSearch(true)}
+      >
+        <SearchIcon className="size-3.5" />
+      </Button>
+
       <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
         {formatDurationSeconds(track.duration_secs)}
       </span>
+
+      {showManualSearch && (
+        <ManualSearchDialog
+          track={track}
+          open={showManualSearch}
+          onOpenChange={setShowManualSearch}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Album manual (interactive) search dialog ───────────────────
+
+function candidateFolderName(folder: string): string {
+  const parts = folder.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] ?? folder;
+}
+
+function ManualAlbumSearchDialog({
+  album,
+  trackCount,
+  open,
+  onOpenChange,
+}: {
+  album: Album;
+  trackCount: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const manualAlbumDownload = useManualAlbumDownload();
+
+  const { data, isLoading, isError } = $api.useQuery(
+    "get",
+    "/api/album/{album_id}/manual-search",
+    { params: { path: { album_id: album.id } } },
+    { enabled: open, staleTime: 5 * 60 * 1000, retry: false },
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Interactive Search</DialogTitle>
+          <DialogDescription>
+            Album folders peers offered for &ldquo;{album.title}&rdquo;. Pick one to download all
+            its tracks from that folder.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading && (
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+            <Loader2Icon className="size-4 animate-spin" />
+            Searching peers&hellip; this can take up to a minute.
+          </div>
+        )}
+
+        {isError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-400">
+            Search failed. Check that the download provider is reachable and try again.
+          </div>
+        )}
+
+        {data && data.length === 0 && (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            No album folders found.
+          </div>
+        )}
+
+        {data && data.length > 0 && (
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border">
+            <div className="divide-y divide-border/50">
+              {data.map((candidate) => (
+                <ManualAlbumCandidateRow
+                  key={`${candidate.username}:${candidate.folder}`}
+                  candidate={candidate}
+                  albumId={album.id}
+                  trackCount={trackCount}
+                  mutation={manualAlbumDownload}
+                  onDownloaded={() => onOpenChange(false)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ManualAlbumCandidateRow({
+  candidate,
+  albumId,
+  trackCount,
+  mutation,
+  onDownloaded,
+}: {
+  candidate: ManualAlbumCandidate;
+  albumId: string;
+  trackCount: number;
+  mutation: ReturnType<typeof useManualAlbumDownload>;
+  onDownloaded: () => void;
+}) {
+  const isThisPending = mutation.isPending && mutation.variables.body.folder === candidate.folder;
+  const fullMatch = candidate.matched_tracks >= trackCount;
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-blue-500/3 dark:hover:bg-blue-500/5">
+      <div className="min-w-0 flex-1">
+        <div className="truncate" title={candidate.folder}>
+          {candidateFolderName(candidate.folder)}
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+          <span className="font-medium">{candidate.username}</span>
+          <span>{candidate.files.length} files</span>
+          <span>{formatFileSize(candidate.total_size)}</span>
+          <span>score {candidate.score}</span>
+          {!candidate.has_free_upload_slot && candidate.queue_length > 0 && (
+            <span>queue {candidate.queue_length}</span>
+          )}
+        </div>
+      </div>
+
+      <Badge
+        className={
+          fullMatch
+            ? "shrink-0 bg-green-500/10 text-green-600"
+            : "shrink-0 bg-amber-500/10 text-amber-600"
+        }
+      >
+        {candidate.matched_tracks}/{trackCount} tracks
+      </Badge>
+
+      <Button
+        size="sm"
+        variant="outline"
+        className="shrink-0"
+        disabled={mutation.isPending}
+        onClick={() =>
+          mutation.mutate(
+            {
+              params: { path: { album_id: albumId } },
+              body: {
+                username: candidate.username,
+                folder: candidate.folder,
+                files: candidate.files,
+              },
+            },
+            { onSuccess: onDownloaded },
+          )
+        }
+      >
+        {isThisPending ? (
+          <Loader2Icon className="size-3.5 animate-spin" />
+        ) : (
+          <DownloadIcon className="size-3.5" />
+        )}
+      </Button>
+    </div>
+  );
+}
+
+// ── Manual (interactive) search dialog ─────────────────────────
+
+function formatFileSize(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  return mb >= 100 ? `${String(Math.round(mb))} MB` : `${mb.toFixed(1)} MB`;
+}
+
+function candidateBasename(filename: string): string {
+  const parts = filename.split(/[\\/]/);
+  return parts[parts.length - 1] ?? filename;
+}
+
+function ManualSearchDialog({
+  track,
+  open,
+  onOpenChange,
+}: {
+  track: TrackInfo;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const manualDownload = useManualDownload();
+
+  const { data, isLoading, isError } = $api.useQuery(
+    "get",
+    "/api/track/{track_id}/manual-search",
+    { params: { path: { track_id: track.id } } },
+    { enabled: open, staleTime: 5 * 60 * 1000, retry: false },
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Interactive Search</DialogTitle>
+          <DialogDescription>
+            Every file peers offered for &ldquo;{track.title}&rdquo;. Pick one to download, even if
+            the automatic matcher rejected it.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading && (
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+            <Loader2Icon className="size-4 animate-spin" />
+            Searching peers&hellip; this can take up to a minute.
+          </div>
+        )}
+
+        {isError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-400">
+            Search failed. Check that the download provider is reachable and try again.
+          </div>
+        )}
+
+        {data && data.length === 0 && (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            No files found for this track.
+          </div>
+        )}
+
+        {data && data.length > 0 && (
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border">
+            <div className="divide-y divide-border/50">
+              {data.map((candidate) => (
+                <ManualSearchCandidateRow
+                  key={`${candidate.username}:${candidate.filename}`}
+                  candidate={candidate}
+                  trackId={track.id}
+                  mutation={manualDownload}
+                  onDownloaded={() => onOpenChange(false)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ManualSearchCandidateRow({
+  candidate,
+  trackId,
+  mutation,
+  onDownloaded,
+}: {
+  candidate: ManualSearchCandidate;
+  trackId: string;
+  mutation: ReturnType<typeof useManualDownload>;
+  onDownloaded: () => void;
+}) {
+  const isThisPending =
+    mutation.isPending && mutation.variables.body.filename === candidate.filename;
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-blue-500/3 dark:hover:bg-blue-500/5">
+      <div className="min-w-0 flex-1">
+        <div className="truncate" title={candidate.filename}>
+          {candidateBasename(candidate.filename)}
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+          <span className="font-medium">{candidate.username}</span>
+          {candidate.extension && <span className="uppercase">{candidate.extension}</span>}
+          <span>{formatFileSize(candidate.size)}</span>
+          {candidate.length_secs != null && (
+            <span>{formatDurationSeconds(candidate.length_secs)}</span>
+          )}
+          {candidate.bit_rate != null && <span>{String(candidate.bit_rate)} kbps</span>}
+          <span>score {candidate.score}</span>
+          {!candidate.has_free_upload_slot && candidate.queue_length > 0 && (
+            <span>queue {candidate.queue_length}</span>
+          )}
+        </div>
+      </div>
+
+      {candidate.plausible ? (
+        <Badge className="shrink-0 bg-green-500/10 text-green-600">match</Badge>
+      ) : (
+        <Badge variant="outline" className="shrink-0 text-muted-foreground">
+          rejected
+        </Badge>
+      )}
+
+      <Button
+        size="sm"
+        variant="outline"
+        className="shrink-0"
+        disabled={mutation.isPending}
+        onClick={() =>
+          mutation.mutate(
+            {
+              params: { path: { track_id: trackId } },
+              body: {
+                username: candidate.username,
+                filename: candidate.filename,
+                size: candidate.size,
+              },
+            },
+            { onSuccess: onDownloaded },
+          )
+        }
+      >
+        {isThisPending ? (
+          <Loader2Icon className="size-3.5 animate-spin" />
+        ) : (
+          <DownloadIcon className="size-3.5" />
+        )}
+      </Button>
     </div>
   );
 }

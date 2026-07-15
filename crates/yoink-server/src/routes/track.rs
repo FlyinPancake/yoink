@@ -1,16 +1,18 @@
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
+use uuid::Uuid;
 
 use crate::api::{LibraryTrack, SearchTrackResult};
 
 use crate::{
     db::provider::Provider,
+    providers::{ManualDownloadSelection, ManualSearchCandidate},
     services::{self, search::SearchQuery},
     state::AppState,
 };
@@ -37,6 +39,8 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(search_tracks))
         .routes(routes!(list_tracks))
         .routes(routes!(create_track))
+        .routes(routes!(manual_search_track))
+        .routes(routes!(manual_download_track))
 }
 
 #[utoipa::path(
@@ -75,6 +79,60 @@ async fn list_tracks(State(state): State<AppState>) -> ApiResult<Vec<LibraryTrac
         .await
         .map_err(app_error_response)
         .map(Json)
+}
+
+#[utoipa::path(
+    get,
+    path = "/{track_id}/manual-search",
+    tag = TAG,
+    params(("track_id" = Uuid, Path, description = "Library track id")),
+    responses(
+        (status = 200, description = "All candidate files found for the track, best-scored first", body = Vec<ManualSearchCandidate>),
+        (status = 404, description = "Track not found"),
+        (status = 503, description = "No search-capable download provider available"),
+    )
+)]
+/// Manual Search
+///
+/// Interactive search: returns every candidate file the download provider
+/// surfaces for this track, including ones the automatic matcher would
+/// reject, so the user can pick one manually. Can take up to a minute.
+async fn manual_search_track(
+    State(state): State<AppState>,
+    Path(track_id): Path<Uuid>,
+) -> ApiResult<Vec<ManualSearchCandidate>> {
+    services::jobs::download::manual_search_track(&state, track_id)
+        .await
+        .map_err(app_error_response)
+        .map(Json)
+}
+
+#[utoipa::path(
+    post,
+    path = "/{track_id}/manual-download",
+    tag = TAG,
+    params(("track_id" = Uuid, Path, description = "Library track id")),
+    request_body = ManualDownloadSelection,
+    responses(
+        (status = 202, description = "Manual download job enqueued"),
+        (status = 404, description = "Track not found"),
+        (status = 500, description = "Failed to enqueue download"),
+    )
+)]
+/// Manual Download
+///
+/// Enqueue a download of a specific user-chosen file for this track,
+/// bypassing automatic candidate selection.
+async fn manual_download_track(
+    State(state): State<AppState>,
+    Path(track_id): Path<Uuid>,
+    Json(selection): Json<ManualDownloadSelection>,
+) -> ApiStatusResult {
+    services::jobs::download::enqueue_manual_download_job(&state, track_id, selection)
+        .await
+        .map_err(app_error_response)?;
+
+    Ok(StatusCode::ACCEPTED)
 }
 
 #[utoipa::path(
