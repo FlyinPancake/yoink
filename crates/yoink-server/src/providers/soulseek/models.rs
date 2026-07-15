@@ -31,6 +31,12 @@ pub(crate) struct SearchStatus {
 pub(crate) struct SearchResponse {
     pub username: String,
     pub files: Vec<SearchFile>,
+    #[serde(default)]
+    pub has_free_upload_slot: bool,
+    #[serde(default)]
+    pub queue_length: u32,
+    #[serde(default)]
+    pub upload_speed: u32,
 }
 
 #[derive(Debug, Deserialize)]

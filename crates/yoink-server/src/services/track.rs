@@ -465,6 +465,7 @@ mod tests {
                 payload: DownloadTrackJobPayload {
                     track_id: track.id,
                     provider: Provider::Tidal,
+                    manual: None,
                 },
             },
         )
@@ -563,6 +564,7 @@ mod tests {
                 payload: DownloadTrackJobPayload {
                     track_id: track.id,
                     provider: Provider::Tidal,
+                    manual: None,
                 },
             },
         )

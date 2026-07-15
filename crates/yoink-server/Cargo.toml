@@ -18,6 +18,7 @@ chrono.workspace             = true
 clap.workspace               = true
 color-eyre.workspace         = true
 cookie.workspace             = true
+deunicode.workspace          = true
 dotenvy.workspace            = true
 envious.workspace            = true
 governor.workspace           = true

@@ -50,4 +50,6 @@ export {
   useBrowsePath,
   usePreviewExternalImport,
   useConfirmExternalImport,
+  useManualDownload,
+  useManualAlbumDownload,
 } from "./mutations";

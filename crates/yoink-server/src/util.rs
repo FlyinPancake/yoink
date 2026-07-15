@@ -4,13 +4,21 @@
 
 use crate::db::provider::Provider;
 
-/// Normalize text for fuzzy comparison: lowercase (Unicode-aware), strip
-/// non-ASCII-alphanumeric characters, and collapse whitespace.
+/// Normalize text for fuzzy comparison: transliterate to ASCII, lowercase,
+/// strip non-alphanumeric characters, and collapse whitespace.
+///
+/// Transliteration keeps accented and non-Latin titles comparable
+/// ("Beyoncé" → "beyonce") instead of silently dropping characters.
 pub(crate) fn normalize(input: &str) -> String {
-    input
+    deunicode::deunicode_with_tofu(input, " ")
         .chars()
-        .flat_map(|c| c.to_lowercase())
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { ' ' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()

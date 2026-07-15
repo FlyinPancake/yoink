@@ -516,6 +516,7 @@ mod tests {
                 payload: DownloadAlbumJobPayload {
                     album_id: album.id,
                     provider: db::provider::Provider::Tidal,
+                    manual: None,
                 },
             },
         )
@@ -587,6 +588,7 @@ mod tests {
                 payload: DownloadAlbumJobPayload {
                     album_id: album.id,
                     provider: db::provider::Provider::Tidal,
+                    manual: None,
                 },
             },
         )
@@ -667,6 +669,7 @@ mod tests {
                 payload: DownloadAlbumJobPayload {
                     album_id: album.id,
                     provider: db::provider::Provider::Tidal,
+                    manual: None,
                 },
             },
         )

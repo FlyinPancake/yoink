@@ -98,6 +98,8 @@ pub(super) fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(set_album_quality))
         .routes(routes!(remove_album_files))
         .routes(routes!(retry_download))
+        .routes(routes!(manual_search_album))
+        .routes(routes!(manual_download_album))
         .routes(routes!(list_album_providers))
         .routes(routes!(list_album_tracks))
         .routes(routes!(bulk_toggle_track_monitor))
@@ -450,6 +452,64 @@ async fn retry_download(
         .map_err(app_error_response)?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Manual Search
+///
+/// Interactive search: returns candidate album folders peers offer for this
+/// album, best-matched first, so the user can pick one manually. Can take up
+/// to a minute.
+#[utoipa::path(
+    get,
+    path = "/{album_id}/manual-search",
+    tag = TAG,
+    params(
+        ("album_id" = Uuid, Path, description = "Album UUID")
+    ),
+    responses(
+        (status = 200, description = "Candidate album folders, best-matched first", body = Vec<crate::providers::ManualAlbumCandidate>),
+        (status = 404, description = "Album not found"),
+        (status = 503, description = "No search-capable download provider available"),
+    )
+)]
+async fn manual_search_album(
+    State(state): State<AppState>,
+    Path(album_id): Path<Uuid>,
+) -> ApiResult<Vec<crate::providers::ManualAlbumCandidate>> {
+    services::jobs::download::manual_search_album(&state, album_id)
+        .await
+        .map_err(app_error_response)
+        .map(Json)
+}
+
+/// Manual Download
+///
+/// Enqueue a download of a specific user-chosen album folder, bypassing
+/// automatic candidate selection.
+#[utoipa::path(
+    post,
+    path = "/{album_id}/manual-download",
+    tag = TAG,
+    params(
+        ("album_id" = Uuid, Path, description = "Album UUID")
+    ),
+    request_body = crate::providers::ManualAlbumSelection,
+    responses(
+        (status = 202, description = "Manual album download job enqueued"),
+        (status = 404, description = "Album not found"),
+        (status = 500, description = "Failed to enqueue download"),
+    )
+)]
+async fn manual_download_album(
+    State(state): State<AppState>,
+    Path(album_id): Path<Uuid>,
+    Json(selection): Json<crate::providers::ManualAlbumSelection>,
+) -> ApiStatusResult {
+    services::jobs::download::enqueue_manual_album_download_job(&state, album_id, selection)
+        .await
+        .map_err(app_error_response)?;
+
+    Ok(StatusCode::ACCEPTED)
 }
 
 /// List Album Providers

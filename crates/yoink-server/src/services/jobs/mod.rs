@@ -114,12 +114,35 @@ pub(crate) async fn cancel_job(state: &AppState, job_id: Uuid) -> AppResult<()> 
         .ok_or(AppError::not_found("job", Some(job_id)))?;
 
     match job.status {
-        JobStatus::Queued => {
+        // Cancelling a Failed job stops the worker from retrying it (see
+        // prepare_track_for_unmonitor).
+        JobStatus::Queued | JobStatus::Failed => {
             job.into_ex()
                 .into_active_model()
                 .set_status(JobStatus::Cancelled)
                 .update(&state.db)
                 .await?;
+        }
+        JobStatus::Running => {
+            let active = state
+                .active_download_job
+                .lock()
+                .expect("active download job lock")
+                .clone();
+            match active {
+                // The worker is processing this job right now: signal it and
+                // let it record the Cancelled status itself.
+                Some((active_id, token)) if active_id == job.id => token.cancel(),
+                // Orphaned `Running` row (e.g. left over from a crash) — no
+                // worker owns it, so it is safe to mark directly.
+                _ => {
+                    job.into_ex()
+                        .into_active_model()
+                        .set_status(JobStatus::Cancelled)
+                        .update(&state.db)
+                        .await?;
+                }
+            }
         }
         _ => {
             return Err(AppError::validation(
@@ -129,6 +152,7 @@ pub(crate) async fn cancel_job(state: &AppState, job_id: Uuid) -> AppResult<()> 
         }
     }
 
+    state.notify_sse();
     Ok(())
 }
 

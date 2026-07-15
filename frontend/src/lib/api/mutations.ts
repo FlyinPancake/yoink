@@ -770,3 +770,30 @@ export function useConfirmExternalImport() {
     },
   });
 }
+
+export function useManualDownload() {
+  const qc = useQueryClient();
+  return $api.useMutation("post", "/api/track/{track_id}/manual-download", {
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["get", "/api/album/{album_id}"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.list().queryKey });
+      void qc.invalidateQueries({ queryKey: queryKeys.dashboard().queryKey });
+      void qc.invalidateQueries({ queryKey: queryKeys.wanted().queryKey });
+    },
+  });
+}
+
+export function useManualAlbumDownload() {
+  const qc = useQueryClient();
+  return $api.useMutation("post", "/api/album/{album_id}/manual-download", {
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({
+        queryKey: queryKeys.albums.detail(variables.params.path.album_id).queryKey,
+      });
+      void qc.invalidateQueries({ queryKey: queryKeys.albums.list().queryKey });
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.list().queryKey });
+      void qc.invalidateQueries({ queryKey: queryKeys.dashboard().queryKey });
+      void qc.invalidateQueries({ queryKey: queryKeys.wanted().queryKey });
+    },
+  });
+}
