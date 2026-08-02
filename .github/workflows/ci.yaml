@@ -28,7 +28,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: mise
-        uses: jdx/mise-action@v4
+        uses: jdx/mise-action@v4.2.3
         with:
           install_args: "bun"
       - name: Install dependencies
@@ -45,7 +45,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: mise
-        uses: jdx/mise-action@v4
+        uses: jdx/mise-action@v4.2.3
         with:
           install_args: "bun"
       - name: Install dependencies
@@ -87,7 +87,7 @@ jobs:
           cache-shared-key: ${{ matrix.key }}
           components: clippy,rustfmt
       - name: mise
-        uses: jdx/mise-action@v4
+        uses: jdx/mise-action@v4.2.3
         with:
           install_args: "cargo-binstall cargo:cargo-nextest cargo:cargo-shear"
       - name: Download frontend
