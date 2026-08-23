@@ -9,7 +9,7 @@ COPY frontend/ .
 RUN bun run build
 
 # ── Stage 2: Chef — compute Rust dependency recipe ──────────
-FROM docker.io/library/rust:1.97-alpine3.24 AS chef
+FROM docker.io/library/rust:1.98-alpine3.24 AS chef
 
 RUN apk add --no-cache curl ca-certificates
 
