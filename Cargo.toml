@@ -9,11 +9,11 @@ edition = "2024"
 [workspace.dependencies]
 migration = { path = "crates/yoink-migration" }
 
-argon2 = "0.5"
+argon2 = "0.6"
 anyhow = "1"
 async-trait = "0.1"
 axum = { version = "0.8", features = ["form", "json", "macros"] }
-base64 = "0.22"
+base64 = "0.23"
 chrono = { version = "0.4", features = ["clock", "serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 color-eyre = "0.6.5"
@@ -26,12 +26,12 @@ http = "1"
 lofty = "0.24"
 lrclib-api-rs = "0.3"
 mime_guess = "2"
-musicbrainz_rs = { version = "0.13", features = [
+musicbrainz_rs = { version = "0.14", features = [
   "rate_limit",
   "async",
   "rustls",
 ], default-features = false }
-oas3-gen-support = "0.26.2"
+oas3-gen-support = "0.28.0"
 rand = "0.10"
 reqwest = { version = "0.13", default-features = false, features = [
   "json",
@@ -87,5 +87,5 @@ utoipa = { version = "5.5.0", features = [
 utoipa-axum = "0.2.0"
 utoipa-scalar = { version = "0.3.0", features = ["axum"] }
 uuid = { version = "1", features = ["v7", "serde"] }
-validator = { version = "0.20", features = ["derive"] }
+validator = { version = "0.21", features = ["derive"] }
 veil = "0.3"
